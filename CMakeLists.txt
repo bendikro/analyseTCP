@@ -1,4 +1,4 @@
-PROJECT (analyseRdb CXX)
+PROJECT (analyseTCP CXX)
 ENABLE_LANGUAGE(C)
 		  
 #CMAKE_MINIMUM_REQUIRED(VERSION 2.0.5)
@@ -13,13 +13,13 @@ SET (LIB_DIRS /work/lib)
 INCLUDE_DIRECTORIES (${INCLUDE_DIRS})
 
 # Prepare sources for app.
-SET (APP_SRCS analyseRdb.cc analyseRdb.h
+SET (APP_SRCS analyseTCP.cc analyseTCP.h
     	      Dump.cc Dump.h
 	      Connection.h Connection.cc
 	      RangeManager.cc RangeManager.h
 	      Range.cc Range.h)
     
-ADD_EXECUTABLE (analyseRdb ${APP_SRCS})
+ADD_EXECUTABLE (analyseTCP ${APP_SRCS})
 
 # Some problem with this check on OS X
 IF (NOT APPLE)
@@ -44,7 +44,7 @@ ENDIF (PCAP)
 
 SET (INCLUDE_FILES arpa/inet.h netinet/in.h sys/socket.h getopt.h)
 
-TARGET_LINK_LIBRARIES (analyseRdb pcap)
+TARGET_LINK_LIBRARIES (analyseTCP pcap)
 
 # Set compiler flags for all configurations
 SET (CMAKE_C_FLAGS "-O1 -lm") # -Werror?
