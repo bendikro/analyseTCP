@@ -1,0 +1,35 @@
+analyseRdb: Utility for analysing tcpdump 
+	    sender side traces with regard
+	    to latency and loss. 
+
+Prerequisites: cmake pcap
+
+To build: 	enter analyseRdb/build
+		run: "cmake .."
+		run: make
+
+Example output with a short explanation.
+Connection identifiers:
+#Src_port: 35260 Dst_port: 9999
+
+Basic statistics:
+#Total packets sent: 29307
+#Total bytes sent: 11046093
+#Average packet size: 376
+#Number of retransmissions: 218
+
+Packets with bundled segments is packets that
+have larger size because of RDB.
+#Number of packets with bundled segments: 23048
+
+We here define loss rate as percentage
+of packets that have to be retransmitted using
+regular TCP schemes.
+#Estimated loss rate: 0.74385%
+
+Bytewise latency is the time before a segment of data 
+is acknowledged.
+#Bytewise latency - Conn: 35260
+#Maximum latency  : 1245ms
+#Minimum latency  : 150ms
+#Average latency  : 160.856ms
