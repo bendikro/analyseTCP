@@ -13,6 +13,7 @@ Connection::Connection(uint16_t src_port, uint16_t dst_port, uint32_t seq){
   curSeq         = 0;
   bundleCount    = 0;
   memset(&firstSendTime, 0, sizeof(firstSendTime));
+  memset(&endTime, 0, sizeof(endTime));
 
   rm = new RangeManager();
 }
@@ -31,8 +32,8 @@ void Connection::registerSent(struct sendData* sd){
     }
   } else if(curSeq > 0 && sd->seq <= curSeq){
     nrRetrans++;
-  }
-
+  } 
+  
   if((sd->seq >= curSeq) && sd->payloadSize > 0){
     curSeq = sd->seq;
     curSize = sd->payloadSize;
@@ -88,6 +89,8 @@ void Connection::registerAck(uint32_t ack, timeval* tv){
 void Connection::genStats(struct connStats* cs){
   if(GlobOpts::verbose){
     cout << "Src_port: " << srcPort << " Dst_port: " << dstPort << endl;
+    cout << "Duration: " << rm->getDuration() << " seconds ( " 
+	 << ((float)rm->getDuration() / 60 / 60) << " hours)" << endl;
     cout << "Total packets sent: " << nrPacketsSent << endl;
     cout << "Total bytes sent (payload): " << totBytesSent << endl;
     cout << "Average payload size: " << (float)(totBytesSent / nrPacketsSent) << endl;

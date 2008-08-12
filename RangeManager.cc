@@ -1,6 +1,6 @@
 #include "RangeManager.h"
 
-/* Register all byes with a coomon send time as a range */
+/* Register all byes with a common send time as a range */
 void RangeManager::insertSentRange(uint32_t startSeq, uint32_t endSeq, timeval* tv){
 
   if (ranges.size() == 0){ /* First packet in stream */
@@ -31,7 +31,17 @@ void RangeManager::insertSentRange(uint32_t startSeq, uint32_t endSeq, timeval* 
     if(endSeq <= lastSeq){/* All bytes are already registered */
       if(GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5)
 	cerr << "-------All bytes have already been registered - discarding---------" << endl;
-      ranges.back()->incNumRetrans(); /* Count a new retransmssion */
+      //ranges.back()->incNumRetrans(); /* Count a new retransmssion */
+      /* Traverse all affected ranges and tag all ranges that
+	 contain retransmitted bytes */
+      vector<Range*>::reverse_iterator it, it_end;
+      it_end = ranges.rend();
+      for(it = ranges.rbegin(); it != it_end; it++){
+	if (startSeq >= (*it)->getEndSeq())
+	  break;
+	if ( endSeq > (*it)->getStartSeq())
+	  (*it)->incNumRetrans(); /* Count a new retransmssion */
+      }
       return;
     }else{ /* We have to register some of the bytes */
       if(GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5)
@@ -39,9 +49,11 @@ void RangeManager::insertSentRange(uint32_t startSeq, uint32_t endSeq, timeval* 
       Range* range = new Range(lastSeq, endSeq, tv);
       ranges.push_back(range);
       lastSeq = endSeq;
-      range->incNumBundled(); /* Count a new bundling */
-    }
+      /* TODO: Have to tag all bundled ranges */
+      //ranges.back()->incNumBundled(); /* Count a new bundling */
+    } 
   }
+
 }
 
 /* Register all byes with a coomon send time as a range */
@@ -59,7 +71,6 @@ void RangeManager::insertRecvRange(uint32_t startSeq, uint32_t endSeq, timeval* 
   }
   /* Insert all packets into datastructure */ 
   recvd.push_back(tmpRecv);
-  //recvd.insert(pair<uint32_t, struct recvData>(startSeq, tmpRecv));
   return;
 }
 
@@ -153,15 +164,21 @@ void RangeManager::genStats(struct byteStats* bs){
     if ( retrans > 0 ){
       if( retrans == 1)
 	bs->retrans[0]++;
-      if( retrans == 2 )
+      if( retrans == 2 ){
+	bs->retrans[0]++;
 	bs->retrans[1]++;
-      if( retrans >= 3 )
+      }
+      if (retrans >= 3 ){
+	bs->retrans[0]++;
+	bs->retrans[1]++;
 	bs->retrans[2]++;
+      }
     }
     if (retrans > bs->maxRetrans)
       bs->maxRetrans = retrans;
   }
   bs->nrRanges = ranges.size();
+  
 }
 
 /* Check that every byte from firstSeq to lastSeq is present.

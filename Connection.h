@@ -23,6 +23,7 @@ class Connection {
   uint32_t curSeq;
   uint32_t lastLargestSeq;
   timeval firstSendTime;
+  timeval endTime;
   RangeManager *rm;
 
  public:
