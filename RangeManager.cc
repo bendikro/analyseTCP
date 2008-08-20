@@ -28,12 +28,11 @@ void RangeManager::insertSentRange(uint32_t startSeq, uint32_t endSeq, timeval* 
   }
 
   if (startSeq < lastSeq){ /* We have some kind of overlap */
-    if(endSeq <= lastSeq){/* All bytes are already registered */
+    if(endSeq <= lastSeq){/* All bytes are already registered: Retransmission */
       if(GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5)
 	cerr << "-------All bytes have already been registered - discarding---------" << endl;
-      //ranges.back()->incNumRetrans(); /* Count a new retransmssion */
-      /* Traverse all affected ranges and tag all ranges that
-	 contain retransmitted bytes */
+      /* Traverse all affected ranges and tag all 
+	 ranges that contain retransmitted bytes */
       vector<Range*>::reverse_iterator it, it_end;
       it_end = ranges.rend();
       for(it = ranges.rbegin(); it != it_end; it++){
@@ -43,17 +42,24 @@ void RangeManager::insertSentRange(uint32_t startSeq, uint32_t endSeq, timeval* 
 	  (*it)->incNumRetrans(); /* Count a new retransmssion */
       }
       return;
-    }else{ /* We have to register some of the bytes */
+    }else{ /* Old and new bytes: Bundle */
       if(GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5)
 	cerr << "-------Overlap: registering some bytes---------" << endl;
       Range* range = new Range(lastSeq, endSeq, tv);
       ranges.push_back(range);
       lastSeq = endSeq;
-      /* TODO: Have to tag all bundled ranges */
-      //ranges.back()->incNumBundled(); /* Count a new bundling */
+      /* Traverse all affected ranges and tag all 
+	 ranges that contain bundled bytes */
+      vector<Range*>::reverse_iterator it, it_end;
+      it_end = ranges.rend();
+      for(it = ranges.rbegin(); it != it_end; it++){
+	if (startSeq >= (*it)->getEndSeq())
+	  break;
+	if ( endSeq > (*it)->getStartSeq())
+	  (*it)->incNumBundled(); /* Count a new bundling */
+      }
     } 
   }
-
 }
 
 /* Register all byes with a coomon send time as a range */

@@ -22,15 +22,15 @@ Connection::Connection(uint16_t src_port, uint16_t dst_port, uint32_t seq){
 void Connection::registerSent(struct sendData* sd){
   totPacketSize += sd->totalSize;
   nrPacketsSent++;
-
-  if( sd->endSeq > lastLargestSeq){
+  
+  if( sd->endSeq > lastLargestSeq){ /* New data */
     lastLargestSeq = sd->endSeq;
     if( (sd->seq == curSeq) && (sd->endSeq > endSeq)){
       bundleCount++;
     } else if( (sd->seq > curSeq) && (sd->seq < endSeq) && (sd->endSeq > endSeq)){
       bundleCount++;
     }
-  } else if(curSeq > 0 && sd->seq <= curSeq){
+  } else if(curSeq > 0 && sd->seq <= curSeq){ /* All seen before */
     nrRetrans++;
   } 
   
@@ -90,7 +90,7 @@ void Connection::genStats(struct connStats* cs){
   if(GlobOpts::verbose){
     cout << "Src_port: " << srcPort << " Dst_port: " << dstPort << endl;
     cout << "Duration: " << rm->getDuration() << " seconds ( " 
-	 << ((float)rm->getDuration() / 60 / 60) << " hours)" << endl;
+	 << ((float)rm->getDuration() / 60 / 60) << " hours )" << endl;
     cout << "Total packets sent: " << nrPacketsSent << endl;
     cout << "Total bytes sent (payload): " << totBytesSent << endl;
     cout << "Average payload size: " << (float)(totBytesSent / nrPacketsSent) << endl;
