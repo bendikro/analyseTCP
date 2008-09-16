@@ -30,6 +30,9 @@ void Dump::analyseSender (){
   }
   
   /* Handle NAT between sender and receiver */
+
+  /* TODO: Seperate NAT-handling options for 
+     NAT on sender side and receiver side */  
   if(!GlobOpts::natIP.empty()){
     cerr << "NATing handled" << endl;
     tmpDstIp = GlobOpts::natIP;

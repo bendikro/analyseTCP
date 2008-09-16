@@ -289,6 +289,10 @@ void RangeManager::registerRecvDiffs(){
     //rit = recStart;
     rit = recvd.begin();
     rit_end = recvd.end();
+    if(GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5){
+      cerr << "Recvd.size=" << recvd.size() << endl;
+    }
+
     for(; rit != rit_end ; rit++){
       //struct recvData tmpRd = (*rit).second;
       struct recvData tmpRd = *rit;
@@ -296,6 +300,11 @@ void RangeManager::registerRecvDiffs(){
       //uint32_t res = (*rit).endSeq;
       
       //bool doBreak = false;
+      if(GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5){
+	cerr << "Processing received packet with startSeq=" << 
+	  tmpRd.startSeq << " - endSeq=" << tmpRd.endSeq << " - Recvd:" 
+	     << tmpRd.tv.tv_sec << "." << tmpRd.tv.tv_usec << endl;
+      }
 
       /* If the received packet matches the range */
       if( tmpRd.startSeq <= tmpStartSeq && tmpRd.endSeq >= tmpEndSeq ){
@@ -342,7 +351,10 @@ void RangeManager::registerRecvDiffs(){
       //	break;
     }
     
-    /* Check if match has been found */
+    /* Check if match has been found 
+       NB!-There seems to be a bug.. this error was triggered even when 
+       there were received segments for the range.
+     TODO: Remove range from data structure, and don't abort*/
     if(!matched){
       cerr << "Found range that has no corresponding received packet. Exiting\n" << endl;
       exit(1);
