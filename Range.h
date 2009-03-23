@@ -1,6 +1,7 @@
 #ifndef RANGE_H
 #define RANGE_H
 
+#include <string.h>
 #include "analyseTCP.h"
 
 /* Modified timersub macro that has defined behaviour

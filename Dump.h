@@ -6,6 +6,7 @@
 #include <pcap.h>
 #include <iostream>
 #include <sstream>
+#include <limits>
 #include <arpa/inet.h>
 
 #include "Connection.h"
