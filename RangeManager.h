@@ -32,7 +32,7 @@ class RangeManager{
   uint32_t lastSeq;  /* Global end seq */
   uint32_t lastContinuous; /* Last seq in sequence of ranges without gaps */
   int highestAcked; /* Index of highest acked range */
-  struct timeval highestRecvd;
+  //struct timeval highestRecvd;
   int  nrRanges;
   long lowestDiff; /* Used to create CDF. */
   long lowestDcDiff; /* Lowest diff when compensated for clock drift */
@@ -52,7 +52,7 @@ class RangeManager{
     lowestDiff = LONG_MAX;
     lowestDcDiff = LONG_MAX;
     highestAcked = -1; /* Initialize to -1 to allow incrementation from first range */
-    memset(&highestRecvd, 0, sizeof(highestRecvd));
+    //memset(&highestRecvd, 0, sizeof(highestRecvd));
     nrRanges = 0;
     //totNumBytes = 0;
   };

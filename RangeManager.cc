@@ -264,23 +264,9 @@ void RangeManager::registerRecvDiffs(){
   vector<Range*>::iterator it, it_end;
   it = ranges.begin();
   it_end = ranges.end();
+
+  vector<recvData*>::iterator rit, rit_end;
  
-  /* Sort recvd vector */
-  // std::stable_sort(recvd.begin(), recvd.end(), sortByStartSeq());
-
-  //vector<vector<struct recvData*>::iterator> deleteList;
-  //vector<struct recvData>::iterator recStart = recvd.begin();
-  //map<uint32_t, struct recvData>::iterator recStart = recvd.begin();
-  vector<struct recvData*>::iterator rit, rit_end;
-
-  /* Give all elements in recvData vector iterator to itself */
-  rit = recvd.begin();
-  rit_end = recvd.end();
-  for(; rit != rit_end ; rit++){
-    struct recvData *tmpRd = *rit;
-    tmpRd->vit = rit;
-  }
-
   /* Create map with references to the ranges */
   rit = recvd.begin();
   rit_end = recvd.end();
@@ -290,19 +276,11 @@ void RangeManager::registerRecvDiffs(){
     rsMap.insert(pair<uint32_t, struct recvData*>(tmpRd->startSeq, tmpRd));
   }
 
-  rit = recvd.begin();
-  rit_end = recvd.end();
-  multimap<uint32_t, struct recvData*> reMap;
-  for(; rit != rit_end ; rit++){
-    struct recvData *tmpRd = *rit;
-    reMap.insert(pair<uint32_t, struct recvData*>(tmpRd->startSeq, tmpRd));
-  }
-
   for(; it != it_end; it++){
     bool matched = false;
     uint32_t tmpStartSeq = (*it)->getStartSeq();
     uint32_t tmpEndSeq = (*it)->getEndSeq();
-
+    
     if(GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5){
       cerr << "Processing range: " << tmpStartSeq << " - " << tmpEndSeq << "- Sent:" 
 	   << (*it)->getSendTime()->tv_sec << "." << (*it)->getSendTime()->tv_usec << endl;
@@ -311,38 +289,34 @@ void RangeManager::registerRecvDiffs(){
     /* Traverse recv data structs to find 
        lowest time for all corresponding bytes */
     /*---------------New code ------------*/
-    //vector<struct recvData*>::iterator lowIt, highIt;
     multimap<uint32_t, struct recvData*>::iterator lowIt, highIt;
+    /* Add and subtract one MTU from the start seq
+       to get range of valid packets to process */
     uint32_t absLow = tmpStartSeq - 1500;
     uint32_t absHigh = tmpStartSeq + 1500;
-    //lowIt = (rsMap.lower_bound(tmpStartSeq))->second->vit;
+
     lowIt = rsMap.lower_bound(absLow);
-    //highIt = (reMap.upper_bound(tmpEndSeq))->second->vit;
     highIt = rsMap.upper_bound(absHigh);
 
-    int i = 0;
+    struct timeval lowestRecvTime;
+    memset(&lowestRecvTime, 9, sizeof(lowestRecvTime));
+    
     for(; lowIt != highIt; lowIt++){
-      //cout << i << ": StartSeq: " << lowIt->second->startSeq << endl;
-      //cout << i << ": EndSeq: " << lowIt->second->endSeq << endl;
-      i++;
-      
       struct recvData *tmpRd = lowIt->second;
       if(GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5){
 	cerr << "Processing received packet with startSeq=" << 
 	  tmpRd->startSeq << " - endSeq=" << tmpRd->endSeq << " - Recvd:" 
 	     << tmpRd->tv.tv_sec << "." << tmpRd->tv.tv_usec << endl;
       }
-      //cout << "tmpStartSeq    : " << tmpStartSeq << " - tmpEndSeq    : " << tmpEndSeq << endl;
-      //cout << "tmpRd->startSeq: " << tmpRd->startSeq << " - tmpRd->endSeq: " << tmpRd->endSeq << endl;
+      
       /* If the received packet matches the range */
       if( tmpRd->startSeq <= tmpStartSeq && tmpRd->endSeq >= tmpEndSeq ){
-	/* Set recvTime only for first match */
-	if(timercmp(&(tmpRd->tv), &highestRecvd, >)){
-	  highestRecvd = tmpRd->tv;
-	  /* Set recv time to highest value yet to reflect
-	     application layer delay upon loss / reordering */
+	/* Set recv time to the lowest observed value that
+	   matches the range */
+	if(timercmp(&(tmpRd->tv), &lowestRecvTime, <)){
+	  lowestRecvTime = tmpRd->tv;
 	}
-	(*it)->setRecvTime(&highestRecvd);
+	
 	matched = true;
 	
 	if(GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5){
@@ -350,11 +324,9 @@ void RangeManager::registerRecvDiffs(){
 	    tmpRd->startSeq << " - endSeq=" << tmpRd->endSeq << " - Recvd:" 
 	       << tmpRd->tv.tv_sec << "." << tmpRd->tv.tv_usec << endl;
 	}
-	break;
       }
-      
     }
-
+    
     /*--------------End new code ------------*/
     
     /*-------------------- Old code ------------------*/
@@ -393,8 +365,6 @@ void RangeManager::registerRecvDiffs(){
 //     }
 
     /*-------------------- End old code ------------------*/
-    
-    //exit(1); // Debug
 
     /* Check if match has been found 
        NB!-There seems to be a bug.. this error was triggered even when 
@@ -404,6 +374,9 @@ void RangeManager::registerRecvDiffs(){
       cerr << "Found range that has no corresponding received packet. Exiting\n" << endl;
       exit(1);
     }
+    
+    /* Update range with the lowest recv time */
+    (*it)->setRecvTime(&lowestRecvTime);
     
     /* Calculate diff and check for lowest value */
     (*it)->setDiff();
