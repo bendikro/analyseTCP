@@ -64,10 +64,10 @@ void RangeManager::insertSentRange(uint32_t startSeq, uint32_t endSeq, timeval* 
 
 /* Register all byes with a coomon send time as a range */
 void RangeManager::insertRecvRange(uint32_t startSeq, uint32_t endSeq, timeval* tv){
-  struct recvData tmpRecv; // = new struct recvData();
-  tmpRecv.startSeq = startSeq;
-  tmpRecv.endSeq = endSeq;
-  tmpRecv.tv = *tv;
+  struct recvData *tmpRecv = new struct recvData(); // = new struct recvData();
+  tmpRecv->startSeq = startSeq;
+  tmpRecv->endSeq = endSeq;
+  tmpRecv->tv = *tv;
   
   if(GlobOpts::debugLevel == 3 || GlobOpts::debugLevel == 5 ){
     cerr << "Inserting receive data: startSeq=" << startSeq << ", endSeq=" << endSeq << endl;
@@ -271,12 +271,38 @@ void RangeManager::registerRecvDiffs(){
   //vector<vector<struct recvData*>::iterator> deleteList;
   //vector<struct recvData>::iterator recStart = recvd.begin();
   //map<uint32_t, struct recvData>::iterator recStart = recvd.begin();
+  vector<struct recvData*>::iterator rit, rit_end;
+
+  /* Give all elements in recvData vector iterator to itself */
+  rit = recvd.begin();
+  rit_end = recvd.end();
+  for(; rit != rit_end ; rit++){
+    struct recvData *tmpRd = *rit;
+    tmpRd->vit = rit;
+  }
+
+  /* Create map with references to the ranges */
+  rit = recvd.begin();
+  rit_end = recvd.end();
+  multimap<uint32_t, struct recvData*> rsMap;
+  for(; rit != rit_end ; rit++){
+    struct recvData *tmpRd = *rit;
+    rsMap.insert(pair<uint32_t, struct recvData*>(tmpRd->startSeq, tmpRd));
+  }
+
+  rit = recvd.begin();
+  rit_end = recvd.end();
+  multimap<uint32_t, struct recvData*> reMap;
+  for(; rit != rit_end ; rit++){
+    struct recvData *tmpRd = *rit;
+    reMap.insert(pair<uint32_t, struct recvData*>(tmpRd->startSeq, tmpRd));
+  }
 
   for(; it != it_end; it++){
     bool matched = false;
     uint32_t tmpStartSeq = (*it)->getStartSeq();
     uint32_t tmpEndSeq = (*it)->getEndSeq();
-    
+
     if(GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5){
       cerr << "Processing range: " << tmpStartSeq << " - " << tmpEndSeq << "- Sent:" 
 	   << (*it)->getSendTime()->tv_sec << "." << (*it)->getSendTime()->tv_usec << endl;
@@ -284,36 +310,35 @@ void RangeManager::registerRecvDiffs(){
     
     /* Traverse recv data structs to find 
        lowest time for all corresponding bytes */
-    vector<struct recvData>::iterator rit, rit_end;
-    //multimap<uint32_t, struct recvData>::iterator rit, rit_end;
-    //rit = recStart;
-    rit = recvd.begin();
-    rit_end = recvd.end();
-    if(GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5){
-      cerr << "Recvd.size=" << recvd.size() << endl;
-    }
+    /*---------------New code ------------*/
+    //vector<struct recvData*>::iterator lowIt, highIt;
+    multimap<uint32_t, struct recvData*>::iterator lowIt, highIt;
+    uint32_t absLow = tmpStartSeq - 1500;
+    uint32_t absHigh = tmpStartSeq + 1500;
+    //lowIt = (rsMap.lower_bound(tmpStartSeq))->second->vit;
+    lowIt = rsMap.lower_bound(absLow);
+    //highIt = (reMap.upper_bound(tmpEndSeq))->second->vit;
+    highIt = rsMap.upper_bound(absHigh);
 
-    for(; rit != rit_end ; rit++){
-      //struct recvData tmpRd = (*rit).second;
-      struct recvData tmpRd = *rit;
-      //uint32_t rss = (*rit).startSeq;
-      //uint32_t res = (*rit).endSeq;
+    int i = 0;
+    for(; lowIt != highIt; lowIt++){
+      //cout << i << ": StartSeq: " << lowIt->second->startSeq << endl;
+      //cout << i << ": EndSeq: " << lowIt->second->endSeq << endl;
+      i++;
       
-      //bool doBreak = false;
+      struct recvData *tmpRd = lowIt->second;
       if(GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5){
 	cerr << "Processing received packet with startSeq=" << 
-	  tmpRd.startSeq << " - endSeq=" << tmpRd.endSeq << " - Recvd:" 
-	     << tmpRd.tv.tv_sec << "." << tmpRd.tv.tv_usec << endl;
+	  tmpRd->startSeq << " - endSeq=" << tmpRd->endSeq << " - Recvd:" 
+	     << tmpRd->tv.tv_sec << "." << tmpRd->tv.tv_usec << endl;
       }
-
+      //cout << "tmpStartSeq    : " << tmpStartSeq << " - tmpEndSeq    : " << tmpEndSeq << endl;
+      //cout << "tmpRd->startSeq: " << tmpRd->startSeq << " - tmpRd->endSeq: " << tmpRd->endSeq << endl;
       /* If the received packet matches the range */
-      if( tmpRd.startSeq <= tmpStartSeq && tmpRd.endSeq >= tmpEndSeq ){
+      if( tmpRd->startSeq <= tmpStartSeq && tmpRd->endSeq >= tmpEndSeq ){
 	/* Set recvTime only for first match */
-	//if(!matched){
-	if(timercmp(&(tmpRd.tv), &highestRecvd, >)){
-	  highestRecvd = tmpRd.tv;
-	  //doBreak = true;
-	  //}
+	if(timercmp(&(tmpRd->tv), &highestRecvd, >)){
+	  highestRecvd = tmpRd->tv;
 	  /* Set recv time to highest value yet to reflect
 	     application layer delay upon loss / reordering */
 	}
@@ -322,35 +347,55 @@ void RangeManager::registerRecvDiffs(){
 	
 	if(GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5){
 	  cerr << "Found overlapping recvData: startSeq=" << 
-	    tmpRd.startSeq << " - endSeq=" << tmpRd.endSeq << " - Recvd:" 
-	       << tmpRd.tv.tv_sec << "." << tmpRd.tv.tv_usec << endl;
+	    tmpRd->startSeq << " - endSeq=" << tmpRd->endSeq << " - Recvd:" 
+	       << tmpRd->tv.tv_sec << "." << tmpRd->tv.tv_usec << endl;
 	}
 	break;
       }
       
-      // if(GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5){
-// 	/* Make sure that the RecvRange >= sendRange assertion holds */
-// 	if( ( tmpRd.startSeq == tmpStartSeq && tmpRd.endSeq < tmpEndSeq) ||
-// 	    ( tmpRd.startSeq > tmpStartSeq && tmpRd.endSeq == tmpEndSeq) ||
-// 	    ( tmpRd.startSeq > tmpStartSeq && tmpRd.endSeq <  tmpEndSeq) ){
-// 	  cerr << "Found recv data sequence that is smaller than the current range." << endl;
-// 	  cerr << "May be caused by erroneous tcp len in dumpfile. Exiting" << endl;
-// 	  exit(1);
-// 	}
-//       }
-            
-      /* Check for already registered elements and tag them for removal */
-      //if ( tmpRd.endSeq < tmpStartSeq ){
-	//deleteList.push_back(rit);
-	//if (recStart != recvd.begin())
-	// recStart = rit-1;
-	//recStart = rit;
-      //}
-      /* A match has been found, break */
-      //if(doBreak)
-      //	break;
     }
+
+    /*--------------End new code ------------*/
     
+    /*-------------------- Old code ------------------*/
+//     rit = recvd.begin();
+//     rit_end = recvd.end();
+//     if(GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5){
+//       cerr << "Recvd.size=" << recvd.size() << endl;
+//     }
+
+//     for(; rit != rit_end ; rit++){
+//       struct recvData *tmpRd = *rit;
+//       if(GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5){
+// 	cerr << "Processing received packet with startSeq=" << 
+// 	  tmpRd->startSeq << " - endSeq=" << tmpRd->endSeq << " - Recvd:" 
+// 	     << tmpRd->tv.tv_sec << "." << tmpRd->tv.tv_usec << endl;
+//       }
+
+//       /* If the received packet matches the range */
+//       if( tmpRd->startSeq <= tmpStartSeq && tmpRd->endSeq >= tmpEndSeq ){
+// 	/* Set recvTime only for first match */
+// 	if(timercmp(&(tmpRd->tv), &highestRecvd, >)){
+// 	  highestRecvd = tmpRd->tv;
+// 	  /* Set recv time to highest value yet to reflect
+// 	     application layer delay upon loss / reordering */
+// 	}
+// 	(*it)->setRecvTime(&highestRecvd);
+// 	matched = true;
+	
+// 	if(GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5){
+// 	  cerr << "Found overlapping recvData: startSeq=" << 
+// 	    tmpRd->startSeq << " - endSeq=" << tmpRd->endSeq << " - Recvd:" 
+// 	       << tmpRd->tv.tv_sec << "." << tmpRd->tv.tv_usec << endl;
+// 	}
+// 	break;
+//       }
+//     }
+
+    /*-------------------- End old code ------------------*/
+    
+    //exit(1); // Debug
+
     /* Check if match has been found 
        NB!-There seems to be a bug.. this error was triggered even when 
        there were received segments for the range.
@@ -372,23 +417,9 @@ void RangeManager::registerRecvDiffs(){
       cerr << "RecvDiff=" << diff << endl;
       //cerr << "Deletelist size: " << deleteList.size() << endl;
       cerr << "recvd.size()= " << recvd.size() << endl;
-    }
-    
-    /* Delete already registered recvData elements */
-//     vector<vector<struct recvData*>::iterator>::reverse_iterator dit, dit_end;
-//     dit = deleteList.rbegin();
-//     dit_end = deleteList.rend();
-//     for(; dit != dit_end; dit++){
-//       if(GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5){
-// 	cerr << "Deleting " << (**dit)->startSeq << " - " << (**dit)->endSeq << endl;
-//       }
-//       free((**dit));
-//       recvd.erase(*dit);
-//     }
-//     deleteList.clear();
+    }  
   }
   /* End of the current connection. Free recv data */
-  //recvd.~multimap();
   recvd.~vector();
 }
 

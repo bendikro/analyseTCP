@@ -14,6 +14,7 @@ struct recvData{
   uint32_t startSeq;
   uint32_t endSeq;
   struct timeval tv;
+  vector<struct recvData*>::iterator vit;
 };
   
 struct sortByStartSeq{
@@ -38,7 +39,7 @@ class RangeManager{
   float drift; /* Clock drift (ms/s) */
   
   vector<Range*> ranges;
-  vector<struct recvData> recvd;
+  vector<struct recvData*> recvd;
   //multimap<uint32_t, struct recvData> recvd;
   map<const int, int> cdf;
   map<const int, int> dcCdf;
@@ -53,7 +54,6 @@ class RangeManager{
     highestAcked = -1; /* Initialize to -1 to allow incrementation from first range */
     memset(&highestRecvd, 0, sizeof(highestRecvd));
     nrRanges = 0;
-    
     //totNumBytes = 0;
   };
   ~RangeManager();
