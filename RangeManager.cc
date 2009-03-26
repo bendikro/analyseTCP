@@ -292,14 +292,14 @@ void RangeManager::registerRecvDiffs(){
     multimap<uint32_t, struct recvData*>::iterator lowIt, highIt;
     /* Add and subtract one MTU from the start seq
        to get range of valid packets to process */
-    uint32_t absLow = tmpStartSeq - 1500;
-    uint32_t absHigh = tmpStartSeq + 1500;
+    uint32_t absLow = tmpStartSeq - 1600;
+    uint32_t absHigh = tmpStartSeq + 1600;
 
     lowIt = rsMap.lower_bound(absLow);
     highIt = rsMap.upper_bound(absHigh);
 
-    struct timeval lowestRecvTime;
-    memset(&lowestRecvTime, 9, sizeof(lowestRecvTime));
+    struct timeval match;
+    memset(&match, 9, sizeof(match));
     
     for(; lowIt != highIt; lowIt++){
       struct recvData *tmpRd = lowIt->second;
@@ -311,12 +311,10 @@ void RangeManager::registerRecvDiffs(){
       
       /* If the received packet matches the range */
       if( tmpRd->startSeq <= tmpStartSeq && tmpRd->endSeq >= tmpEndSeq ){
-	/* Set recv time to the lowest observed value that
+	/* Set match time to the lowest observed value that
 	   matches the range */
-	if(timercmp(&(tmpRd->tv), &lowestRecvTime, <)){
-	  lowestRecvTime = tmpRd->tv;
-	}
-	
+	if(timercmp(&(tmpRd->tv), &match, <))
+	  match = tmpRd->tv;
 	matched = true;
 	
 	if(GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5){
@@ -375,8 +373,18 @@ void RangeManager::registerRecvDiffs(){
       exit(1);
     }
     
-    /* Update range with the lowest recv time */
-    (*it)->setRecvTime(&lowestRecvTime);
+    if(GlobOpts::transport){
+      (*it)->setRecvTime(&match);
+    }else{
+      /* Use lowest time that has been found for this range,
+	 if the timestamp is lower than the highest time we 
+	 have seen yet, use the highest time (to reflect application 
+	 layer delay) */
+      if(timercmp(&match, &highestRecvd, >)){
+	highestRecvd = match;
+      }
+      (*it)->setRecvTime(&highestRecvd);
+    }
     
     /* Calculate diff and check for lowest value */
     (*it)->setDiff();

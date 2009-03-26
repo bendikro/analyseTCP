@@ -49,6 +49,7 @@ class GlobOpts{
   static bool aggregate;
   static bool verbose;
   static bool bwlatency;
+  static bool transport;
   static int  debugLevel;
   static bool withRecv;
   static string natIP;

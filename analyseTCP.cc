@@ -31,6 +31,7 @@ bool GlobOpts::verbose    = false;
 bool GlobOpts::aggregate  = false;
 bool GlobOpts::bwlatency  = false;
 bool GlobOpts::withRecv   = false;
+bool GlobOpts::transport  = false;
 int  GlobOpts::debugLevel = 0;
 string GlobOpts::natIP = "";
 
@@ -43,6 +44,8 @@ void usage (char* argv){
   printf(" -f <pcap-file>     : Sender-side dumpfile.\n");
   printf("Other options:\n");
   printf(" -g                 : Receiver-side dumpfile\n");
+  printf(" -t                 : Calculate transport-layer delays\n");
+  printf("                    : (if not set, application-layer delay is calculated)\n");
   printf(" -n  <IP>           : Nat-address on receiver side dump\n");
   printf(" -v                 : Verbose (off by default, optional)\n");
   printf(" -a                 : Get aggregated output (off by default, optional)\n");
@@ -68,7 +71,7 @@ int main(int argc, char *argv[]){
   Dump *senderDump;
 
   while(1){
-    c = getopt( argc, argv, "s:r:p:f:n:o:g:d:vab");
+    c = getopt( argc, argv, "s:r:p:f:n:o:g:d:vabt");
     if(c == -1) break;
 
     switch(c){
@@ -90,6 +93,9 @@ int main(int argc, char *argv[]){
     case 'g':
       recvfn = optarg;
       GlobOpts::withRecv = true;
+      break;
+    case 't':
+      GlobOpts::transport = true;
       break;
     case 'v':
       GlobOpts::verbose = true;
@@ -118,6 +124,11 @@ int main(int argc, char *argv[]){
   }
 
   if(argc < 6){
+    usage(argv[0]);
+  }
+
+  if(GlobOpts::transport && !GlobOpts::withRecv){
+    cerr << "-t option requires -g option " << endl;
     usage(argv[0]);
   }
 
