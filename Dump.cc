@@ -339,7 +339,7 @@ void Dump::processRecvd(string recvFn){
      more than 2 minutes duration 
   make drift compensated CDF*/
   makeDcCdf();
-  
+
   printDcCdf();
 }
 
@@ -427,5 +427,12 @@ void Dump::printDumpStats(){
     cout << "recvPacketCount:" << recvPacketCount << endl;
     cout << "recvBytesCount: " << recvBytesCount << endl;
     cout << "packetLoss: " << ((float)(sentPacketCount - recvPacketCount) / sentPacketCount) * 100 <<  "\%" << endl; 
+  }
+}
+
+void Dump::genRFiles(){
+ map<uint16_t, Connection*>::iterator cIt, cItEnd;
+  for(cIt = conns.begin(); cIt != conns.end(); cIt++){
+    cIt->second->genRFiles();
   }
 }

@@ -44,6 +44,7 @@ class Dump {
   void analyseSender();
   void processRecvd(string fn);
   void printDumpStats();
+  void genRFiles();
 };
 
 #endif /* DUMP_H */

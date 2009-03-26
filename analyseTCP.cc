@@ -27,13 +27,14 @@
 #include "analyseTCP.h"
 
 /* Initialize global options */
-bool GlobOpts::verbose    = false;
-bool GlobOpts::aggregate  = false;
-bool GlobOpts::bwlatency  = false;
-bool GlobOpts::withRecv   = false;
-bool GlobOpts::transport  = false;
-int  GlobOpts::debugLevel = 0;
-string GlobOpts::natIP = "";
+bool GlobOpts::verbose        = false;
+bool GlobOpts::aggregate      = false;
+bool GlobOpts::bwlatency      = false;
+bool GlobOpts::withRecv       = false;
+bool GlobOpts::transport      = false;
+bool GlobOpts::genRFiles       = false;
+int  GlobOpts::debugLevel     = 0;
+string GlobOpts::natIP        = "";
 
 void usage (char* argv){
   printf("Usage: %s [-s] [-r] [-p] [-f] [-v|a|b|d]\n", argv);
@@ -46,6 +47,7 @@ void usage (char* argv){
   printf(" -g                 : Receiver-side dumpfile\n");
   printf(" -t                 : Calculate transport-layer delays\n");
   printf("                    : (if not set, application-layer delay is calculated)\n");
+  printf(" -u                 : Write statistics to comma-separated files (for use with R)\n");
   printf(" -n  <IP>           : Nat-address on receiver side dump\n");
   printf(" -v                 : Verbose (off by default, optional)\n");
   printf(" -a                 : Get aggregated output (off by default, optional)\n");
@@ -71,7 +73,7 @@ int main(int argc, char *argv[]){
   Dump *senderDump;
 
   while(1){
-    c = getopt( argc, argv, "s:r:p:f:n:o:g:d:vabt");
+    c = getopt( argc, argv, "s:r:p:f:n:o:g:d:vabtu");
     if(c == -1) break;
 
     switch(c){
@@ -96,6 +98,9 @@ int main(int argc, char *argv[]){
       break;
     case 't':
       GlobOpts::transport = true;
+      break;
+    case 'u':
+      GlobOpts::genRFiles = true;
       break;
     case 'v':
       GlobOpts::verbose = true;
@@ -131,7 +136,7 @@ int main(int argc, char *argv[]){
     cerr << "-t option requires -g option " << endl;
     usage(argv[0]);
   }
-
+  
   if(GlobOpts::debugLevel < 0)
     cerr << "debugLevel = " << GlobOpts::debugLevel << endl;
 
@@ -141,10 +146,12 @@ int main(int argc, char *argv[]){
     
   if (GlobOpts::withRecv){
     senderDump->processRecvd(recvfn);
-//     receiverDump = new Dump(src_ip, dst_ip, dst_port, recvfn);
-//     receiverDump->analyseReceiver(senderDump);
   }
      
+  if(GlobOpts::genRFiles){
+    senderDump->genRFiles();
+  }
+  
   senderDump->printDumpStats();
   return 0;
 }

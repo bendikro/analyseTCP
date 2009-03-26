@@ -288,7 +288,6 @@ void RangeManager::registerRecvDiffs(){
     
     /* Traverse recv data structs to find 
        lowest time for all corresponding bytes */
-    /*---------------New code ------------*/
     multimap<uint32_t, struct recvData*>::iterator lowIt, highIt;
     /* Add and subtract one MTU from the start seq
        to get range of valid packets to process */
@@ -325,49 +324,8 @@ void RangeManager::registerRecvDiffs(){
       }
     }
     
-    /*--------------End new code ------------*/
-    
-    /*-------------------- Old code ------------------*/
-//     rit = recvd.begin();
-//     rit_end = recvd.end();
-//     if(GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5){
-//       cerr << "Recvd.size=" << recvd.size() << endl;
-//     }
-
-//     for(; rit != rit_end ; rit++){
-//       struct recvData *tmpRd = *rit;
-//       if(GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5){
-// 	cerr << "Processing received packet with startSeq=" << 
-// 	  tmpRd->startSeq << " - endSeq=" << tmpRd->endSeq << " - Recvd:" 
-// 	     << tmpRd->tv.tv_sec << "." << tmpRd->tv.tv_usec << endl;
-//       }
-
-//       /* If the received packet matches the range */
-//       if( tmpRd->startSeq <= tmpStartSeq && tmpRd->endSeq >= tmpEndSeq ){
-// 	/* Set recvTime only for first match */
-// 	if(timercmp(&(tmpRd->tv), &highestRecvd, >)){
-// 	  highestRecvd = tmpRd->tv;
-// 	  /* Set recv time to highest value yet to reflect
-// 	     application layer delay upon loss / reordering */
-// 	}
-// 	(*it)->setRecvTime(&highestRecvd);
-// 	matched = true;
-	
-// 	if(GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5){
-// 	  cerr << "Found overlapping recvData: startSeq=" << 
-// 	    tmpRd->startSeq << " - endSeq=" << tmpRd->endSeq << " - Recvd:" 
-// 	       << tmpRd->tv.tv_sec << "." << tmpRd->tv.tv_usec << endl;
-// 	}
-// 	break;
-//       }
-//     }
-
-    /*-------------------- End old code ------------------*/
-
-    /* Check if match has been found 
-       NB!-There seems to be a bug.. this error was triggered even when 
-       there were received segments for the range.
-     TODO: Remove range from data structure, and don't abort*/
+    /* Check if match has been found...
+       TODO: Remove range from data structure, and don't abort*/
     if(!matched){
       cerr << "Found range that has no corresponding received packet. Exiting\n" << endl;
       exit(1);
@@ -393,13 +351,15 @@ void RangeManager::registerRecvDiffs(){
       lowestDiff = diff;
 
     if(GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5){
-      cerr << "SendTime: " << (*it)->getSendTime()->tv_sec << "." << (*it)->getSendTime()->tv_usec << endl;
-      cerr << "RecvTime: " << (*it)->getRecvTime()->tv_sec << "." << (*it)->getRecvTime()->tv_usec << endl;
+      cerr << "SendTime: " << (*it)->getSendTime()->tv_sec << "." 
+	   << (*it)->getSendTime()->tv_usec << endl;
+      cerr << "RecvTime: " << (*it)->getRecvTime()->tv_sec << "." 
+	   << (*it)->getRecvTime()->tv_usec << endl;
       cerr << "RecvDiff=" << diff << endl;
-      //cerr << "Deletelist size: " << deleteList.size() << endl;
       cerr << "recvd.size()= " << recvd.size() << endl;
     }  
   }
+
   /* End of the current connection. Free recv data */
   recvd.~vector();
 }
@@ -538,7 +498,7 @@ void RangeManager::makeDcCdf(){
   vector<Range*>::iterator it, it_end;
   it = ranges.begin();
   it_end = ranges.end();
-  
+    
   for(; it != it_end; it++){
     long diff = (*it)->getDcDiff() - lowestDcDiff;
     if ( dcCdf.count(diff) > 0 ){
@@ -557,7 +517,7 @@ void RangeManager::makeDcCdf(){
 
 void RangeManager::printCDF(){
   map<const int, int>::iterator nit, nit_end;
-  float cdfSum = 0;
+  double cdfSum = 0;
   nit = cdf.begin();
   nit_end = cdf.end();
 
@@ -567,14 +527,14 @@ void RangeManager::printCDF(){
 
   cout << "#Relative delay      Percentage" << endl;
   for(; nit != nit_end; nit++){
-    cdfSum += (float)(*nit).second / getTotNumBytes();
+    cdfSum += (double)(*nit).second / getTotNumBytes();
     printf("time: %10d    CDF: %.10f\n",(*nit).first, cdfSum);
   }
 }
 
 void RangeManager::printDcCdf(){
   map<const int, int>::iterator nit, nit_end;
-  float cdfSum = 0;
+  double cdfSum = 0;
   nit = dcCdf.begin();
   nit_end = dcCdf.end();
 
@@ -589,7 +549,59 @@ void RangeManager::printDcCdf(){
   cout << "#------ Drift : " << drift << "ms/s ------" << endl;
   cout << "#Relative delay      Percentage" << endl;
   for(; nit != nit_end; nit++){
-    cdfSum += (float)(*nit).second / getTotNumBytes();
+    cdfSum += (double)(*nit).second / getTotNumBytes();
     printf("time: %10d    CDF: %.10f\n",(*nit).first, cdfSum);
   }
+}
+
+void RangeManager::genRFiles(uint16_t port){
+  vector<Range*>::iterator it, it_end;
+  it = ranges.begin();
+  it_end = ranges.end();
+    
+  ofstream dcDiff, retr1, retr2, retr3, retr4;
+  stringstream r1fn, r2fn, r3fn, r4fn, dcdfn;;
+  
+  r1fn << "1retr-" << port << ".dat";
+  r2fn << "2retr-" << port << ".dat";
+  r3fn << "3retr-" << port << ".dat";
+  r4fn << "4retr-" << port << ".dat";
+  
+  if (GlobOpts::withRecv){
+    dcdfn << "dcDiff-" << port << ".dat";
+    dcDiff.open((char*)((dcdfn.str()).c_str()), ios::out);
+  }
+
+  retr1.open((char*)((r1fn.str()).c_str()), ios::out);
+  retr2.open((char*)((r2fn.str()).c_str()), ios::out);
+  retr3.open((char*)((r3fn.str()).c_str()), ios::out);
+  retr4.open((char*)((r4fn.str()).c_str()), ios::out);
+
+  for(; it != it_end; it++){
+
+    if (GlobOpts::withRecv){
+      dcDiff << (*it)->getDcDiff() << endl;
+    }
+      
+    if((*it)->getNumRetrans() == 1)
+      retr1 << (*it)->getDiff() << endl;
+
+    if((*it)->getNumRetrans() == 2)
+      retr2 << (*it)->getDiff() << endl;
+
+    if((*it)->getNumRetrans() == 3)
+      retr3 << (*it)->getDiff() << endl;
+
+    if((*it)->getNumRetrans() == 4)
+      retr4 << (*it)->getDiff() << endl;
+    
+  }
+  
+  if (GlobOpts::withRecv){
+    dcDiff.close();
+  }
+  retr1.close();
+  retr2.close();
+  retr3.close();
+  retr4.close();
 }

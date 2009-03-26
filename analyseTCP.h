@@ -53,7 +53,7 @@ class GlobOpts{
   static int  debugLevel;
   static bool withRecv;
   static string natIP;
-  
+  static bool genRFiles;
 };
 
 /* Struct used to pass aggregated data between connections */

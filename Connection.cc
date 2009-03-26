@@ -174,3 +174,7 @@ void Connection::makeDcCdf(){
   rm->registerDcDiffs();
   rm->makeDcCdf();
 }
+
+void Connection::genRFiles(){
+  rm->genRFiles(dstPort);
+}

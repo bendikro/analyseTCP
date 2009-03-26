@@ -3,6 +3,8 @@
 
 #include <vector>
 #include <iostream>
+#include <string>
+#include <fstream>
 #include <limits.h>
 #include "Range.h"
 #include <deque>
@@ -40,7 +42,6 @@ class RangeManager{
   
   vector<Range*> ranges;
   vector<struct recvData*> recvd;
-  //multimap<uint32_t, struct recvData> recvd;
   map<const int, int> cdf;
   map<const int, int> dcCdf;
 
@@ -54,12 +55,9 @@ class RangeManager{
     highestAcked = -1; /* Initialize to -1 to allow incrementation from first range */
     memset(&highestRecvd, 0, sizeof(highestRecvd));
     nrRanges = 0;
-    //totNumBytes = 0;
   };
   ~RangeManager();
 
-  /*TODO: Implement verification that all bytes between startSeq of first range
-    and endSeq of last range are registered (no holes) */
   void insertSentRange(uint32_t startSeq, uint32_t endSeq, timeval* tv);
   void insertRecvRange(uint32_t startSeq, uint32_t endSeq, timeval* tv);
   void processAck(uint32_t ack, timeval* tv);
@@ -77,8 +75,8 @@ class RangeManager{
   float calcDrift();
   void registerDcDiffs();
   void makeDcCdf();
+  void genRFiles(uint16_t port);
   int getNumBytes(){ return lastSeq - firstSeq; }
-  //bool sortComp(struct recvData&, struct recvData&); 
 };
 
 #endif /* RANGEMANAGER_H */
