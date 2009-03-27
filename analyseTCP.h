@@ -54,6 +54,7 @@ class GlobOpts{
   static bool withRecv;
   static string natIP;
   static bool genRFiles;
+  static string prefix;
 };
 
 /* Struct used to pass aggregated data between connections */

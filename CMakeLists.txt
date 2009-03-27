@@ -60,7 +60,8 @@ ENDIF (APPLE)
 
 # Set debug compiler flags
 # To activate: cmake -DCMAKE_BUILD_TYPE=Debug .
-SET (CMAKE_C_FLAGS_DEBUG "-g3 -Werror")	
+SET (CMAKE_C_FLAGS_DEBUG "-g3 -Wall")	
+SET (CMAKE_CXX_FLAGS_DEBUG "-g3 -Wall")	
 # Platform specific debug flags   
 IF (UNIX)
    SET (CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -gdwarf-2")

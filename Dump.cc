@@ -146,7 +146,6 @@ void Dump::analyseSender (){
   int aggrMaxLat = 0;
   int aggrMinLat = (numeric_limits<int>::max)();
   float aggrCumLat = 0;
-  int aggrConns = 0;
   int r1=0, r2=0, r3=0;
   int maxRetrans = 0;
   
@@ -220,8 +219,6 @@ void Dump::processSent(const struct pcap_pkthdr* header, const u_char *data){
   const struct sniff_ethernet *ethernet; /* The ethernet header */
   const struct sniff_ip *ip; /* The IP header */
   const struct sniff_tcp *tcp; /* The TCP header */
-  const char *payload; /* Packet payload */
-  const struct timeval *hdrTv; /* Pcap timestamp */
   Connection *tmpConn;
 
   /* Finds the different headers+payload */
@@ -348,8 +345,6 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data){
   const struct sniff_ethernet *ethernet; /* The ethernet header */
   const struct sniff_ip *ip; /* The IP header */
   const struct sniff_tcp *tcp; /* The TCP header */
-  const char *payload; /* Packet payload */
-  const struct timeval *hdrTv; /* Pcap timestamp */
   Connection *tmpConn;
 
   /* Finds the different headers+payload */

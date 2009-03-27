@@ -32,7 +32,8 @@ bool GlobOpts::aggregate      = false;
 bool GlobOpts::bwlatency      = false;
 bool GlobOpts::withRecv       = false;
 bool GlobOpts::transport      = false;
-bool GlobOpts::genRFiles       = false;
+bool GlobOpts::genRFiles      = false;
+string GlobOpts::prefix       = "";
 int  GlobOpts::debugLevel     = 0;
 string GlobOpts::natIP        = "";
 
@@ -47,8 +48,9 @@ void usage (char* argv){
   printf(" -g                 : Receiver-side dumpfile\n");
   printf(" -t                 : Calculate transport-layer delays\n");
   printf("                    : (if not set, application-layer delay is calculated)\n");
-  printf(" -u                 : Write statistics to comma-separated files (for use with R)\n");
-  printf(" -n  <IP>           : Nat-address on receiver side dump\n");
+  printf(" -u <prefix>        : Write statistics to comma-separated files (for use with R)\n");
+  printf("                      <prefix> assigns an output filename prefix.\n");
+  printf(" -n <IP>            : Nat-address on receiver side dump\n");
   printf(" -v                 : Verbose (off by default, optional)\n");
   printf(" -a                 : Get aggregated output (off by default, optional)\n");
   printf(" -b                 : Calculate bytewise latency\n");
@@ -62,7 +64,6 @@ void usage (char* argv){
 }
 
 int main(int argc, char *argv[]){
-  char errbuf[PCAP_ERRBUF_SIZE];
   char *src_ip;
   char *dst_ip;
   int dst_port;
@@ -73,7 +74,7 @@ int main(int argc, char *argv[]){
   Dump *senderDump;
 
   while(1){
-    c = getopt( argc, argv, "s:r:p:f:n:o:g:d:vabtu");
+    c = getopt( argc, argv, "s:r:p:f:n:o:g:d:u:vabt");
     if(c == -1) break;
 
     switch(c){
@@ -100,6 +101,7 @@ int main(int argc, char *argv[]){
       GlobOpts::transport = true;
       break;
     case 'u':
+      GlobOpts::prefix = optarg;
       GlobOpts::genRFiles = true;
       break;
     case 'v':

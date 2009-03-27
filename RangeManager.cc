@@ -86,7 +86,7 @@ void RangeManager::processAck(uint32_t ack, timeval* tv){
   Range* tmpRange;
   int i = highestAcked + 1;
 
-  for( ; i != ranges.size(); i++){
+  for( ; i != (int)ranges.size(); i++){
     tmpRange = ranges[i];
     
     if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
@@ -157,7 +157,7 @@ void RangeManager::genStats(struct byteStats* bs){
 
   it_end = ranges.end();
   for(it = ranges.begin(); it != it_end; it++){
-    if ( latency = (*it)->getDiff() ){ /* Skip if invalid */
+    if ( (latency = (*it)->getDiff()) ){ /* Skip if invalid */
       bs->cumLat += latency;
       if(latency > bs->maxLat)
 	bs->maxLat = latency;
@@ -195,7 +195,6 @@ void RangeManager::genStats(struct byteStats* bs){
 void RangeManager::validateContent(){
   int numAckTimes = 0;
   int numSendTimes = 0;
-  uint32_t tmpStartSeq = 0;
   uint32_t tmpEndSeq = 0;
 
   vector<Range*>::iterator it, it_end;
@@ -238,7 +237,7 @@ void RangeManager::validateContent(){
   if(nrRanges == 0){
     nrRanges = ranges.size();
   }else{
-    if(ranges.size() != nrRanges){
+    if( (int)ranges.size() != nrRanges){
       if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
 	cerr << "Ranges has been resized. Old size: " << nrRanges
 	     << " - New size: " << ranges.size() << endl;
@@ -386,7 +385,7 @@ uint32_t RangeManager::getDuration(){
 }
 
 /* Calculate clock drift on CDF */
-float RangeManager::calcDrift(){
+void RangeManager::calcDrift(){
   /* If connection > 500 ranges &&
      connection.duration > 120 seconds, 
      calculate clock drift */
@@ -562,15 +561,15 @@ void RangeManager::genRFiles(uint16_t port){
   ofstream dcDiff, retr1, retr2, retr3, retr4;
   stringstream r1fn, r2fn, r3fn, r4fn, dcdfn;;
   
-  r1fn << "1retr-" << port << ".dat";
-  r2fn << "2retr-" << port << ".dat";
-  r3fn << "3retr-" << port << ".dat";
-  r4fn << "4retr-" << port << ".dat";
+  r1fn << GlobOpts::prefix << "-1retr-" << port << ".dat";
+  r2fn << GlobOpts::prefix << "-2retr-" << port << ".dat";
+  r3fn << GlobOpts::prefix << "-3retr-" << port << ".dat";
+  r4fn << GlobOpts::prefix << "-4retr-" << port << ".dat";
   
-  if (GlobOpts::withRecv){
-    dcdfn << "dcDiff-" << port << ".dat";
-    dcDiff.open((char*)((dcdfn.str()).c_str()), ios::out);
-  }
+  //if (GlobOpts::withRecv){
+  //  dcdfn << "dcDiff-" << port << ".dat";
+  //  dcDiff.open((char*)((dcdfn.str()).c_str()), ios::out);
+  //}
 
   retr1.open((char*)((r1fn.str()).c_str()), ios::out);
   retr2.open((char*)((r2fn.str()).c_str()), ios::out);
@@ -579,10 +578,10 @@ void RangeManager::genRFiles(uint16_t port){
 
   for(; it != it_end; it++){
 
-    if (GlobOpts::withRecv){
-      dcDiff << (*it)->getDcDiff()  << "  " <<
-	(*it)->getNumBytes() << endl;
-    }
+    //if (GlobOpts::withRecv){
+    //  dcDiff << (*it)->getDcDiff()  << "  " <<
+    //	(*it)->getNumBytes() << endl;
+    //}
       
     if((*it)->getNumRetrans() == 1)
       retr1 << (*it)->getDiff() << endl;
@@ -598,9 +597,9 @@ void RangeManager::genRFiles(uint16_t port){
     
   }
   
-  if (GlobOpts::withRecv){
-    dcDiff.close();
-  }
+  //if (GlobOpts::withRecv){
+  //  dcDiff.close();
+  //}
   retr1.close();
   retr2.close();
   retr3.close();
