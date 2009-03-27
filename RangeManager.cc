@@ -357,7 +357,7 @@ void RangeManager::registerRecvDiffs(){
 	   << (*it)->getRecvTime()->tv_usec << endl;
       cerr << "RecvDiff=" << diff << endl;
       cerr << "recvd.size()= " << recvd.size() << endl;
-    }  
+    }
   }
 
   /* End of the current connection. Free recv data */
@@ -580,7 +580,8 @@ void RangeManager::genRFiles(uint16_t port){
   for(; it != it_end; it++){
 
     if (GlobOpts::withRecv){
-      dcDiff << (*it)->getDcDiff() << endl;
+      dcDiff << (*it)->getDcDiff()  << "  " <<
+	(*it)->getNumBytes() << endl;
     }
       
     if((*it)->getNumRetrans() == 1)
