@@ -266,6 +266,11 @@ void RangeManager::registerRecvDiffs(){
 
   vector<recvData*>::iterator rit, rit_end;
  
+  /* Store ranges with no corresponding packet
+     on the receiver side, and delete them after
+     traversing all ranges */
+  vector<vector<Range*>::iterator> delList;
+
   /* Create map with references to the ranges */
   rit = recvd.begin();
   rit_end = recvd.end();
@@ -323,11 +328,12 @@ void RangeManager::registerRecvDiffs(){
       }
     }
     
-    /* Check if match has been found...
-       TODO: Remove range from data structure, and don't abort*/
+    /* Check if match has been found */
     if(!matched){
-      cerr << "Found range that has no corresponding received packet. Exiting\n" << endl;
-      exit(1);
+      cerr << "Found range that has no corresponding received packet.\nTagging for deletion." << endl;
+      delList.push_back(it);
+      
+      continue;
     }
     
     if(GlobOpts::transport){
@@ -358,6 +364,19 @@ void RangeManager::registerRecvDiffs(){
       cerr << "recvd.size()= " << recvd.size() << endl;
     }
   }
+
+  /* Remove invalid ranges */
+  vector<vector<Range*>::iterator>::iterator dit, dit_end;
+  dit = delList.begin();
+  dit_end = delList.end();
+  
+  for(; dit != dit_end; dit++){
+    delBytes += (*(*dit))->getNumBytes();
+    ranges.erase(*dit);
+  }
+
+  
+  // TODO: Count deleted bytes to make CDF values coorect
 
   /* End of the current connection. Free recv data */
   recvd.~vector();
