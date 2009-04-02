@@ -298,6 +298,12 @@ void RangeManager::registerRecvDiffs(){
     uint32_t absLow = tmpStartSeq - 1600;
     uint32_t absHigh = tmpStartSeq + 1600;
 
+    if( absLow > absHigh ){
+      cerr << "Wrapped TCP sequence number detected.\n Tagging range for deletion" << endl;
+      delList.push_back(it);
+      continue;
+    }
+
     lowIt = rsMap.lower_bound(absLow);
     highIt = rsMap.upper_bound(absHigh);
 
@@ -310,6 +316,7 @@ void RangeManager::registerRecvDiffs(){
 	cerr << "Processing received packet with startSeq=" << 
 	  tmpRd->startSeq << " - endSeq=" << tmpRd->endSeq << " - Recvd:" 
 	     << tmpRd->tv.tv_sec << "." << tmpRd->tv.tv_usec << endl;
+	cerr << "absLow: " << absLow << " - absHigh: " << absHigh << endl;
       }
       
       /* If the received packet matches the range */
@@ -365,19 +372,17 @@ void RangeManager::registerRecvDiffs(){
     }
   }
 
-  /* Remove invalid ranges */
-  vector<vector<Range*>::iterator>::iterator dit, dit_end;
-  dit = delList.begin();
-  dit_end = delList.end();
+  /* Remove invalid ranges 
+     Do in reverse so as not to invalidate iterators */
+  vector<vector<Range*>::iterator>::reverse_iterator dit, dit_end;
+  dit = delList.rbegin();
+  dit_end = delList.rend();
   
   for(; dit != dit_end; dit++){
     delBytes += (*(*dit))->getNumBytes();
     ranges.erase(*dit);
   }
-
   
-  // TODO: Count deleted bytes to make CDF values coorect
-
   /* End of the current connection. Free recv data */
   recvd.~vector();
 }
