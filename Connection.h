@@ -43,6 +43,6 @@ class Connection {
   void printDcCdf();
   void makeDcCdf();
   void genRFiles();
-  int getNumBytes(){ return endSeq - firstSeq; }
+  int getNumBytes();
 };
 #endif /* CONNECTION_H */

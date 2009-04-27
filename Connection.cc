@@ -100,8 +100,8 @@ void Connection::genStats(struct connStats* cs){
     cout << "Number of retransmissions: " << nrRetrans << endl;
     cout << "Number of packets with bundled segments: " << bundleCount << endl;
     cout << "Estimated loss rate: " << (((float)nrRetrans / nrPacketsSent) * 100) << "%" << endl;
-    cout << "Number of unique bytes: " << endSeq - firstSeq << endl;
-    cout << "Redundancy: " << ((float)(totBytesSent - (endSeq - firstSeq)) / totBytesSent) * 100 << "\%" << endl;
+    cout << "Number of unique bytes: " << getNumBytes() << endl;
+    cout << "Redundancy: " << ((float)(totBytesSent - (getNumBytes())) / totBytesSent) * 100 << "\%" << endl;
     cout << "--------------------------------------------------" << endl;
   } else {
     cout << nrPacketsSent << " " << nrRetrans << " " << bundleCount << endl;
@@ -177,4 +177,12 @@ void Connection::makeDcCdf(){
 
 void Connection::genRFiles(){
   rm->genRFiles(dstPort);
+}
+
+int Connection::getNumBytes(){ 
+  if ( endSeq > firstSeq )
+    return endSeq - firstSeq;
+  else {
+    return (UINT_MAX - firstSeq) + endSeq; 
+  }
 }
