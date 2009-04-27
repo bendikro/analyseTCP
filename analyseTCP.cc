@@ -34,7 +34,7 @@ bool GlobOpts::withRecv       = false;
 bool GlobOpts::transport      = false;
 bool GlobOpts::genRFiles      = false;
 string GlobOpts::prefix       = "";
-int  GlobOpts::debugLevel     = 0;
+int GlobOpts::debugLevel      = 0;
 string GlobOpts::natIP        = "";
 
 void usage (char* argv){

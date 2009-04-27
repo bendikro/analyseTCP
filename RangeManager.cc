@@ -163,6 +163,7 @@ void RangeManager::genStats(struct byteStats* bs){
 	bs->maxLat = latency;
       if(latency < bs->minLat)
 	bs->minLat = latency;
+      bs->nrRanges++;
     }else{
       continue; /* Skip */
     }
@@ -183,8 +184,7 @@ void RangeManager::genStats(struct byteStats* bs){
     if (retrans > bs->maxRetrans)
       bs->maxRetrans = retrans;
   }
-  bs->nrRanges = ranges.size();
-  
+  //bs->nrRanges = ranges.size();
 }
 
 /* Check that every byte from firstSeq to lastSeq is present.
@@ -590,11 +590,6 @@ void RangeManager::genRFiles(uint16_t port){
   r3fn << GlobOpts::prefix << "-3retr-" << port << ".dat";
   r4fn << GlobOpts::prefix << "-4retr-" << port << ".dat";
   
-  //if (GlobOpts::withRecv){
-  //  dcdfn << "dcDiff-" << port << ".dat";
-  //  dcDiff.open((char*)((dcdfn.str()).c_str()), ios::out);
-  //}
-
   retr1.open((char*)((r1fn.str()).c_str()), ios::out);
   retr2.open((char*)((r2fn.str()).c_str()), ios::out);
   retr3.open((char*)((r3fn.str()).c_str()), ios::out);
@@ -602,28 +597,27 @@ void RangeManager::genRFiles(uint16_t port){
 
   for(; it != it_end; it++){
 
-    //if (GlobOpts::withRecv){
-    //  dcDiff << (*it)->getDcDiff()  << "  " <<
-    //	(*it)->getNumBytes() << endl;
-    //}
-      
-    if((*it)->getNumRetrans() == 1)
-      retr1 << (*it)->getDiff() << endl;
+    if((*it)->getNumRetrans() == 1){
+      if ( (*it)->getDiff() > 0)
+	retr1 << (*it)->getDiff() << endl;
+    }
 
-    if((*it)->getNumRetrans() == 2)
-      retr2 << (*it)->getDiff() << endl;
-
-    if((*it)->getNumRetrans() == 3)
-      retr3 << (*it)->getDiff() << endl;
-
-    if((*it)->getNumRetrans() == 4)
-      retr4 << (*it)->getDiff() << endl;
+    if((*it)->getNumRetrans() == 2){
+      if ( (*it)->getDiff() > 0)
+	retr2 << (*it)->getDiff() << endl;
+    }
     
+    if((*it)->getNumRetrans() == 3){
+      if ( (*it)->getDiff() > 0)
+	retr3 << (*it)->getDiff() << endl;
+    }
+    
+    if((*it)->getNumRetrans() == 4){
+      if ( (*it)->getDiff() > 0)
+	retr4 << (*it)->getDiff() << endl;
+    }
   }
   
-  //if (GlobOpts::withRecv){
-  //  dcDiff.close();
-  //}
   retr1.close();
   retr2.close();
   retr3.close();
