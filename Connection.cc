@@ -34,11 +34,13 @@ void Connection::registerSent(struct sendData* sd){
     nrRetrans++;
   } 
   
-  if((sd->seq >= curSeq) && sd->payloadSize > 0){
-    curSeq = sd->seq;
-    curSize = sd->payloadSize;
-    endSeq = sd->endSeq;
-  }
+  if( ( (sd->seq >= curSeq) && sd->payloadSize > 0) ||
+      ( (sd->seq < firstSeq) && sd->payloadSize > 0)) /* Wrapped seq nr. */
+    {
+      curSeq = sd->seq;
+      curSize = sd->payloadSize;
+      endSeq = sd->endSeq;
+    }
   totBytesSent += sd->payloadSize; 
 }
 
