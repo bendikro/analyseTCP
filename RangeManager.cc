@@ -582,18 +582,20 @@ void RangeManager::genRFiles(uint16_t port){
   it = ranges.begin();
   it_end = ranges.end();
     
-  ofstream dcDiff, retr1, retr2, retr3, retr4;
-  stringstream r1fn, r2fn, r3fn, r4fn, dcdfn;;
+  ofstream dcDiff, retr1, retr2, retr3, retr4, all;
+  stringstream r1fn, r2fn, r3fn, r4fn, allfn, dcdfn;;
   
   r1fn << GlobOpts::prefix << "-1retr-" << port << ".dat";
   r2fn << GlobOpts::prefix << "-2retr-" << port << ".dat";
   r3fn << GlobOpts::prefix << "-3retr-" << port << ".dat";
   r4fn << GlobOpts::prefix << "-4retr-" << port << ".dat";
-  
+  allfn << GlobOpts::prefix << "-all-" << port << ".dat";
+
   retr1.open((char*)((r1fn.str()).c_str()), ios::out);
   retr2.open((char*)((r2fn.str()).c_str()), ios::out);
   retr3.open((char*)((r3fn.str()).c_str()), ios::out);
   retr4.open((char*)((r4fn.str()).c_str()), ios::out);
+  all.open((char*)((allfn.str()).c_str()), ios::out);
 
   for(; it != it_end; it++){
 
@@ -616,6 +618,10 @@ void RangeManager::genRFiles(uint16_t port){
       if ( (*it)->getDiff() > 0)
 	retr4 << (*it)->getDiff() << endl;
     }
+    
+    if ( (*it)->getDiff() > 0)
+      all << (*it)->getDiff() << endl;
+
   }
   
   retr1.close();
