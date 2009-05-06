@@ -52,7 +52,7 @@ void usage (char* argv){
   printf("                    : (if not set, application-layer delay is calculated)\n");
   printf(" -u <prefix>        : Write statistics to comma-separated files (for use with R)\n");
   printf("                      <prefix> assigns an output filename prefix.\n");
-  printf(" -m <IP>            : Sender side NAT address (as seen on recv dump)\n");
+  printf(" -m <IP>            : Sender side external NAT address (as seen on recv dump)\n");
   printf(" -n <IP>            : Receiver side local address (as seen on recv dump\n");
   printf(" -a                 : Get aggregated statistics (off by default, optional)\n");
   printf(" -A                 : Only print aggregated statistics (off by default, optional)\n");

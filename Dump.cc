@@ -281,7 +281,7 @@ void Dump::processRecvd(string recvFn){
     cerr << "tmpSrcIp: " << tmpSrcIp << endl;
   }
   if(!GlobOpts::recvNatIP.empty()){
-    cerr << "sender side NATing handled" << endl;
+    cerr << "receiver side NATing handled" << endl;
     tmpDstIp = GlobOpts::recvNatIP;
     cerr << "dstIp: " << dstIp << endl;
     cerr << "tmpDstIp: " << tmpDstIp << endl;
