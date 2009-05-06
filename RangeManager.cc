@@ -1,8 +1,13 @@
 #include "RangeManager.h"
 
-map<const int, int> GlobOpts::cdf;
-map<const int, int> GlobOpts::dcCdf;
-float GlobOpts::avgDrift = 0;
+map<const int, int> GlobStats::cdf;
+map<const int, int> GlobStats::dcCdf;
+float GlobStats::avgDrift = 0;
+vector<int> GlobStats::retr1;
+vector<int> GlobStats::retr2;
+vector<int> GlobStats::retr3;
+vector<int> GlobStats::retr4;
+vector<int> GlobStats::all;
 
 /* Register all byes with a common send time as a range */
 void RangeManager::insertSentRange(uint32_t startSeq, uint32_t endSeq, timeval* tv){
@@ -498,13 +503,13 @@ void RangeManager::makeCdf(){
       cdf.insert(pair<int, int>(diff, (*it)->getNumBytes()));
     } 
     if(GlobOpts::aggregate){
-      if ( GlobOpts::cdf.count(diff) > 0 ){
+      if ( GlobStats::cdf.count(diff) > 0 ){
 	/*  Add bytes to bucket */
-	map<const int, int>::iterator element = GlobOpts::cdf.find(diff);
+	map<const int, int>::iterator element = GlobStats::cdf.find(diff);
 	element->second = element->second + (*it)->getNumBytes();
       }else{
 	/* Initiate new bucket */
-	GlobOpts::cdf.insert(pair<int, int>(diff, (*it)->getNumBytes()));
+	GlobStats::cdf.insert(pair<int, int>(diff, (*it)->getNumBytes()));
       }
     }
   }
@@ -547,13 +552,13 @@ void RangeManager::makeDcCdf(){
       dcCdf.insert(pair<int, int>(diff, (*it)->getNumBytes()));
     }
     if(GlobOpts::aggregate){
-      if ( GlobOpts::dcCdf.count(diff) > 0 ){
+      if ( GlobStats::dcCdf.count(diff) > 0 ){
 	/*  Add bytes to bucket */
-	map<const int, int>::iterator element = GlobOpts::dcCdf.find(diff);
+	map<const int, int>::iterator element = GlobStats::dcCdf.find(diff);
 	element->second = element->second + (*it)->getNumBytes();
       }else{
 	/* Initiate new bucket */
-	GlobOpts::dcCdf.insert(pair<int, int>(diff, (*it)->getNumBytes()));
+	GlobStats::dcCdf.insert(pair<int, int>(diff, (*it)->getNumBytes()));
       }
     }
     
@@ -561,12 +566,12 @@ void RangeManager::makeDcCdf(){
       (*it)->printValues();
     }
   }
-  GlobOpts::totNumBytes += getTotNumBytes();
+  GlobStats::totNumBytes += getTotNumBytes();
 
-  if (GlobOpts::avgDrift == 0)
-    GlobOpts::avgDrift = drift;
+  if (GlobStats::avgDrift == 0)
+    GlobStats::avgDrift = drift;
   else
-    GlobOpts::avgDrift = (GlobOpts::avgDrift + drift) / 2;
+    GlobStats::avgDrift = (GlobStats::avgDrift + drift) / 2;
 }
 
 void RangeManager::printCDF(){
@@ -614,49 +619,68 @@ void RangeManager::genRFiles(uint16_t port){
   it_end = ranges.end();
     
   ofstream dcDiff, retr1, retr2, retr3, retr4, all;
-  stringstream r1fn, r2fn, r3fn, r4fn, allfn, dcdfn;;
+  stringstream r1fn, r2fn, r3fn, r4fn, allfn, dcdfn;
   
-  r1fn << GlobOpts::prefix << "-1retr-" << port << ".dat";
-  r2fn << GlobOpts::prefix << "-2retr-" << port << ".dat";
-  r3fn << GlobOpts::prefix << "-3retr-" << port << ".dat";
-  r4fn << GlobOpts::prefix << "-4retr-" << port << ".dat";
-  allfn << GlobOpts::prefix << "-all-" << port << ".dat";
-
-  retr1.open((char*)((r1fn.str()).c_str()), ios::out);
-  retr2.open((char*)((r2fn.str()).c_str()), ios::out);
-  retr3.open((char*)((r3fn.str()).c_str()), ios::out);
-  retr4.open((char*)((r4fn.str()).c_str()), ios::out);
-  all.open((char*)((allfn.str()).c_str()), ios::out);
+  if(!(GlobOpts::aggOnly)){
+    r1fn << GlobOpts::prefix << "-1retr-" << port << ".dat";
+    r2fn << GlobOpts::prefix << "-2retr-" << port << ".dat";
+    r3fn << GlobOpts::prefix << "-3retr-" << port << ".dat";
+    r4fn << GlobOpts::prefix << "-4retr-" << port << ".dat";
+    allfn << GlobOpts::prefix << "-all-" << port << ".dat";
+    
+    retr1.open((char*)((r1fn.str()).c_str()), ios::out);
+    retr2.open((char*)((r2fn.str()).c_str()), ios::out);
+    retr3.open((char*)((r3fn.str()).c_str()), ios::out);
+    retr4.open((char*)((r4fn.str()).c_str()), ios::out);
+    all.open((char*)((allfn.str()).c_str()), ios::out);
+  }
 
   for(; it != it_end; it++){
 
     if((*it)->getNumRetrans() == 1){
-      if ( (*it)->getDiff() > 0)
-	retr1 << (*it)->getDiff() << endl;
+      if ( (*it)->getDiff() > 0){
+	GlobStats::retr1.push_back((*it)->getDiff());
+	if(!(GlobOpts::aggOnly))
+	  retr1 << (*it)->getDiff() << endl;
+      }
     }
 
     if((*it)->getNumRetrans() == 2){
-      if ( (*it)->getDiff() > 0)
-	retr2 << (*it)->getDiff() << endl;
+      if ( (*it)->getDiff() > 0){
+	GlobStats::retr2.push_back((*it)->getDiff());
+	if(!(GlobOpts::aggOnly))
+	  retr2 << (*it)->getDiff() << endl;
+      }
     }
     
     if((*it)->getNumRetrans() == 3){
-      if ( (*it)->getDiff() > 0)
-	retr3 << (*it)->getDiff() << endl;
+      if ( (*it)->getDiff() > 0){
+	GlobStats::retr3.push_back((*it)->getDiff());
+	if(!(GlobOpts::aggOnly))
+	  retr3 << (*it)->getDiff() << endl;
+      }
     }
     
     if((*it)->getNumRetrans() == 4){
-      if ( (*it)->getDiff() > 0)
-	retr4 << (*it)->getDiff() << endl;
+      if ( (*it)->getDiff() > 0){
+	GlobStats::retr4.push_back((*it)->getDiff());
+	if(!(GlobOpts::aggOnly))
+	  retr4 << (*it)->getDiff() << endl;
+      }
     }
     
-    if ( (*it)->getDiff() > 0)
-      all << (*it)->getDiff() << endl;
-
+    if ( (*it)->getDiff() > 0){
+      GlobStats::all.push_back((*it)->getDiff());
+      if(!(GlobOpts::aggOnly))  
+	all << (*it)->getDiff() << endl;
+    }
   }
   
-  retr1.close();
-  retr2.close();
-  retr3.close();
-  retr4.close();
+  if(!(GlobOpts::aggOnly)){
+    retr1.close();
+    retr2.close();
+    retr3.close();
+    retr4.close();
+    all.close();
+  }
 }

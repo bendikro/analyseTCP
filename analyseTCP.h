@@ -47,7 +47,7 @@ class GlobOpts{
 
  public:
   static bool aggregate;
-  static bool verbose;
+  static bool aggOnly;
   static bool bwlatency;
   static bool transport;
   static int  debugLevel;
@@ -56,10 +56,22 @@ class GlobOpts{
   static string recvNatIP;
   static bool genRFiles;
   static string prefix;
+};
+
+class GlobStats{
+ private:
+
+ public:
   static map<const int, int> cdf;
   static map<const int, int> dcCdf;
   static float avgDrift;
   static int totNumBytes;
+  static vector<int> retr1;
+  static vector<int> retr2;
+  static vector<int> retr3;
+  static vector<int> retr4;
+  static vector<int> all;
+  
 };
 
 /* Struct used to pass aggregated data between connections */

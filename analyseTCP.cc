@@ -27,8 +27,8 @@
 #include "analyseTCP.h"
 
 /* Initialize global options */
-bool GlobOpts::verbose        = false;
 bool GlobOpts::aggregate      = false;
+bool GlobOpts::aggOnly        = false;
 bool GlobOpts::bwlatency      = false;
 bool GlobOpts::withRecv       = false;
 bool GlobOpts::transport      = false;
@@ -54,8 +54,8 @@ void usage (char* argv){
   printf("                      <prefix> assigns an output filename prefix.\n");
   printf(" -m <IP>            : Sender side NAT address (as seen on recv dump)\n");
   printf(" -n <IP>            : Receiver side local address (as seen on recv dump\n");
-  printf(" -v                 : Verbose (off by default, optional)\n");
-  printf(" -a                 : Get aggregated output (off by default, optional)\n");
+  printf(" -a                 : Get aggregated statistics (off by default, optional)\n");
+  printf(" -A                 : Only print aggregated statistics (off by default, optional)\n");
   printf(" -b                 : Calculate bytewise latency\n");
   printf(" -d                 : Indicate debug level\n");
   printf("                      1 = Only output on reading sender side dump first pass.\n");
@@ -77,7 +77,7 @@ int main(int argc, char *argv[]){
   Dump *senderDump;
 
   while(1){
-    c = getopt( argc, argv, "s:r:p:f:m:n:o:g:d:u:vabt");
+    c = getopt( argc, argv, "s:r:p:f:m:n:o:g:d:u:aAbt");
     if(c == -1) break;
 
     switch(c){
@@ -110,10 +110,11 @@ int main(int argc, char *argv[]){
       GlobOpts::prefix = optarg;
       GlobOpts::genRFiles = true;
       break;
-    case 'v':
-      GlobOpts::verbose = true;
-      break;
     case 'a':
+      GlobOpts::aggregate = true;
+      break;
+    case 'A':
+      GlobOpts::aggOnly = true;
       GlobOpts::aggregate = true;
       break;
     case 'b':
@@ -161,6 +162,7 @@ int main(int argc, char *argv[]){
   }
      
   senderDump->printDumpStats();
+
   return 0;
 }
 

@@ -89,7 +89,7 @@ void Connection::registerAck(uint32_t ack, timeval* tv){
 /* Generate statistics for each connection.
    update aggregate stats if requested */
 void Connection::genStats(struct connStats* cs){
-  if(GlobOpts::verbose){
+  if(!(GlobOpts::aggOnly)){
     cout << "Src_port: " << srcPort << " Dst_port: " << dstPort << endl;
     
     if(GlobOpts::bwlatency)
@@ -105,10 +105,8 @@ void Connection::genStats(struct connStats* cs){
     cout << "Number of unique bytes: " << getNumBytes() << endl;
     cout << "Redundancy: " << ((float)(totBytesSent - (getNumBytes())) / totBytesSent) * 100 << "\%" << endl;
     cout << "--------------------------------------------------" << endl;
-  } else {
-    cout << nrPacketsSent << " " << nrRetrans << " " << bundleCount << endl;
   }
-
+  
   if(GlobOpts::aggregate){
     cs->totPacketSize += totPacketSize;
     cs->nrPacketsSent += nrPacketsSent;
@@ -122,20 +120,20 @@ void Connection::genStats(struct connStats* cs){
    /* Iterate through vector and gather data */
    rm->genStats(bs);
    bs->avgLat = (float)bs->cumLat / bs->nrRanges;
-
-  if(GlobOpts::verbose){
-    cout << "Bytewise latency - Conn: " <<  srcPort << endl;
-    cout << "Maximum latency  : " << bs->maxLat << "ms" << endl;
-    cout << "Minimum latency  : " << bs->minLat << "ms" << endl;
-    cout << "Average latency  : " << bs->avgLat << "ms" << endl;
-    cout << "--------------------------------------------------" << endl;
-    cout << "Occurrences of 1. retransmission : " << bs->retrans[0] << endl;
-    cout << "Occurrences of 2. retransmission : " << bs->retrans[1] << endl; 
-    cout << "Occurrences of 3. retransmission : " << bs->retrans[2] << endl;
-    cout << "Max retransmissions              : " << bs->maxRetrans << endl;
-    cout << "==================================================" << endl << endl;
-  }
-}
+   
+   if(!(GlobOpts::aggOnly)){
+     cout << "Bytewise latency - Conn: " <<  srcPort << endl;
+     cout << "Maximum latency  : " << bs->maxLat << "ms" << endl;
+     cout << "Minimum latency  : " << bs->minLat << "ms" << endl;
+     cout << "Average latency  : " << bs->avgLat << "ms" << endl;
+     cout << "--------------------------------------------------" << endl;
+     cout << "Occurrences of 1. retransmission : " << bs->retrans[0] << endl;
+     cout << "Occurrences of 2. retransmission : " << bs->retrans[1] << endl; 
+     cout << "Occurrences of 3. retransmission : " << bs->retrans[2] << endl;
+     cout << "Max retransmissions              : " << bs->maxRetrans << endl;
+     cout << "==================================================" << endl << endl;
+   }
+ }
 
 /* Check validity of connection range and time data */
 void Connection::validateRanges(){
@@ -179,7 +177,7 @@ void Connection::makeDcCdf(){
 }
 
 void Connection::genRFiles(){
-  rm->genRFiles(dstPort);
+  rm->genRFiles(srcPort);
 }
 
 int Connection::getNumBytes(){ 

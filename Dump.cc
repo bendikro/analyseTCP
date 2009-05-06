@@ -1,6 +1,6 @@
 #include "Dump.h"
 
-int GlobOpts::totNumBytes;
+int GlobStats::totNumBytes;
 
 /* Methods for class Dump */
 Dump::Dump( string src_ip, string dst_ip, int dst_port, string fn ){
@@ -171,8 +171,7 @@ void Dump::analyseSender (){
       }
     }
   }
-  
-  if(GlobOpts::verbose){
+  if(GlobOpts::aggregate){
     if(cs.nrPacketsSent){ /* To avoid division by 0 */
       /* Print aggregate statistics */
       cout << "--------------------------------------------------" <<endl;
@@ -199,13 +198,9 @@ void Dump::analyseSender (){
 	cout << "==================================================" << endl;
       }
     }
-  }else{
-    cout << cs.nrPacketsSent << " " << cs.nrRetrans
-	 << " " << cs.bundleCount << " " << (((float)cs.nrRetrans / cs.nrPacketsSent) * 100) 
-	 << endl;
   }
 }
-  
+
 /* Process outgoing packets */
 void Dump::processSent(const struct pcap_pkthdr* header, const u_char *data){
   const struct sniff_ethernet *ethernet; /* The ethernet header */
@@ -336,7 +331,8 @@ void Dump::processRecvd(string recvFn){
      place timestamp diffs in buckets */
   makeCDF();
 
-  printCDF();
+  if(!(GlobOpts::aggOnly))
+    printCDF();
 
   /* Calculate clock drift for all eligible connections
      eligible: more than 500 ranges && 
@@ -344,7 +340,8 @@ void Dump::processRecvd(string recvFn){
   make drift compensated CDF*/
   makeDcCdf();
 
-  printDcCdf();
+  if(!(GlobOpts::aggOnly))  
+    printDcCdf();
 
   if(GlobOpts::aggregate){
     printAggCdf();
@@ -416,13 +413,13 @@ void Dump::printDcCdf(){
 void Dump::printAggCdf(){
   map<const int, int>::iterator nit, nit_end;
   double cdfSum = 0;
-  nit = GlobOpts::cdf.begin();
-  nit_end = GlobOpts::cdf.end();
+  nit = GlobStats::cdf.begin();
+  nit_end = GlobStats::cdf.end();
   
   cout << endl << endl << "#Aggregated CDF:" << endl;
   cout << "#Relative delay      Percentage" << endl;
   for(; nit != nit_end; nit++){
-    cdfSum += (double)(*nit).second / GlobOpts::totNumBytes;
+    cdfSum += (double)(*nit).second / GlobStats::totNumBytes;
     printf("time: %10d    CDF: %.10f\n",(*nit).first, cdfSum);
   }
 }
@@ -430,14 +427,14 @@ void Dump::printAggCdf(){
 void Dump::printAggDcCdf(){
   map<const int, int>::iterator nit, nit_end;
   double cdfSum = 0;
-  nit = GlobOpts::dcCdf.begin();
-  nit_end = GlobOpts::dcCdf.end();
+  nit = GlobStats::dcCdf.begin();
+  nit_end = GlobStats::dcCdf.end();
   
-  cout << endl << "#Aggregated, drift-compensted CDF:" << endl;
-  cout << "#------ Average drift : " << GlobOpts::avgDrift << "ms/s ------" << endl;
+  cout << endl << "#Aggregated, drift-compensated CDF:" << endl;
+  cout << "#------ Average drift : " << GlobStats::avgDrift << "ms/s ------" << endl;
   cout << "#Relative delay      Percentage" << endl;
   for(; nit != nit_end; nit++){
-    cdfSum += (double)(*nit).second / GlobOpts::totNumBytes;
+    cdfSum += (double)(*nit).second / GlobStats::totNumBytes;
     printf("time: %10d    CDF: %.10f\n",(*nit).first, cdfSum);
   }
 }
@@ -471,4 +468,58 @@ void Dump::genRFiles(){
   for(cIt = conns.begin(); cIt != conns.end(); cIt++){
     cIt->second->genRFiles();
   }
+
+  /* Print aggregate statistics */
+  ofstream dcDiff, retr1, retr2, retr3, retr4, all;
+  stringstream r1fn, r2fn, r3fn, r4fn, allfn, dcdfn;;
+  
+  r1fn << GlobOpts::prefix << "-1retr-aggr.dat";
+  r2fn << GlobOpts::prefix << "-2retr-aggr.dat";
+  r3fn << GlobOpts::prefix << "-3retr-aggr.dat";
+  r4fn << GlobOpts::prefix << "-4retr-aggr.dat";
+  allfn << GlobOpts::prefix << "-all-aggr.dat";
+
+  retr1.open((char*)((r1fn.str()).c_str()), ios::out);
+  retr2.open((char*)((r2fn.str()).c_str()), ios::out);
+  retr3.open((char*)((r3fn.str()).c_str()), ios::out);
+  retr4.open((char*)((r4fn.str()).c_str()), ios::out);
+  all.open((char*)((allfn.str()).c_str()), ios::out);
+  
+  vector<int>::iterator it, it_end;
+  it = GlobStats::retr1.begin();
+  it_end = GlobStats::retr1.end();
+  for(; it != it_end; it++){
+    retr1 << *it << endl;
+  }
+  
+  it = GlobStats::retr2.begin();
+  it_end = GlobStats::retr2.end();
+  for(; it != it_end; it++){
+    retr2 << *it << endl;
+  }
+  
+  it = GlobStats::retr3.begin();
+  it_end = GlobStats::retr3.end();
+  for(; it != it_end; it++){
+    retr3 << *it << endl;
+  }
+
+  it = GlobStats::retr4.begin();
+  it_end = GlobStats::retr4.end();
+  for(; it != it_end; it++){
+    retr4 << *it << endl;
+  }
+
+  it = GlobStats::all.begin();
+  it_end = GlobStats::all.end();
+  for(; it != it_end; it++){
+    all << *it << endl;
+  }
+
+  retr1.close();
+  retr2.close();
+  retr3.close();
+  retr4.close();
+  all.close();
+
 }
