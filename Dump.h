@@ -36,6 +36,9 @@ class Dump {
   void makeCDF();
   void printCDF();
   void printDcCdf();
+  void printAggCdf();
+  void printAggDcCdf();
+
   void makeDcCdf();
  public:
   Dump( string src_ip, string dst_ip, int dst_port, string fn );

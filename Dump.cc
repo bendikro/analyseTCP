@@ -1,5 +1,7 @@
 #include "Dump.h"
 
+int GlobOpts::totNumBytes;
+
 /* Methods for class Dump */
 Dump::Dump( string src_ip, string dst_ip, int dst_port, string fn ){
   srcIp = src_ip;
@@ -17,7 +19,6 @@ Dump::Dump( string src_ip, string dst_ip, int dst_port, string fn ){
    This generates initial one-pass statistics from sender-side dump. */
 void Dump::analyseSender (){
   int packetCount = 0;
-  string tmpDstIp = dstIp;
   char errbuf[PCAP_ERRBUF_SIZE];
   struct pcap_pkthdr h;
   const u_char *data;
@@ -29,23 +30,13 @@ void Dump::analyseSender (){
     exit(1);
   }
   
-  /* Handle NAT between sender and receiver */
-
-  /* TODO: Seperate NAT-handling options for 
-     NAT on sender side and receiver side */  
-  if(!GlobOpts::natIP.empty()){
-    cerr << "NATing handled" << endl;
-    tmpDstIp = GlobOpts::natIP;
-    cerr << "dstIp: " << dstIp << endl;
-  }
-  
   /* Set up pcap filter to include only outgoing tcp
      packets with correct ip and port numbers.
      We exclude packets with no TCP payload. */
   struct bpf_program compFilter;
   stringstream filterExp;
   filterExp << "tcp && src host " << srcIp << " && dst host "
-	    << tmpDstIp << " && dst port " << dstPort
+	    << dstIp << " && dst port " << dstPort
 	    << " && (ip[2:2] - ((ip[0]&0x0f)<<2) - (tcp[12]>>2)) >= 1";
   
   /* Filter to get outgoing packets */
@@ -97,7 +88,7 @@ void Dump::analyseSender (){
     /* Set up pcap filter to get only incoming tcp packets
        with correct IP and ports and the ack flag set */
     filterExp.str("");
-    filterExp << "tcp && src host " << tmpDstIp << " && dst host "
+    filterExp << "tcp && src host " << dstIp << " && dst host "
 	      << srcIp << " && src port " << dstPort
 	      << " && ((tcp[tcpflags] & tcp-syn) != tcp-syn)"
 	      << " && ((tcp[tcpflags] & tcp-fin) != tcp-fin)"
@@ -177,40 +168,41 @@ void Dump::analyseSender (){
 	if( maxRetrans < bs.maxRetrans ){
 	  maxRetrans = bs.maxRetrans;
 	}
-	
-	if(GlobOpts::verbose){
-	  if(cs.nrPacketsSent){ /* To avoid division by 0 */
-	    /* Print aggregated statistics */
-	    cout << "--------------------------------------------------" <<endl;
-	    cout << "Aggregate Statistics      : " << conns.size() << " connections:" << endl;
-	    cout << "Total bytes sent          : " << sentBytesCount << endl;
-	    cout << "Total packets sent        : " << cs.nrPacketsSent << endl;
-	    cout << "Average payload size      : " << (sentBytesCount / cs.nrPacketsSent) << endl;
-	    cout << "Number of retransmissions : " << cs.nrRetrans << endl;
-	    cout << "Bundled segment packets   : " << cs.bundleCount << endl;
-	    cout << "Estimated loss rate       : " << (((float)cs.nrRetrans / cs.nrPacketsSent) * 100) 
-		 << "%" << endl;
-	    if(GlobOpts::bwlatency){
-	      cout << "--------------------------------------------------" <<endl;
-	      /* Print Aggregate bytewise latency */
-	      cout << "Bytewise latency" << endl;
-	      cout << "Minimum latency : " << aggrMinLat << endl;
-	      cout << "Maximum latency : " << aggrMaxLat << endl;
-	      cout << "Average latency : " << aggrCumLat / conns.size() << endl;
-	      cout << "--------------------------------------------------" << endl;
-	      cout << "Occurrences of 1. retransmission : " << r1 << endl;
-	      cout << "Occurrences of 2. retransmission : " << r2 << endl; 
-	      cout << "Occurrences of 3. retransmission : " << r3 << endl;
-	      cout << "Max retransmissions              : " << maxRetrans << endl;
-	    }
-	  }
-	}else{
-	  cout << cs.nrPacketsSent << " " << cs.nrRetrans
-	       << " " << cs.bundleCount << " " << (((float)cs.nrRetrans / cs.nrPacketsSent) * 100) 
-	       << endl;
-	}
       }
     }
+  }
+  
+  if(GlobOpts::verbose){
+    if(cs.nrPacketsSent){ /* To avoid division by 0 */
+      /* Print aggregate statistics */
+      cout << "--------------------------------------------------" <<endl;
+      cout << "Aggregate Statistics      : " << conns.size() << " connections:" << endl;
+      cout << "Total bytes sent          : " << sentBytesCount << endl;
+      cout << "Total packets sent        : " << cs.nrPacketsSent << endl;
+      cout << "Average payload size      : " << (sentBytesCount / cs.nrPacketsSent) << endl;
+      cout << "Number of retransmissions : " << cs.nrRetrans << endl;
+      cout << "Bundled segment packets   : " << cs.bundleCount << endl;
+      cout << "Estimated loss rate       : " << (((float)cs.nrRetrans / cs.nrPacketsSent) * 100) 
+	   << "%" << endl;
+      if(GlobOpts::bwlatency){
+	cout << "--------------------------------------------------" <<endl;
+	/* Print Aggregate bytewise latency */
+	cout << "Bytewise latency" << endl;
+	cout << "Minimum latency : " << aggrMinLat << endl;
+	cout << "Maximum latency : " << aggrMaxLat << endl;
+	cout << "Average latency : " << aggrCumLat / conns.size() << endl;
+	cout << "--------------------------------------------------" << endl;
+	cout << "Occurrences of 1. retransmission : " << r1 << endl;
+	cout << "Occurrences of 2. retransmission : " << r2 << endl; 
+	cout << "Occurrences of 3. retransmission : " << r3 << endl;
+	cout << "Max retransmissions              : " << maxRetrans << endl;
+	cout << "==================================================" << endl;
+      }
+    }
+  }else{
+    cout << cs.nrPacketsSent << " " << cs.nrRetrans
+	 << " " << cs.bundleCount << " " << (((float)cs.nrRetrans / cs.nrPacketsSent) * 100) 
+	 << endl;
   }
 }
   
@@ -280,10 +272,25 @@ void Dump::processAcks(const struct pcap_pkthdr* header, const u_char *data){
 /* Analyse receiver dump - create CDFs */ 
 void Dump::processRecvd(string recvFn){
   int packetCount = 0;
+  string tmpSrcIp = srcIp;
+  string tmpDstIp = dstIp;
   char errbuf[PCAP_ERRBUF_SIZE];
   struct pcap_pkthdr h;
   const u_char *data;
   map<uint16_t, Connection*>::iterator it, it_end;
+
+  if(!GlobOpts::sendNatIP.empty()){
+    cerr << "sender side NATing handled" << endl;
+    tmpSrcIp = GlobOpts::sendNatIP;
+    cerr << "srcIp: " << srcIp << endl;
+    cerr << "tmpSrcIp: " << tmpSrcIp << endl;
+  }
+  if(!GlobOpts::recvNatIP.empty()){
+    cerr << "sender side NATing handled" << endl;
+    tmpDstIp = GlobOpts::recvNatIP;
+    cerr << "dstIp: " << dstIp << endl;
+    cerr << "tmpDstIp: " << tmpDstIp << endl;
+  }
 
   pcap_t *fd = pcap_open_offline(recvFn.c_str(), errbuf);
   if ( fd == NULL ) {
@@ -296,8 +303,8 @@ void Dump::processRecvd(string recvFn){
      We exclude packets with no TCP payload. */
   struct bpf_program compFilter;
   stringstream filterExp;
-  filterExp << "tcp && src host " << srcIp << " && dst host "
-	    << dstIp << " && dst port " << dstPort
+  filterExp << "tcp && src host " << tmpSrcIp << " && dst host "
+	    << tmpDstIp << " && dst port " << dstPort
 	    << " && (ip[2:2] - ((ip[0]&0x0f)<<2) - (tcp[12]>>2)) >= 1";
   /* Filter to get outgoing packets */
   if (pcap_compile(fd, &compFilter, (char*)((filterExp.str()).c_str()), 0, 0) == -1) {
@@ -338,6 +345,11 @@ void Dump::processRecvd(string recvFn){
   makeDcCdf();
 
   printDcCdf();
+
+  if(GlobOpts::aggregate){
+    printAggCdf();
+    printAggDcCdf();
+  }
 }
 
 /* Process outgoing packets */
@@ -398,6 +410,35 @@ void Dump::printDcCdf(){
   map<uint16_t, Connection*>::iterator cIt, cItEnd;
   for(cIt = conns.begin(); cIt != conns.end(); cIt++){
     cIt->second->printDcCdf();
+  }
+}
+
+void Dump::printAggCdf(){
+  map<const int, int>::iterator nit, nit_end;
+  double cdfSum = 0;
+  nit = GlobOpts::cdf.begin();
+  nit_end = GlobOpts::cdf.end();
+  
+  cout << endl << endl << "#Aggregated CDF:" << endl;
+  cout << "#Relative delay      Percentage" << endl;
+  for(; nit != nit_end; nit++){
+    cdfSum += (double)(*nit).second / GlobOpts::totNumBytes;
+    printf("time: %10d    CDF: %.10f\n",(*nit).first, cdfSum);
+  }
+}
+
+void Dump::printAggDcCdf(){
+  map<const int, int>::iterator nit, nit_end;
+  double cdfSum = 0;
+  nit = GlobOpts::dcCdf.begin();
+  nit_end = GlobOpts::dcCdf.end();
+  
+  cout << endl << "#Aggregated, drift-compensted CDF:" << endl;
+  cout << "#------ Average drift : " << GlobOpts::avgDrift << "ms/s ------" << endl;
+  cout << "#Relative delay      Percentage" << endl;
+  for(; nit != nit_end; nit++){
+    cdfSum += (double)(*nit).second / GlobOpts::totNumBytes;
+    printf("time: %10d    CDF: %.10f\n",(*nit).first, cdfSum);
   }
 }
 

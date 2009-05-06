@@ -133,6 +133,7 @@ void Connection::genStats(struct connStats* cs){
     cout << "Occurrences of 2. retransmission : " << bs->retrans[1] << endl; 
     cout << "Occurrences of 3. retransmission : " << bs->retrans[2] << endl;
     cout << "Max retransmissions              : " << bs->maxRetrans << endl;
+    cout << "==================================================" << endl << endl;
   }
 }
 

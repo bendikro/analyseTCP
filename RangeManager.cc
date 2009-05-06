@@ -1,5 +1,9 @@
 #include "RangeManager.h"
 
+map<const int, int> GlobOpts::cdf;
+map<const int, int> GlobOpts::dcCdf;
+float GlobOpts::avgDrift = 0;
+
 /* Register all byes with a common send time as a range */
 void RangeManager::insertSentRange(uint32_t startSeq, uint32_t endSeq, timeval* tv){
 
@@ -492,7 +496,17 @@ void RangeManager::makeCdf(){
     }else{
       /* Initiate new bucket */
       cdf.insert(pair<int, int>(diff, (*it)->getNumBytes()));
-    }  
+    } 
+    if(GlobOpts::aggregate){
+      if ( GlobOpts::cdf.count(diff) > 0 ){
+	/*  Add bytes to bucket */
+	map<const int, int>::iterator element = GlobOpts::cdf.find(diff);
+	element->second = element->second + (*it)->getNumBytes();
+      }else{
+	/* Initiate new bucket */
+	GlobOpts::cdf.insert(pair<int, int>(diff, (*it)->getNumBytes()));
+      }
+    }
   }
 }
 
@@ -532,10 +546,27 @@ void RangeManager::makeDcCdf(){
       /* Initiate new bucket */
       dcCdf.insert(pair<int, int>(diff, (*it)->getNumBytes()));
     }
+    if(GlobOpts::aggregate){
+      if ( GlobOpts::dcCdf.count(diff) > 0 ){
+	/*  Add bytes to bucket */
+	map<const int, int>::iterator element = GlobOpts::dcCdf.find(diff);
+	element->second = element->second + (*it)->getNumBytes();
+      }else{
+	/* Initiate new bucket */
+	GlobOpts::dcCdf.insert(pair<int, int>(diff, (*it)->getNumBytes()));
+      }
+    }
+    
     if(GlobOpts::debugLevel== 4 || GlobOpts::debugLevel== 5){
       (*it)->printValues();
     }
   }
+  GlobOpts::totNumBytes += getTotNumBytes();
+
+  if (GlobOpts::avgDrift == 0)
+    GlobOpts::avgDrift = drift;
+  else
+    GlobOpts::avgDrift = (GlobOpts::avgDrift + drift) / 2;
 }
 
 void RangeManager::printCDF(){

@@ -35,7 +35,9 @@ bool GlobOpts::transport      = false;
 bool GlobOpts::genRFiles      = false;
 string GlobOpts::prefix       = "";
 int GlobOpts::debugLevel      = 0;
-string GlobOpts::natIP        = "";
+string GlobOpts::sendNatIP    = "";
+string GlobOpts::recvNatIP    = "";
+
 
 void usage (char* argv){
   printf("Usage: %s [-s] [-r] [-p] [-f] [-v|a|b|d]\n", argv);
@@ -50,7 +52,8 @@ void usage (char* argv){
   printf("                    : (if not set, application-layer delay is calculated)\n");
   printf(" -u <prefix>        : Write statistics to comma-separated files (for use with R)\n");
   printf("                      <prefix> assigns an output filename prefix.\n");
-  printf(" -n <IP>            : Nat-address on receiver side dump\n");
+  printf(" -m <IP>            : Sender side NAT address (as seen on recv dump)\n");
+  printf(" -n <IP>            : Receiver side local address (as seen on recv dump\n");
   printf(" -v                 : Verbose (off by default, optional)\n");
   printf(" -a                 : Get aggregated output (off by default, optional)\n");
   printf(" -b                 : Calculate bytewise latency\n");
@@ -74,7 +77,7 @@ int main(int argc, char *argv[]){
   Dump *senderDump;
 
   while(1){
-    c = getopt( argc, argv, "s:r:p:f:n:o:g:d:u:vabt");
+    c = getopt( argc, argv, "s:r:p:f:m:n:o:g:d:u:vabt");
     if(c == -1) break;
 
     switch(c){
@@ -87,8 +90,11 @@ int main(int argc, char *argv[]){
     case 'p':
       dst_port = atoi(optarg);
       break;
+    case 'm':
+      GlobOpts::sendNatIP = optarg;
+      break;
     case 'n':
-      GlobOpts::natIP = optarg;
+      GlobOpts::recvNatIP = optarg;
       break;
     case 'f':
       sendfn = optarg;
@@ -146,14 +152,14 @@ int main(int argc, char *argv[]){
   senderDump = new Dump(src_ip, dst_ip, dst_port, sendfn);
   senderDump->analyseSender();
     
-  if (GlobOpts::withRecv){
-    senderDump->processRecvd(recvfn);
-  }
-     
   if(GlobOpts::genRFiles){
     senderDump->genRFiles();
   }
   
+  if (GlobOpts::withRecv){
+    senderDump->processRecvd(recvfn);
+  }
+     
   senderDump->printDumpStats();
   return 0;
 }

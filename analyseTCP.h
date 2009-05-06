@@ -52,9 +52,14 @@ class GlobOpts{
   static bool transport;
   static int  debugLevel;
   static bool withRecv;
-  static string natIP;
+  static string sendNatIP;
+  static string recvNatIP;
   static bool genRFiles;
   static string prefix;
+  static map<const int, int> cdf;
+  static map<const int, int> dcCdf;
+  static float avgDrift;
+  static int totNumBytes;
 };
 
 /* Struct used to pass aggregated data between connections */
