@@ -109,6 +109,7 @@ void Connection::genStats(struct connStats* cs){
     cs->nrPacketsSent += nrPacketsSent;
     cs->nrRetrans += nrRetrans;
     cs->bundleCount += bundleCount;
+    cs->totUniqueBytes += getNumBytes();
   }
 }
 

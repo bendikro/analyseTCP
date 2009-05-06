@@ -172,9 +172,12 @@ void Dump::analyseSender (){
       cout << "Average payload size      : " << (sentBytesCount / cs.nrPacketsSent) << endl;
       cout << "Number of retransmissions : " << cs.nrRetrans << endl;
       cout << "Bundled segment packets   : " << cs.bundleCount << endl;
-      cout << "Estimated loss rate       : " << (((float)cs.nrRetrans / cs.nrPacketsSent) * 100) 
+      cout << "Estimated loss rate       : " << (((float)cs.nrRetrans 
+						  / cs.nrPacketsSent) * 100)
 	   << "%" << endl;
-      
+      cout << "Number of unique bytes: " << cs.totUniqueBytes << endl;
+      cout << "Redundancy: " << ((float)(sentBytesCount - (cs.totUniqueBytes)) 
+				 / sentBytesCount) * 100 << "\%" << endl;
       cout << "--------------------------------------------------" <<endl;
       /* Print Aggregate bytewise latency */
       cout << "Bytewise latency" << endl;

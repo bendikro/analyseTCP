@@ -79,6 +79,7 @@ struct connStats{
   int nrPacketsSent;
   int nrRetrans;
   int bundleCount;
+  int totUniqueBytes;
 };
 
 /* Struct used to keep track of bytewise latency stats */
