@@ -91,11 +91,8 @@ void Connection::registerAck(uint32_t ack, timeval* tv){
 void Connection::genStats(struct connStats* cs){
   if(!(GlobOpts::aggOnly)){
     cout << "Src_port: " << srcPort << " Dst_port: " << dstPort << endl;
-    
-    if(GlobOpts::bwlatency)
-      cout << "Duration: " << rm->getDuration() << " seconds ( " 
-	   << ((float)rm->getDuration() / 60 / 60) << " hours )" << endl;
-    
+    cout << "Duration: " << rm->getDuration() << " seconds ( " 
+	 << ((float)rm->getDuration() / 60 / 60) << " hours )" << endl;
     cout << "Total packets sent: " << nrPacketsSent << endl;
     cout << "Total bytes sent (payload): " << totBytesSent << endl;
     cout << "Average payload size: " << (float)(totBytesSent / nrPacketsSent) << endl;

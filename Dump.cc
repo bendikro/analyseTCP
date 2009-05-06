@@ -64,71 +64,65 @@ void Dump::analyseSender (){
   
   pcap_close(fd);
   
-  if(GlobOpts::bwlatency){
-    /* DEBUG: Validate range */
-    if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
-      cerr << "---------------Begin first validation--------------" << endl;
-    it_end = conns.end();
-    for(it = conns.begin(); it != it_end; it++){
-      it->second->validateRanges();
-    }
-    if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5 )
-      cerr << "---------------End of first validation--------------" << endl;
+  
+  /* DEBUG: Validate range */
+  if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
+    cerr << "---------------Begin first validation--------------" << endl;
+  it_end = conns.end();
+  for(it = conns.begin(); it != it_end; it++){
+    it->second->validateRanges();
+  }
+  if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5 )
+    cerr << "---------------End of first validation--------------" << endl;
+  
+  
+  pcap_t *fd2 = pcap_open_offline(filename.c_str(), errbuf);
+  if ( fd2 == NULL ) {
+    cerr << "pcap: Could not open file" << filename << endl;
+    exit(1);
   }
   
-  /* For byte-latency: process received packets
-     and enter timestamps for acks */
-  if ( GlobOpts::bwlatency ){
-    pcap_t *fd2 = pcap_open_offline(filename.c_str(), errbuf);
-    if ( fd2 == NULL ) {
-      cerr << "pcap: Could not open file" << filename << endl;
-      exit(1);
-    }
-    
-    /* Set up pcap filter to get only incoming tcp packets
-       with correct IP and ports and the ack flag set */
-    filterExp.str("");
-    filterExp << "tcp && src host " << dstIp << " && dst host "
-	      << srcIp << " && src port " << dstPort
-	      << " && ((tcp[tcpflags] & tcp-syn) != tcp-syn)"
-	      << " && ((tcp[tcpflags] & tcp-fin) != tcp-fin)"
-	      << " && ((tcp[tcpflags] & tcp-ack) == tcp-ack)";
-    if (pcap_compile(fd2, &compFilter, (char*)((filterExp.str()).c_str()), 0, 0) == -1) {
-      cerr << "Couldn't parse filter " << filterExp << "Error:" << pcap_geterr(fd2) << endl;
-      exit(1);
-    }
-    
-    if (pcap_setfilter(fd2, &compFilter) == -1) {
-      cerr << "Couldn't install filter: " << filterExp << "Error: " << pcap_geterr(fd2) << endl;
-      exit(1);
-    }
-    
-    /* Sniff each sent packet in pcap tracefile: */
-    do {
-      data = (const u_char *)pcap_next(fd2, &h);
-      if(data == NULL){
-	char errMsg[] = "\nNo more data on file\n";
-	pcap_perror(fd2, errMsg);
-      }else{
-	processAcks(&h, data); /* Sniff packet */
-	packetCount++;
-      }
-    } while(data != NULL);
-    
-    pcap_close(fd2);
+  /* Set up pcap filter to get only incoming tcp packets
+     with correct IP and ports and the ack flag set */
+  filterExp.str("");
+  filterExp << "tcp && src host " << dstIp << " && dst host "
+	    << srcIp << " && src port " << dstPort
+	    << " && ((tcp[tcpflags] & tcp-syn) != tcp-syn)"
+	    << " && ((tcp[tcpflags] & tcp-fin) != tcp-fin)"
+	    << " && ((tcp[tcpflags] & tcp-ack) == tcp-ack)";
+  if (pcap_compile(fd2, &compFilter, (char*)((filterExp.str()).c_str()), 0, 0) == -1) {
+    cerr << "Couldn't parse filter " << filterExp << "Error:" << pcap_geterr(fd2) << endl;
+    exit(1);
   }
   
-  if ( GlobOpts::bwlatency ){
-    /* DEBUG: Validate ranges */
-    if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5 )
-      cerr << "---------------Begin second validation--------------" << endl;
-    it_end = conns.end();
-    for(it = conns.begin(); it != it_end; it++){
-      it->second->validateRanges();
-    }
-    if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5 )
-      cerr << "---------------End of second validation--------------" << endl;
+  if (pcap_setfilter(fd2, &compFilter) == -1) {
+    cerr << "Couldn't install filter: " << filterExp << "Error: " << pcap_geterr(fd2) << endl;
+    exit(1);
   }
+  
+  /* Sniff each sent packet in pcap tracefile: */
+  do {
+    data = (const u_char *)pcap_next(fd2, &h);
+    if(data == NULL){
+      char errMsg[] = "\nNo more data on file\n";
+      pcap_perror(fd2, errMsg);
+    }else{
+      processAcks(&h, data); /* Sniff packet */
+      packetCount++;
+    }
+  } while(data != NULL);
+  
+  pcap_close(fd2);
+  
+  /* DEBUG: Validate ranges */
+  if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5 )
+    cerr << "---------------Begin second validation--------------" << endl;
+  it_end = conns.end();
+  for(it = conns.begin(); it != it_end; it++){
+    it->second->validateRanges();
+  }
+  if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5 )
+    cerr << "---------------End of second validation--------------" << endl;
   
   /* Initiate struct for aggregate stats */
   struct connStats cs;
@@ -147,27 +141,24 @@ void Dump::analyseSender (){
   for(cIt = conns.begin(); cIt != conns.end(); cIt++){
     cIt->second->genStats(&cs);
     
-    /* Generate bytewise latency statistics */
-    if(GlobOpts::bwlatency){
-      /* Initialize bs struct */
-      struct byteStats bs;
-      memset(&bs, 0, sizeof(bs));
-      bs.minLat = (numeric_limits<int>::max)();
-      cIt->second->genBLStats(&bs);
+    /* Initialize bs struct */
+    struct byteStats bs;
+    memset(&bs, 0, sizeof(bs));
+    bs.minLat = (numeric_limits<int>::max)();
+    cIt->second->genBLStats(&bs);
+    
+    if(GlobOpts::aggregate){
+      if(bs.minLat < aggrMinLat)
+	aggrMinLat = bs.minLat;
+      if(bs.maxLat > aggrMaxLat)
+	aggrMaxLat = bs.maxLat;
+      aggrCumLat += bs.avgLat;
       
-      if(GlobOpts::aggregate){
-	if(bs.minLat < aggrMinLat)
-	  aggrMinLat = bs.minLat;
-	if(bs.maxLat > aggrMaxLat)
-	  aggrMaxLat = bs.maxLat;
-	aggrCumLat += bs.avgLat;
-	
-	r1 += bs.retrans[0];
-	r2 += bs.retrans[1];
-	r3 += bs.retrans[2];
-	if( maxRetrans < bs.maxRetrans ){
-	  maxRetrans = bs.maxRetrans;
-	}
+      r1 += bs.retrans[0];
+      r2 += bs.retrans[1];
+      r3 += bs.retrans[2];
+      if( maxRetrans < bs.maxRetrans ){
+	maxRetrans = bs.maxRetrans;
       }
     }
   }
@@ -183,20 +174,19 @@ void Dump::analyseSender (){
       cout << "Bundled segment packets   : " << cs.bundleCount << endl;
       cout << "Estimated loss rate       : " << (((float)cs.nrRetrans / cs.nrPacketsSent) * 100) 
 	   << "%" << endl;
-      if(GlobOpts::bwlatency){
-	cout << "--------------------------------------------------" <<endl;
-	/* Print Aggregate bytewise latency */
-	cout << "Bytewise latency" << endl;
-	cout << "Minimum latency : " << aggrMinLat << endl;
-	cout << "Maximum latency : " << aggrMaxLat << endl;
-	cout << "Average latency : " << aggrCumLat / conns.size() << endl;
-	cout << "--------------------------------------------------" << endl;
-	cout << "Occurrences of 1. retransmission : " << r1 << endl;
-	cout << "Occurrences of 2. retransmission : " << r2 << endl; 
-	cout << "Occurrences of 3. retransmission : " << r3 << endl;
-	cout << "Max retransmissions              : " << maxRetrans << endl;
-	cout << "==================================================" << endl;
-      }
+      
+      cout << "--------------------------------------------------" <<endl;
+      /* Print Aggregate bytewise latency */
+      cout << "Bytewise latency" << endl;
+      cout << "Minimum latency : " << aggrMinLat << endl;
+      cout << "Maximum latency : " << aggrMaxLat << endl;
+      cout << "Average latency : " << aggrCumLat / conns.size() << endl;
+      cout << "--------------------------------------------------" << endl;
+      cout << "Occurrences of 1. retransmission : " << r1 << endl;
+      cout << "Occurrences of 2. retransmission : " << r2 << endl; 
+      cout << "Occurrences of 3. retransmission : " << r3 << endl;
+      cout << "Max retransmissions              : " << maxRetrans << endl;
+      cout << "==================================================" << endl;   
     }
   }
 }
@@ -239,9 +229,8 @@ void Dump::processSent(const struct pcap_pkthdr* header, const u_char *data){
   sentPacketCount++;
   sentBytesCount += sd.payloadSize;
   tmpConn->registerSent(&sd);
-
-  if(GlobOpts::bwlatency)
-    tmpConn->registerRange(&sd);
+  
+  tmpConn->registerRange(&sd);
 }
 
 /* Process incoming ACKs */

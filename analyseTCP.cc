@@ -29,7 +29,6 @@
 /* Initialize global options */
 bool GlobOpts::aggregate      = false;
 bool GlobOpts::aggOnly        = false;
-bool GlobOpts::bwlatency      = false;
 bool GlobOpts::withRecv       = false;
 bool GlobOpts::transport      = false;
 bool GlobOpts::genRFiles      = false;
@@ -56,7 +55,6 @@ void usage (char* argv){
   printf(" -n <IP>            : Receiver side local address (as seen on recv dump\n");
   printf(" -a                 : Get aggregated statistics (off by default, optional)\n");
   printf(" -A                 : Only print aggregated statistics (off by default, optional)\n");
-  printf(" -b                 : Calculate bytewise latency\n");
   printf(" -d                 : Indicate debug level\n");
   printf("                      1 = Only output on reading sender side dump first pass.\n");
   printf("                      2 = Only output on reading sender side second pass.\n");
@@ -77,7 +75,7 @@ int main(int argc, char *argv[]){
   Dump *senderDump;
 
   while(1){
-    c = getopt( argc, argv, "s:r:p:f:m:n:o:g:d:u:aAbt");
+    c = getopt( argc, argv, "s:r:p:f:m:n:o:g:d:u:aAt");
     if(c == -1) break;
 
     switch(c){
@@ -117,9 +115,6 @@ int main(int argc, char *argv[]){
       GlobOpts::aggOnly = true;
       GlobOpts::aggregate = true;
       break;
-    case 'b':
-      GlobOpts::bwlatency = true;
-      break;
     case 'd':
       GlobOpts::debugLevel = atoi(optarg);
       break;
@@ -141,26 +136,19 @@ int main(int argc, char *argv[]){
     usage(argv[0]);
   }
 
-  if(GlobOpts::transport && !GlobOpts::withRecv){
-    cerr << "-t option requires -g option " << endl;
-    usage(argv[0]);
-  }
-  
   if(GlobOpts::debugLevel < 0)
     cerr << "debugLevel = " << GlobOpts::debugLevel << endl;
-
+  
   /* Create Dump - object */
   senderDump = new Dump(src_ip, dst_ip, dst_port, sendfn);
   senderDump->analyseSender();
-    
-  if(GlobOpts::genRFiles){
-    senderDump->genRFiles();
-  }
   
-  if (GlobOpts::withRecv){
+  if(GlobOpts::genRFiles)
+    senderDump->genRFiles();
+  
+  if (GlobOpts::withRecv)
     senderDump->processRecvd(recvfn);
-  }
-     
+  
   senderDump->printDumpStats();
 
   return 0;

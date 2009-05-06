@@ -48,7 +48,6 @@ class GlobOpts{
  public:
   static bool aggregate;
   static bool aggOnly;
-  static bool bwlatency;
   static bool transport;
   static int  debugLevel;
   static bool withRecv;
