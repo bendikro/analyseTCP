@@ -74,7 +74,7 @@ class RangeManager{
   void makeCdf();
   void printCDF();
   void printDcCdf();
-  void calcDrift();
+  int calcDrift();
   void registerDcDiffs();
   void makeDcCdf();
   void genRFiles(uint16_t port);

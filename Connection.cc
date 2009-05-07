@@ -169,9 +169,10 @@ void Connection::printDcCdf(){
 }
 
 void Connection::makeDcCdf(){
-  rm->calcDrift();
-  rm->registerDcDiffs();
-  rm->makeDcCdf();
+  if ( rm->calcDrift() == 0 ){
+    rm->registerDcDiffs();
+    rm->makeDcCdf();
+  }
 }
 
 void Connection::genRFiles(){

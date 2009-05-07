@@ -418,7 +418,7 @@ uint32_t RangeManager::getDuration(){
 }
 
 /* Calculate clock drift on CDF */
-void RangeManager::calcDrift(){
+int RangeManager::calcDrift(){
   /* If connection > 500 ranges &&
      connection.duration > 120 seconds, 
      calculate clock drift */
@@ -467,7 +467,9 @@ void RangeManager::calcDrift(){
     cerr << "Connection has less than 500 ranges or a duration of less than 2 minutes." << endl;
     cerr << "Drift-compensated CDF will therefore not be calculated." << endl;
     drift = -1;
+    return -1;
   }
+  return 0;
 }
   
 /* Returns the difference between the start 
@@ -568,10 +570,12 @@ void RangeManager::makeDcCdf(){
   }
   GlobStats::totNumBytes += getTotNumBytes();
 
-  if (GlobStats::avgDrift == 0)
-    GlobStats::avgDrift = drift;
-  else
-    GlobStats::avgDrift = (GlobStats::avgDrift + drift) / 2;
+  if ( drift != -1) {
+    if (GlobStats::avgDrift == 0)
+      GlobStats::avgDrift = drift;
+    else
+      GlobStats::avgDrift = (GlobStats::avgDrift + drift) / 2;
+  }
 }
 
 void RangeManager::printCDF(){
