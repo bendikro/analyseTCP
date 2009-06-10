@@ -39,7 +39,7 @@ string GlobOpts::recvNatIP    = "";
 
 
 void usage (char* argv){
-  printf("Usage: %s [-s] [-r] [-p] [-f] [-v|a|b|d]\n", argv);
+  printf("Usage: %s [-s|r|p|f|g|t|u|m|n|a|A|d]\n", argv);
   printf("Required options:\n");
   printf(" -s <sender ip>     : Sender ip.\n");
   printf(" -r <receiver ip>   : Receiver ip.\n");
