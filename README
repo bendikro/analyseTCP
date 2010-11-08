@@ -4,7 +4,7 @@ analyseRdb: Utility for analysing tcpdump
 
 Prerequisites: cmake pcap
 
-To build: 	enter analyseRdb/build
+To build: 	enter analyseTCP/build
 		run: "cmake .."
 		run: make
 
