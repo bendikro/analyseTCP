@@ -9,7 +9,7 @@ vector<int> GlobStats::retr3;
 vector<int> GlobStats::retr4;
 vector<int> GlobStats::all;
 
-/* Register all byes with a common send time as a range */
+/* Register all bytes with a common send time as a range */
 void RangeManager::insertSentRange(uint32_t startSeq, uint32_t endSeq, timeval* tv){
 
   if (ranges.size() == 0){ /* First packet in stream */
@@ -84,7 +84,7 @@ void RangeManager::insertRecvRange(uint32_t startSeq, uint32_t endSeq, timeval* 
       cerr << "Erroneous seq." << endl;
     }
   }
-  /* Insert all packets into datastructure */ 
+  /* Insert all packets into data structure */ 
   recvd.push_back(tmpRecv);
   return;
 }

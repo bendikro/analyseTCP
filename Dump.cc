@@ -3,9 +3,10 @@
 int GlobStats::totNumBytes;
 
 /* Methods for class Dump */
-Dump::Dump( string src_ip, string dst_ip, int dst_port, string fn ){
+Dump::Dump( string src_ip, string dst_ip, int src_port, int dst_port, string fn ){
   srcIp = src_ip;
   dstIp = dst_ip;
+  srcPort = src_port;
   dstPort = dst_port;
   filename = fn;
   sentPacketCount = 0;
@@ -35,9 +36,16 @@ void Dump::analyseSender (){
      We exclude packets with no TCP payload. */
   struct bpf_program compFilter;
   stringstream filterExp;
-  filterExp << "tcp && src host " << srcIp << " && dst host "
-	    << dstIp << " && dst port " << dstPort
-	    << " && (ip[2:2] - ((ip[0]&0x0f)<<2) - (tcp[12]>>2)) >= 1";
+  filterExp << "tcp && src host " << srcIp;
+  if (!srcPort == 0)
+    filterExp << " && src port " << srcPort;
+  if (!dstIp.empty())
+    filterExp << " && dst host " << dstIp;
+  if (!dstPort == 0)
+    filterExp << " && dst port " << dstPort;
+  filterExp << " && (ip[2:2] - ((ip[0]&0x0f)<<2) - (tcp[12]>>2)) >= 1";
+  
+  cerr << "pcap filter expression: " << (char*)((filterExp.str()).c_str()) << endl;
   
   /* Filter to get outgoing packets */
   if (pcap_compile(fd, &compFilter, (char*)((filterExp.str()).c_str()), 0, 0) == -1) {

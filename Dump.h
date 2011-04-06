@@ -21,6 +21,7 @@ class Dump {
   string srcIp;
   string dstIp;
   string filename;
+  int srcPort;
   int dstPort;
   int sentPacketCount;
   int sentBytesCount;
@@ -41,7 +42,7 @@ class Dump {
 
   void makeDcCdf();
  public:
-  Dump( string src_ip, string dst_ip, int dst_port, string fn );
+  Dump( string src_ip, string dst_ip, int src_port, int dst_port, string fn );
   ~Dump ();
 
   void analyseSender();

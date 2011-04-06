@@ -41,19 +41,20 @@ string GlobOpts::recvNatIP    = "";
 void usage (char* argv){
   printf("Usage: %s [-s|r|p|f|g|t|u|m|n|a|A|d]\n", argv);
   printf("Required options:\n");
-  printf(" -s <sender ip>     : Sender ip.\n");
-  printf(" -r <receiver ip>   : Receiver ip.\n");
-  printf(" -p <receiver port> : Receiver port.\n");
+  printf(" -s <sender ip>     : Sender ip. If not given, analyse all sender IPs\n");
   printf(" -f <pcap-file>     : Sender-side dumpfile.\n");
   printf("Other options:\n");
-  printf(" -g                 : Receiver-side dumpfile\n");
+  printf(" -r <receiver ip>   : Receiver ip. If not given, analyse all receiver IPs\n");
+  printf(" -q <sender port>   : Sender port. If not given, analyse all sender ports\n");
+  printf(" -p <receiver port> : Receiver port. If not given, analyse all receiver ports\n");
+  printf(" -g <pcap-file>     : Receiver-side dumpfile\n");
   printf(" -t                 : Calculate transport-layer delays\n");
   printf("                    : (if not set, application-layer delay is calculated)\n");
   printf(" -u <prefix>        : Write statistics to comma-separated files (for use with R)\n");
   printf("                      <prefix> assigns an output filename prefix.\n");
   printf(" -m <IP>            : Sender side external NAT address (as seen on recv dump)\n");
-  printf(" -n <IP>            : Receiver side local address (as seen on recv dump\n");
-  printf(" -a                 : Get aggregated statistics (off by default, optional)\n");
+  printf(" -n <IP>            : Receiver side local address (as seen on recv dump)\n");
+  printf(" -a                 : Produce aggregated statistics (off by default, optional)\n");
   printf(" -A                 : Only print aggregated statistics (off by default, optional)\n");
   printf(" -d                 : Indicate debug level\n");
   printf("                      1 = Only output on reading sender side dump first pass.\n");
@@ -65,17 +66,18 @@ void usage (char* argv){
 }
 
 int main(int argc, char *argv[]){
-  char *src_ip;
-  char *dst_ip;
-  int dst_port;
-  char *sendfn; /* Sender dump file name */
-  char *recvfn; /* Receiver dump filename */
+  char *src_ip = (char*)"";
+  char *dst_ip = (char*)"";
+  int src_port = 0;
+  int dst_port = 0;
+  char *sendfn = (char*)""; /* Sender dump file name */
+  char *recvfn = (char*)""; /* Receiver dump filename */
 
   int c;
   Dump *senderDump;
 
   while(1){
-    c = getopt( argc, argv, "s:r:p:f:m:n:o:g:d:u:aAt");
+    c = getopt( argc, argv, "s:r:p:q:f:m:n:o:g:d:u:aAt");
     if(c == -1) break;
 
     switch(c){
@@ -87,6 +89,9 @@ int main(int argc, char *argv[]){
       break;
     case 'p':
       dst_port = atoi(optarg);
+      break;
+    case 'q':
+      src_port = atoi(optarg);
       break;
     case 'm':
       GlobOpts::sendNatIP = optarg;
@@ -131,16 +136,16 @@ int main(int argc, char *argv[]){
       break;
     }
   }
-
-  if(argc < 6){
+  /* TODO Exit if required options are not given */ 
+  if(argc < 4){
     usage(argv[0]);
   }
-
+   
   if(GlobOpts::debugLevel < 0)
     cerr << "debugLevel = " << GlobOpts::debugLevel << endl;
   
   /* Create Dump - object */
-  senderDump = new Dump(src_ip, dst_ip, dst_port, sendfn);
+  senderDump = new Dump(src_ip, dst_ip, src_port, dst_port, sendfn);
   senderDump->analyseSender();
   
   if(GlobOpts::genRFiles)
