@@ -33,9 +33,11 @@ void RangeManager::insertSentRange(uint32_t startSeq, uint32_t endSeq, timeval* 
   
   /* Check for instances where sent packets are lost from the packet trace */
   /* Possible fix: Insert "empty" range that will be discarded when analysed */
+  /* Possible quicker fix: emove connection, a new one will be created for the rest
+     of the connection */
   if (startSeq > lastSeq ){ 
     cerr << "RangeManager::insertRange: Missing byte in send range: Exiting." << endl;
-    //exit(1);
+    exit(1);
   }
 
   if (startSeq < lastSeq){ /* We have some kind of overlap */

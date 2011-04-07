@@ -222,17 +222,18 @@ void Dump::processSent(const struct pcap_pkthdr* header, const u_char *data){
 
   /* Generate snd IP/port + rcv IP/port string to use as key */
   stringstream connKey;
-  connKey << ntohs(tcp->th_sport);
+  connKey << ip->ip_src.s_addr << ntohs(tcp->th_sport) << ip->ip_dst.s_addr << ntohs(tcp->th_dport);
   
-  cout << "connKey: " << connKey.str() << endl;
-
   /* Check if connection exists. If not, create a new */
   /* Create connection based on snd IP/port + rcv IP/port */
 
   if (conns.count(connKey.str()) == 0){
     tmpConn = new Connection(ntohs(tcp->th_sport),
-			     ntohs(tcp->th_dport), ntohl(tcp->th_seq));
+			     ntohs(tcp->th_dport), 
+			     ntohl(tcp->th_seq) );
     conns.insert(pair<string, Connection*>(connKey.str(), tmpConn));
+    if(GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5)
+      cerr << "created new Connection with key: " << connKey.str() << endl;
   }else{
     tmpConn = conns[connKey.str()];
   }
