@@ -41,7 +41,7 @@ string GlobOpts::recvNatIP    = "";
 void usage (char* argv){
   printf("Usage: %s [-s|r|p|f|g|t|u|m|n|a|A|d]\n", argv);
   printf("Required options:\n");
-  printf(" -s <sender ip>     : Sender ip. If not given, analyse all sender IPs\n");
+  printf(" -s <sender ip>     : Sender ip.\n");
   printf(" -f <pcap-file>     : Sender-side dumpfile.\n");
   printf("Other options:\n");
   printf(" -r <receiver ip>   : Receiver ip. If not given, analyse all receiver IPs\n");

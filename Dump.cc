@@ -23,7 +23,7 @@ void Dump::analyseSender (){
   char errbuf[PCAP_ERRBUF_SIZE];
   struct pcap_pkthdr h;
   const u_char *data;
-  map<uint16_t, Connection*>::iterator it, it_end;
+  map<string, Connection*>::iterator it, it_end;
   
   pcap_t *fd = pcap_open_offline(filename.c_str(), errbuf);
   if ( fd == NULL ) {
@@ -34,6 +34,10 @@ void Dump::analyseSender (){
   /* Set up pcap filter to include only outgoing tcp
      packets with correct ip and port numbers.
      We exclude packets with no TCP payload. */
+
+  /* TODO: Add options to crop dumpfiles from front or back with n
+     minutes */
+
   struct bpf_program compFilter;
   stringstream filterExp;
   filterExp << "tcp && src host " << srcIp;
@@ -71,7 +75,6 @@ void Dump::analyseSender (){
   } while(data != NULL);
   
   pcap_close(fd);
-  
   
   /* DEBUG: Validate range */
   if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
@@ -145,7 +148,7 @@ void Dump::analyseSender (){
   //for (int i = 0; i<=sizeof(retrans); i++)
   // retrans[i] = 0;
   
-  map<uint16_t, Connection*>::iterator cIt, cItEnd;
+  map<string, Connection*>::iterator cIt, cItEnd;
   for(cIt = conns.begin(); cIt != conns.end(); cIt++){
     cIt->second->genStats(&cs);
     
@@ -217,13 +220,21 @@ void Dump::processSent(const struct pcap_pkthdr* header, const u_char *data){
   tcp = (struct sniff_tcp*)(data + SIZE_ETHERNET + ipHdrLen);
   u_int tcpHdrLen = TH_OFF(tcp)*4;
 
+  /* Generate snd IP/port + rcv IP/port string to use as key */
+  stringstream connKey;
+  connKey << ntohs(tcp->th_sport);
+  
+  cout << "connKey: " << connKey.str() << endl;
+
   /* Check if connection exists. If not, create a new */
-  if (conns.count(ntohs(tcp->th_sport)) == 0){
+  /* Create connection based on snd IP/port + rcv IP/port */
+
+  if (conns.count(connKey.str()) == 0){
     tmpConn = new Connection(ntohs(tcp->th_sport),
 			     ntohs(tcp->th_dport), ntohl(tcp->th_seq));
-    conns.insert(pair<uint16_t, Connection*>(ntohs(tcp->th_sport), tmpConn));
+    conns.insert(pair<string, Connection*>(connKey.str(), tmpConn));
   }else{
-    tmpConn = conns[ntohs(tcp->th_sport)];
+    tmpConn = conns[connKey.str()];
   }
 
   /* Prepare packet data struct */
@@ -254,14 +265,18 @@ void Dump::processAcks(const struct pcap_pkthdr* header, const u_char *data){
   u_int ipHdrLen = IP_HL(ip)*4;
   tcp = (struct sniff_tcp*)(data + SIZE_ETHERNET + ipHdrLen);
 
+  stringstream connKey;
+ 
+  connKey << ntohs(tcp->th_dport); /* Finish this */
+
   /* It should not be possible that the connection is not yet created */
-  if (conns.count(ntohs(tcp->th_dport)) == 0){
+  if (conns.count(connKey.str()) == 0){
     cerr << "Ack for unregistered connection found. Conn: "
 	 << ntohs(tcp->th_dport) << " - Ignoring." << endl;
     return;
   }
   ackCount++;
-  conns[ntohs(tcp->th_dport)]->registerAck(ntohl(tcp->th_ack), &hdrTv);
+  conns[connKey.str()]->registerAck(ntohl(tcp->th_ack), &hdrTv);
 }
 
 /* Analyse receiver dump - create CDFs */ 
@@ -364,12 +379,16 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data){
   tcp = (struct sniff_tcp*)(data + SIZE_ETHERNET + ipHdrLen);
   u_int tcpHdrLen = TH_OFF(tcp)*4;
 
+  stringstream connKey;
+
+  connKey << ntohs(tcp->th_sport); /*Finish this */
+
   /* Check if connection exists. If not, exit with exception*/
-  if (conns.count(ntohs(tcp->th_sport)) == 0){
+  if (conns.count(connKey.str()) == 0){
     cerr << "Connection found in recveiver dump that does not exist in sender. Maybe NAT is in effect?  Exiting." << endl;
     exit(1);
   }else{
-    tmpConn = conns[ntohs(tcp->th_sport)];
+    tmpConn = conns[connKey.str()];
   }
     
   /* Prepare packet data struct */
@@ -390,21 +409,21 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data){
 }
 
 void Dump::makeCDF(){
-  map<uint16_t, Connection*>::iterator cIt, cItEnd;
+  map<string, Connection*>::iterator cIt, cItEnd;
   for(cIt = conns.begin(); cIt != conns.end(); cIt++){
     cIt->second->makeCDF();
   }
 }
 
 void Dump::printCDF(){
-  map<uint16_t, Connection*>::iterator cIt, cItEnd;
+  map<string, Connection*>::iterator cIt, cItEnd;
   for(cIt = conns.begin(); cIt != conns.end(); cIt++){
     cIt->second->printCDF();
   }
 }
 
 void Dump::printDcCdf(){
-  map<uint16_t, Connection*>::iterator cIt, cItEnd;
+  map<string, Connection*>::iterator cIt, cItEnd;
   for(cIt = conns.begin(); cIt != conns.end(); cIt++){
     cIt->second->printDcCdf();
   }
@@ -440,7 +459,7 @@ void Dump::printAggDcCdf(){
 }
 
 void Dump::makeDcCdf(){
-  map<uint16_t, Connection*>::iterator cIt, cItEnd;
+  map<string, Connection*>::iterator cIt, cItEnd;
   for(cIt = conns.begin(); cIt != conns.end(); cIt++){
     cIt->second->makeDcCdf();
   }
@@ -464,7 +483,7 @@ void Dump::printDumpStats(){
 }
 
 void Dump::genRFiles(){
- map<uint16_t, Connection*>::iterator cIt, cItEnd;
+ map<string, Connection*>::iterator cIt, cItEnd;
   for(cIt = conns.begin(); cIt != conns.end(); cIt++){
     cIt->second->genRFiles();
   }
