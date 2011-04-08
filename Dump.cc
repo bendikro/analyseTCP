@@ -49,7 +49,8 @@ void Dump::analyseSender (){
     filterExp << " && dst port " << dstPort;
   filterExp << " && (ip[2:2] - ((ip[0]&0x0f)<<2) - (tcp[12]>>2)) >= 1";
   
-  cerr << "pcap filter expression: " << (char*)((filterExp.str()).c_str()) << endl;
+  if(GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5)
+    cerr << "pcap filter expression: " << (char*)((filterExp.str()).c_str()) << endl;
   
   /* Filter to get outgoing packets */
   if (pcap_compile(fd, &compFilter, (char*)((filterExp.str()).c_str()), 0, 0) == -1) {
@@ -93,14 +94,29 @@ void Dump::analyseSender (){
     exit(1);
   }
   
+  // filterExp << "tcp && src host " << dstIp << " && dst host "
+  // 	    << srcIp << " && src port " << dstPort
+  // 	    << " && ((tcp[tcpflags] & tcp-syn) != tcp-syn)"
+  // 	    << " && ((tcp[tcpflags] & tcp-fin) != tcp-fin)"
+  // 	    << " && ((tcp[tcpflags] & tcp-ack) == tcp-ack)";
+  
   /* Set up pcap filter to get only incoming tcp packets
      with correct IP and ports and the ack flag set */
+  
   filterExp.str("");
-  filterExp << "tcp && src host " << dstIp << " && dst host "
-	    << srcIp << " && src port " << dstPort
-	    << " && ((tcp[tcpflags] & tcp-syn) != tcp-syn)"
+  filterExp << "tcp ";
+  if (!dstIp.empty())
+    filterExp << "&& src host " << dstIp;
+  filterExp << "&& dst host " << srcIp;
+  if (!dstPort == 0)
+    filterExp << "&& src port " << dstPort;
+  filterExp << " && ((tcp[tcpflags] & tcp-syn) != tcp-syn)"
 	    << " && ((tcp[tcpflags] & tcp-fin) != tcp-fin)"
 	    << " && ((tcp[tcpflags] & tcp-ack) == tcp-ack)";
+    
+  if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
+    cerr << "pcap filter expression: " << (char*)((filterExp.str()).c_str()) << endl;
+  
   if (pcap_compile(fd2, &compFilter, (char*)((filterExp.str()).c_str()), 0, 0) == -1) {
     cerr << "Couldn't parse filter " << filterExp << "Error:" << pcap_geterr(fd2) << endl;
     exit(1);
@@ -288,10 +304,10 @@ void Dump::processAcks(const struct pcap_pkthdr* header, const u_char *data){
   
   /* Generate snd IP/port + rcv IP/port string to use as key */
   stringstream connKey;
-  connKey << srcIp
-	  << "-" << ntohs(tcp->th_sport)
-	  << "-" << dstIp
-	  << "-" << ntohs(tcp->th_dport);
+  connKey << dstIp
+	  << "-" << ntohs(tcp->th_dport)
+	  << "-" << srcIp
+	  << "-" << ntohs(tcp->th_sport);
 
   /* It should not be possible that the connection is not yet created */
   if (conns.count(connKey.str()) == 0){

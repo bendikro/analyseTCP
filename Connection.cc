@@ -141,7 +141,7 @@ void Connection::genStats(struct connStats* cs){
 void Connection::validateRanges(){
   if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5){
     cerr << "###### Validation of range data ######" << endl;
-    cerr << "Connection - srcPort: " << srcPort << endl;
+    cerr << "Connection: " << getConnKey() << endl;
   }
   rm->validateContent();
   if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5){
