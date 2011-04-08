@@ -11,11 +11,12 @@ vector<int> GlobStats::all;
 
 /* Register all bytes with a common send time as a range */
 void RangeManager::insertSentRange(uint32_t startSeq, uint32_t endSeq, timeval* tv){
+  Range* range;
 
   if (ranges.size() == 0){ /* First packet in stream */
     if(GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5)
       cerr << "-------Creating first range---------" << endl;
-    Range* range = new Range(startSeq, endSeq, tv);
+    range = new Range(startSeq, endSeq, tv, false);
     ranges.push_back(range);
     firstSeq = startSeq;
     lastSeq = endSeq;
@@ -25,7 +26,7 @@ void RangeManager::insertSentRange(uint32_t startSeq, uint32_t endSeq, timeval* 
   if (startSeq == lastSeq){ /* Next packet in correct sequence */
     if(GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5)
       cerr << "-------New range equivalent with packet---------" << endl;
-    Range* range = new Range(startSeq, endSeq, tv);
+    range = new Range(startSeq, endSeq, tv, false);
     ranges.push_back(range);
     lastSeq = endSeq;
     return;
@@ -33,11 +34,34 @@ void RangeManager::insertSentRange(uint32_t startSeq, uint32_t endSeq, timeval* 
   
   /* Check for instances where sent packets are lost from the packet trace */
   /* Possible fix: Insert "empty" range that will be discarded when analysed */
-  /* Possible quicker fix: emove connection, a new one will be created for the rest
+  /* Possible quicker fix: remove connection, a new one will be created for the rest
      of the connection */
-  if (startSeq > lastSeq ){ 
-    cerr << "RangeManager::insertRange: Missing byte in send range: Exiting." << endl;
-    exit(1);
+  
+
+  // if (startSeq > lastSeq ){ 
+  //   cerr << "RangeManager::insertRange: Missing byte in send range: Exiting." << endl;
+  //   exit(1);
+  // }
+  
+  /* If we have missing packets in the sender dump, insert a dummy range
+     before the new range. This range will not be used to generate statistics */
+  if (startSeq > lastSeq ){
+    /* Insert dummy range */
+    if(GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5){
+      cerr << "-------Missing packet(s): inserting dummy range---------" << endl;
+      cerr << "Dummy range: lastSeq: " << lastSeq << " - startSeq: " << startSeq 
+	   << " - size: " << startSeq - lastSeq << endl;
+      cerr << "Valid range: startSeq: " << startSeq << " - endSeq: " << endSeq 
+	   << " - size: " << endSeq - startSeq << endl;
+    }
+    range = new Range(lastSeq, startSeq, tv, true);
+    ranges.push_back(range);
+    
+    /* Then insert the new, valid range */
+    range = new Range(startSeq, endSeq, tv, false);
+    ranges.push_back(range);
+    lastSeq = endSeq;
+    return;
   }
 
   if (startSeq < lastSeq){ /* We have some kind of overlap */
@@ -58,7 +82,7 @@ void RangeManager::insertSentRange(uint32_t startSeq, uint32_t endSeq, timeval* 
     }else{ /* Old and new bytes: Bundle */
       if(GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5)
 	cerr << "-------Overlap: registering some bytes---------" << endl;
-      Range* range = new Range(lastSeq, endSeq, tv);
+      range = new Range(lastSeq, endSeq, tv, false);
       ranges.push_back(range);
       lastSeq = endSeq;
       /* Traverse all affected ranges and tag all 
@@ -97,13 +121,23 @@ void RangeManager::insertRecvRange(uint32_t startSeq, uint32_t endSeq, timeval* 
    Organize in ranges that have common send and ack times */
 void RangeManager::processAck(uint32_t ack, timeval* tv){
   Range* tmpRange;
-  int i = highestAcked + 1;
+  int i = highestAcked + 1; /* Start on the highest unACKed range */ 
 
   for( ; i != (int)ranges.size(); i++){
     tmpRange = ranges[i];
     
     if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
-      cerr << "tmpRange - startSeq: " << tmpRange->getStartSeq() << " - endSeq: " << tmpRange->getEndSeq() << endl;
+      cerr << "tmpRange - startSeq: " << tmpRange->getStartSeq() 
+	   << " - endSeq: " << tmpRange->getEndSeq() << endl;
+
+    // /* First range is a dummy range. Mark as ACKed and return */
+    // if(tmpRange->isDummy()){
+    //   if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
+    // 	cerr << "--------Dummy range. Marking as ACKed and continuing--------" << endl;
+    //   tmpRange->setIsAcked();
+    //   highestAcked = i;
+    //   return;
+    // }
 
     /* All data from this ack has been acked before: return */
     if(ack <= tmpRange->getStartSeq()){
@@ -132,8 +166,10 @@ void RangeManager::processAck(uint32_t ack, timeval* tv){
 
     /* ACK covers only part of this range: split range and return */
     if(ack > tmpRange->getStartSeq() && ack < tmpRange->getEndSeq()){
-      if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
+      if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5){
 	cerr << "--------Ack covers only parts of this range: Splitting --------" << endl;
+	cerr << " Split range dummy: " << tmpRange->isDummy() << endl;
+      }
       vector<Range*>::iterator it, it_end;
       it_end = ranges.end();
       for(it = ranges.begin(); it != it_end; it++){
@@ -141,7 +177,8 @@ void RangeManager::processAck(uint32_t ack, timeval* tv){
 	   (*it)->getEndSeq() == tmpRange->getEndSeq()){
 	  /* We have an iterator to tmpRange (is this possible to do without traversing the vector?)*/
 	  /* Create new range to insert after modifying existing */
-	  Range* newRange = new Range(tmpRange->getStartSeq(), ack, tmpRange->getSendTime());
+	  Range* newRange = new Range(tmpRange->getStartSeq(), ack, 
+				      tmpRange->getSendTime(), tmpRange->isDummy());
 	  newRange->insertAckTime(tv);
 
 	  /* First part of range: increase startSeq = ack + 1 no ack*/
@@ -167,10 +204,11 @@ void RangeManager::processAck(uint32_t ack, timeval* tv){
 void RangeManager::genStats(struct byteStats* bs){
   vector<Range*>::iterator it, it_end;
   int latency;
-
+  it = ranges.begin();
   it_end = ranges.end();
-  for(it = ranges.begin(); it != it_end; it++){
-    if ( (latency = (*it)->getDiff()) ){ /* Skip if invalid */
+  for( ; it != it_end; it++){
+    /* Skip if invalid (negative) latency or dummy range */
+    if ( latency = (*it)->getDiff() ){ 
       bs->cumLat += latency;
       if(latency > bs->maxLat)
 	bs->maxLat = latency;
@@ -208,6 +246,7 @@ void RangeManager::genStats(struct byteStats* bs){
 void RangeManager::validateContent(){
   int numAckTimes = 0;
   int numSendTimes = 0;
+  int numDummy = 0;
   uint32_t tmpEndSeq = 0;
 
   vector<Range*>::iterator it, it_end;
@@ -246,6 +285,8 @@ void RangeManager::validateContent(){
       numSendTimes++;
     if((*it)->getAckTime())
       numAckTimes++;
+    if((*it)->isDummy())
+      numDummy++;
   }
   if(nrRanges == 0){
     nrRanges = ranges.size();
@@ -256,10 +297,13 @@ void RangeManager::validateContent(){
 	     << " - New size: " << ranges.size() << endl;
     }
     nrRanges = ranges.size();
+    nrDummy = numDummy;
+
   }
   if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5){
     cerr << "First seq: " << firstSeq << " Last seq: " <<  lastSeq << endl;
     cerr << "Number of ranges: " << ranges.size() << endl;
+    cerr << "Number of dummy ranges: " << numDummy << endl;
     cerr << "Number of bytes: " << lastSeq - firstSeq << endl;
     cerr << "numSendTimes: " << numSendTimes << endl;
     cerr << "numAckTimes: " << numAckTimes << endl;

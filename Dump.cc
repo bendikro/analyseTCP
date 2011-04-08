@@ -87,7 +87,6 @@ void Dump::analyseSender (){
   if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5 )
     cerr << "---------------End of first validation--------------" << endl;
   
-  
   pcap_t *fd2 = pcap_open_offline(filename.c_str(), errbuf);
   if ( fd2 == NULL ) {
     cerr << "pcap: Could not open file" << filename << endl;
@@ -310,6 +309,7 @@ void Dump::processAcks(const struct pcap_pkthdr* header, const u_char *data){
 	  << "-" << ntohs(tcp->th_sport);
 
   /* It should not be possible that the connection is not yet created */
+  /* If lingering ack arrives for a closed connection, this may happen */
   if (conns.count(connKey.str()) == 0){
     cerr << "Ack for unregistered connection found. Conn: "
 	 << ntohs(tcp->th_dport) << " - Ignoring." << endl;

@@ -30,6 +30,7 @@
 /* Keeps track of a range of bytes that share send and ack time */
 class Range{
  private:
+  bool dummy;
   uint32_t startSeq;
   uint32_t endSeq;
   struct timeval sendTime;
@@ -41,10 +42,11 @@ class Range{
   long diff, dcDiff;
 
  public:
-  Range(uint32_t ss, uint32_t es, timeval* tv){
+  Range(uint32_t ss, uint32_t es, timeval* tv, bool dmy){
     startSeq = ss;
     endSeq = es;
     sendTime = *tv;
+    dummy = dmy;
     memset(&ackTime, 0, sizeof(ackTime));
     memset(&ackTime, 0, sizeof(recvTime));
     acked = false;
@@ -63,6 +65,7 @@ class Range{
   uint32_t getNumRetrans(){ return numRetrans; }
   uint32_t getNumBundled(){ return numBundled; }
   bool isAcked(){ return acked; }
+  bool isDummy(){ return dummy; }
   void incNumRetrans(){ numRetrans++; }
   void incNumBundled(){ numBundled++; }
   void setIsAcked(){acked = true; }

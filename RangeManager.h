@@ -36,6 +36,7 @@ class RangeManager{
   int highestAcked; /* Index of highest acked range */
   struct timeval highestRecvd;
   int  nrRanges;
+  int nrDummy;
   int delBytes;
   long lowestDiff; /* Used to create CDF. */
   long lowestDcDiff; /* Lowest diff when compensated for clock drift */
@@ -56,6 +57,7 @@ class RangeManager{
     highestAcked = -1; /* Initialize to -1 to allow incrementation from first range */
     memset(&highestRecvd, 0, sizeof(highestRecvd));
     nrRanges = 0;
+    nrDummy = 0;
     delBytes = 0;
   };
   ~RangeManager();
@@ -79,6 +81,7 @@ class RangeManager{
   void makeDcCdf();
   void genRFiles(uint16_t port);
   int getNumBytes(){ return lastSeq - firstSeq; }
+  int getNrDummy(){ return nrDummy; }
 };
 
 #endif /* RANGEMANAGER_H */

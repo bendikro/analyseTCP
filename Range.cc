@@ -32,6 +32,11 @@ int Range::getDiff(){
   struct timeval tv;
   int ms = 0;
 
+  if ( isDummy() ){
+    cerr << "Dummy range. Skipping." << endl;
+    return 0;
+  }
+
   if (sendTime.tv_sec == 0 && sendTime.tv_usec == 0){
     cerr << "Range without a send time. Skipping." << endl;
     //removeConnection(); /* Connection has gone bad: Remove it */

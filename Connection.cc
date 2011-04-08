@@ -74,8 +74,7 @@ void Connection::registerAck(uint32_t ack, timeval* tv){
   if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5){
     timeval offset;
     timersub(tv, &firstSendTime, &offset);
-    
-    cerr << endl << "Registering new ACK. Conn: " << srcPort << " Ack: " << ack << endl;
+    cerr << endl << "Registering new ACK. Conn: " << getConnKey() << " Ack: " << ack << endl;
     cerr << "Time offset: Secs: " << offset.tv_sec << " uSecs: " << offset.tv_sec << endl;
   }
 
