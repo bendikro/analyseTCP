@@ -1,12 +1,16 @@
 #include "Connection.h"
 
 /* Methods for class Connection */
-Connection::Connection(uint16_t src_port, uint16_t dst_port, uint32_t seq){
+Connection::Connection(struct in_addr src_ip, uint16_t src_port, 
+		       struct in_addr dst_ip, uint16_t dst_port, 
+		       uint32_t seq){
   nrPacketsSent  = 0;
   totPacketSize  = 0;
   totBytesSent   = 0;
   nrRetrans      = 0;
+  srcIp          = src_ip;
   srcPort        = src_port;
+  dstIp          = dst_ip;
   dstPort        = dst_port;
   lastLargestSeq = 0;
   firstSeq       = seq;
@@ -53,7 +57,7 @@ void Connection::registerRange(struct sendData* sd){
     }
     timersub(&(sd->time), &firstSendTime, &offset);
 
-    cerr << "Registering new outgoing. Conn: " << srcPort << " Seq: " << sd->seq << endl;
+    cerr << "Registering new outgoing. Conn: " << getConnKey() << " Seq: " << sd->seq << endl;
     cerr << "Time offset: Secs: " << offset.tv_sec << " uSecs: " << offset.tv_usec << endl;
     cerr << "Payload: " << sd->payloadSize << endl;
   }
@@ -185,4 +189,19 @@ int Connection::getNumBytes(){
   else {
     return (UINT_MAX - firstSeq) + endSeq; 
   }
+}
+
+string Connection::getConnKey(){
+  char src_ip[INET_ADDRSTRLEN];
+  char dst_ip[INET_ADDRSTRLEN];
+  inet_ntop(AF_INET, &(srcIp), src_ip, INET_ADDRSTRLEN);
+  inet_ntop(AF_INET, &(dstIp), dst_ip, INET_ADDRSTRLEN);
+
+  /* Generate snd IP/port + rcv IP/port string to use as key */
+  stringstream connKey;
+  connKey << src_ip
+	  << "-" << srcPort
+	  << "-" << dst_ip
+	  << "-" << dstPort;
+  return connKey.str();
 }

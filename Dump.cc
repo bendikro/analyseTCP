@@ -219,17 +219,33 @@ void Dump::processSent(const struct pcap_pkthdr* header, const u_char *data){
   u_int ipHdrLen = IP_HL(ip)*4;
   tcp = (struct sniff_tcp*)(data + SIZE_ETHERNET + ipHdrLen);
   u_int tcpHdrLen = TH_OFF(tcp)*4;
+  char srcIp[INET_ADDRSTRLEN];
+  char dstIp[INET_ADDRSTRLEN];
+  inet_ntop(AF_INET, &(ip->ip_src), srcIp, INET_ADDRSTRLEN);
+  inet_ntop(AF_INET, &(ip->ip_dst), dstIp, INET_ADDRSTRLEN);
 
   /* Generate snd IP/port + rcv IP/port string to use as key */
   stringstream connKey;
-  connKey << ip->ip_src.s_addr << ntohs(tcp->th_sport) << ip->ip_dst.s_addr << ntohs(tcp->th_dport);
+  connKey << srcIp
+	  << "-" << ntohs(tcp->th_sport)
+	  << "-" << dstIp
+	  << "-" << ntohs(tcp->th_dport);
   
+  // cout << "ipSize: " << ipSize << " - " << "ipHdrLen: " << ipHdrLen << endl;
+  // cout << "tcpHdrLen: " << tcpHdrLen << endl;
+  // cout << &(ip->ip_src) << " - " << inet_ntop(ip->ip_src) << endl;
+  // cout << "sport: " << ntohs(tcp->th_sport) << endl;
+  // cout << &(ip->ip_dst) << " - " << inet_ntop(ip->ip_dst) << endl;
+  // cout << "dport: " << ntohs(tcp->th_dport) << endl;
+  //cout << connKey.str() << endl;
+
+
   /* Check if connection exists. If not, create a new */
   /* Create connection based on snd IP/port + rcv IP/port */
 
   if (conns.count(connKey.str()) == 0){
-    tmpConn = new Connection(ntohs(tcp->th_sport),
-			     ntohs(tcp->th_dport), 
+    tmpConn = new Connection(ip->ip_src, ntohs(tcp->th_sport),
+			     ip->ip_dst, ntohs(tcp->th_dport), 
 			     ntohl(tcp->th_seq) );
     conns.insert(pair<string, Connection*>(connKey.str(), tmpConn));
     if(GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5)
@@ -265,10 +281,17 @@ void Dump::processAcks(const struct pcap_pkthdr* header, const u_char *data){
   ip = (struct sniff_ip*)(data + SIZE_ETHERNET);
   u_int ipHdrLen = IP_HL(ip)*4;
   tcp = (struct sniff_tcp*)(data + SIZE_ETHERNET + ipHdrLen);
-
+  char srcIp[INET_ADDRSTRLEN];
+  char dstIp[INET_ADDRSTRLEN];
+  inet_ntop(AF_INET, &(ip->ip_src), srcIp, INET_ADDRSTRLEN);
+  inet_ntop(AF_INET, &(ip->ip_dst), dstIp, INET_ADDRSTRLEN);
+  
+  /* Generate snd IP/port + rcv IP/port string to use as key */
   stringstream connKey;
- 
-  connKey << ntohs(tcp->th_dport); /* Finish this */
+  connKey << srcIp
+	  << "-" << ntohs(tcp->th_sport)
+	  << "-" << dstIp
+	  << "-" << ntohs(tcp->th_dport);
 
   /* It should not be possible that the connection is not yet created */
   if (conns.count(connKey.str()) == 0){
@@ -379,11 +402,18 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data){
   u_int ipHdrLen = IP_HL(ip)*4;
   tcp = (struct sniff_tcp*)(data + SIZE_ETHERNET + ipHdrLen);
   u_int tcpHdrLen = TH_OFF(tcp)*4;
-
+  char srcIp[INET_ADDRSTRLEN];
+  char dstIp[INET_ADDRSTRLEN];
+  inet_ntop(AF_INET, &(ip->ip_src), srcIp, INET_ADDRSTRLEN);
+  inet_ntop(AF_INET, &(ip->ip_dst), dstIp, INET_ADDRSTRLEN);
+  
+  /* Generate snd IP/port + rcv IP/port string to use as key */
   stringstream connKey;
-
-  connKey << ntohs(tcp->th_sport); /*Finish this */
-
+  connKey << srcIp
+	  << "-" << ntohs(tcp->th_sport)
+	  << "-" << dstIp
+	  << "-" << ntohs(tcp->th_dport);
+  
   /* Check if connection exists. If not, exit with exception*/
   if (conns.count(connKey.str()) == 0){
     cerr << "Connection found in recveiver dump that does not exist in sender. Maybe NAT is in effect?  Exiting." << endl;

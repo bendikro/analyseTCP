@@ -14,8 +14,10 @@ class Connection {
   int totPacketSize;
   int totBytesSent;
   int nrRetrans;
-  uint16_t dstPort;
+  struct in_addr srcIp;
   uint16_t srcPort;
+  struct in_addr dstIp;
+  uint16_t dstPort;
   int bundleCount;
   int curSize;
   uint32_t endSeq;
@@ -27,7 +29,11 @@ class Connection {
   RangeManager *rm;
 
  public:
-  Connection(uint16_t src_port, uint16_t dst_port, uint32_t seq);
+  Connection(struct in_addr src_ip, 
+	     uint16_t src_port, 
+	     struct in_addr dst_ip,
+	     uint16_t dst_port, 
+	     uint32_t seq);
 
   ~Connection(){}
 
@@ -44,5 +50,6 @@ class Connection {
   void makeDcCdf();
   void genRFiles();
   int getNumBytes();
+  string getConnKey();
 };
 #endif /* CONNECTION_H */

@@ -1,7 +1,7 @@
 /*************************************************************************************
 **************************************************************************************
 **                                                                                  **
-**  analyseRdb - Tool for analysing sender side tcpdump                             **
+**  analyseTCP - Tool for analysing sender side tcpdump                             **
 **               files with regard to latency.                                      **
 **                                                                                  **
 **  Copyright (C) 2007     Andreas Petlund  - andreas@petlund.no                    **
