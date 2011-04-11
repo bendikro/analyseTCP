@@ -33,11 +33,8 @@ void RangeManager::insertSentRange(uint32_t startSeq, uint32_t endSeq, timeval* 
   }
   
   /* Check for instances where sent packets are lost from the packet trace */
-  /* Possible fix: Insert "empty" range that will be discarded when analysed */
-  /* Possible quicker fix: remove connection, a new one will be created for the rest
-     of the connection */
-  
-
+   
+  /* TODO: Add this as a warning if incomplete dump option is not given */
   // if (startSeq > lastSeq ){ 
   //   cerr << "RangeManager::insertRange: Missing byte in send range: Exiting." << endl;
   //   exit(1);
@@ -129,15 +126,6 @@ void RangeManager::processAck(uint32_t ack, timeval* tv){
     if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
       cerr << "tmpRange - startSeq: " << tmpRange->getStartSeq() 
 	   << " - endSeq: " << tmpRange->getEndSeq() << endl;
-
-    // /* First range is a dummy range. Mark as ACKed and return */
-    // if(tmpRange->isDummy()){
-    //   if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
-    // 	cerr << "--------Dummy range. Marking as ACKed and continuing--------" << endl;
-    //   tmpRange->setIsAcked();
-    //   highestAcked = i;
-    //   return;
-    // }
 
     /* All data from this ack has been acked before: return */
     if(ack <= tmpRange->getStartSeq()){
@@ -393,6 +381,7 @@ void RangeManager::registerRecvDiffs(){
     }
     
     /* Check if match has been found */
+    /* Tag as dummy range? */
     if(!matched){
       cerr << "Found range that has no corresponding received packet.\nTagging for deletion." << endl;
       delList.push_back(it);
