@@ -75,7 +75,7 @@ void Connection::registerAck(uint32_t ack, timeval* tv){
     timeval offset;
     timersub(tv, &firstSendTime, &offset);
     cerr << endl << "Registering new ACK. Conn: " << getConnKey() << " Ack: " << ack << endl;
-    cerr << "Time offset: Secs: " << offset.tv_sec << " uSecs: " << offset.tv_sec << endl;
+    cerr << "Time offset: Secs: " << offset.tv_sec << " uSecs: " << offset.tv_usec << endl;
   }
 
   rm->processAck(ack, tv);
@@ -93,7 +93,8 @@ void Connection::registerAck(uint32_t ack, timeval* tv){
    update aggregate stats if requested */
 void Connection::genStats(struct connStats* cs){
   if(!(GlobOpts::aggOnly)){
-    cout << "Src_port: " << srcPort << " Dst_port: " << dstPort << endl;
+    cout << "Src: " << getSrcIp() << ":" << srcPort << endl;
+    cout << "Dst: " << getDstIp() << ":" << dstPort << endl;
     cout << "Duration: " << rm->getDuration() << " seconds ( " 
 	 << ((float)rm->getDuration() / 60 / 60) << " hours )" << endl;
     cout << "Total packets sent: " << nrPacketsSent << endl;
@@ -179,7 +180,7 @@ void Connection::makeDcCdf(){
 }
 
 void Connection::genRFiles(){
-  rm->genRFiles(srcPort);
+  rm->genRFiles(getConnKey());
 }
 
 int Connection::getNumBytes(){ 
@@ -203,4 +204,28 @@ string Connection::getConnKey(){
 	  << "-" << dst_ip
 	  << "-" << dstPort;
   return connKey.str();
+}
+
+string Connection::getSrcIp(){
+  char src_ip[INET_ADDRSTRLEN];
+  char dst_ip[INET_ADDRSTRLEN];
+  inet_ntop(AF_INET, &(srcIp), src_ip, INET_ADDRSTRLEN);
+  inet_ntop(AF_INET, &(dstIp), dst_ip, INET_ADDRSTRLEN);
+
+  /* Generate snd IP/port + rcv IP/port string to use as key */
+  stringstream sip;
+  sip << src_ip;
+  return sip.str();
+}
+
+string Connection::getDstIp(){
+  char src_ip[INET_ADDRSTRLEN];
+  char dst_ip[INET_ADDRSTRLEN];
+  inet_ntop(AF_INET, &(srcIp), src_ip, INET_ADDRSTRLEN);
+  inet_ntop(AF_INET, &(dstIp), dst_ip, INET_ADDRSTRLEN);
+
+  /* Generate snd IP/port + rcv IP/port string to use as key */
+  stringstream dip;
+  dip << dst_ip;
+  return dip.str();
 }

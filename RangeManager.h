@@ -79,7 +79,7 @@ class RangeManager{
   int calcDrift();
   void registerDcDiffs();
   void makeDcCdf();
-  void genRFiles(uint16_t port);
+  void genRFiles(string connKey);
   int getNumBytes(){ return lastSeq - firstSeq; }
   int getNrDummy(){ return nrDummy; }
 };

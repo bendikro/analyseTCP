@@ -93,26 +93,19 @@ void Dump::analyseSender (){
     exit(1);
   }
   
-  // filterExp << "tcp && src host " << dstIp << " && dst host "
-  // 	    << srcIp << " && src port " << dstPort
-  // 	    << " && ((tcp[tcpflags] & tcp-syn) != tcp-syn)"
-  // 	    << " && ((tcp[tcpflags] & tcp-fin) != tcp-fin)"
-  // 	    << " && ((tcp[tcpflags] & tcp-ack) == tcp-ack)";
-  
-  /* Set up pcap filter to get only incoming tcp packets
-     with correct IP and ports and the ack flag set */
-  
   filterExp.str("");
   filterExp << "tcp ";
   if (!dstIp.empty())
     filterExp << "&& src host " << dstIp;
-  filterExp << "&& dst host " << srcIp;
   if (!dstPort == 0)
     filterExp << "&& src port " << dstPort;
+  filterExp << "&& dst host " << srcIp;
+  if (!srcPort == 0)
+    filterExp << "&& dst port " << srcPort;
   filterExp << " && ((tcp[tcpflags] & tcp-syn) != tcp-syn)"
 	    << " && ((tcp[tcpflags] & tcp-fin) != tcp-fin)"
 	    << " && ((tcp[tcpflags] & tcp-ack) == tcp-ack)";
-    
+  
   if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
     cerr << "pcap filter expression: " << (char*)((filterExp.str()).c_str()) << endl;
   
@@ -312,7 +305,7 @@ void Dump::processAcks(const struct pcap_pkthdr* header, const u_char *data){
   /* If lingering ack arrives for a closed connection, this may happen */
   if (conns.count(connKey.str()) == 0){
     cerr << "Ack for unregistered connection found. Conn: "
-	 << ntohs(tcp->th_dport) << " - Ignoring." << endl;
+	 << connKey.str() << " - Ignoring." << endl;
     return;
   }
   ackCount++;
@@ -516,8 +509,6 @@ void Dump::printDumpStats(){
   cout << endl << endl;
   cout << "General info:" << endl;
   cout << "srcIp: " << srcIp << endl;;
-  cout << "dstIp: " << dstIp << endl;
-  cout << "dstPort: " << dstPort << endl;
   cout << "filename: " << filename << endl;
   cout << "sentPacketCount: " << sentPacketCount << endl;
   cout << "sentBytesCount: " << sentBytesCount << endl;

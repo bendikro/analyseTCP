@@ -665,20 +665,20 @@ void RangeManager::printDcCdf(){
   }
 }
 
-void RangeManager::genRFiles(uint16_t port){
+void RangeManager::genRFiles(string connKey){
   vector<Range*>::iterator it, it_end;
   it = ranges.begin();
   it_end = ranges.end();
-    
+
   ofstream dcDiff, retr1, retr2, retr3, retr4, all;
   stringstream r1fn, r2fn, r3fn, r4fn, allfn, dcdfn;
   
   if(!(GlobOpts::aggOnly)){
-    r1fn << GlobOpts::prefix << "-1retr-" << port << ".dat";
-    r2fn << GlobOpts::prefix << "-2retr-" << port << ".dat";
-    r3fn << GlobOpts::prefix << "-3retr-" << port << ".dat";
-    r4fn << GlobOpts::prefix << "-4retr-" << port << ".dat";
-    allfn << GlobOpts::prefix << "-all-" << port << ".dat";
+    r1fn << GlobOpts::prefix << "-1retr-" << connKey << ".dat";
+    r2fn << GlobOpts::prefix << "-2retr-" << connKey << ".dat";
+    r3fn << GlobOpts::prefix << "-3retr-" << connKey << ".dat";
+    r4fn << GlobOpts::prefix << "-4retr-" << connKey << ".dat";
+    allfn << GlobOpts::prefix << "-all-" << connKey << ".dat";
     
     retr1.open((char*)((r1fn.str()).c_str()), ios::out);
     retr2.open((char*)((r2fn.str()).c_str()), ios::out);

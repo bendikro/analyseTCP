@@ -32,7 +32,7 @@ class Connection {
   Connection(struct in_addr src_ip, 
 	     uint16_t src_port, 
 	     struct in_addr dst_ip,
-	     uint16_t dst_port, 
+	     uint16_t dst_port,
 	     uint32_t seq);
 
   ~Connection(){}
@@ -51,5 +51,7 @@ class Connection {
   void genRFiles();
   int getNumBytes();
   string getConnKey();
+  string getSrcIp();
+ string getDstIp();
 };
 #endif /* CONNECTION_H */

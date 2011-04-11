@@ -72,7 +72,7 @@ int Range::getDiff(){
       cerr << "sendTime.tv_sec: " << sendTime.tv_sec << " - sendTime.tv_usec: " << sendTime.tv_usec << endl;
       cerr << "ackTime.tv_sec : " << ackTime.tv_sec << "  - ackTime.tv_usec : " << ackTime.tv_usec << endl;
       cerr << "Number of retransmissions: " << numRetrans << endl;
-      cerr << "Number of bundlings: " << numBundled << endl;
+      cerr << "Number of bundles: " << numBundled << endl;
     }
   }
 
