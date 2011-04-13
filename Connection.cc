@@ -63,9 +63,12 @@ void Connection::registerRange(struct sendData* sd){
   }
 
   rm->insertSentRange(sd->seq, sd->endSeq, &(sd->time));
+  
   if(GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5){
-    cerr << "Last range: startSeq: " << rm->getLastRange()->getStartSeq() << " - endSeq: " << rm->getLastRange()->getEndSeq() << " - size: " << rm->getLastRange()->getEndSeq() - rm->getLastRange()->getStartSeq() << endl;
-    cerr << endl;
+    cerr << "Last range: startSeq: " << rm->getLastRange()->getStartSeq()
+	 << " - endSeq: " << rm->getLastRange()->getEndSeq() << " - size: "
+	 << rm->getLastRange()->getEndSeq() - rm->getLastRange()->getStartSeq()
+	 << endl;
   }
 }
 
@@ -104,7 +107,16 @@ void Connection::genStats(struct connStats* cs){
     cout << "Number of packets with bundled segments: " << bundleCount << endl;
     cout << "Estimated loss rate: " << (((float)nrRetrans / nrPacketsSent) * 100) << "%" << endl;
     cout << "Number of unique bytes: " << getNumBytes() << endl;
-    cout << "Redundancy: " << ((float)(totBytesSent - (getNumBytes())) / totBytesSent) * 100 << "\%" << endl;
+    
+    if(GlobOpts::incTrace){
+      cout << "Number of redundant (retransmitted) bytes: " << rm->getRedundantBytes() << endl;
+      cout << "Redundancy: " <<  ((float)rm->getRedundantBytes() / getNumBytes()) *100
+	   << "%" << endl;
+    }else{
+      cout << "Redundancy: " 
+	   << ((float)(totBytesSent - (getNumBytes())) / totBytesSent) * 100
+	   << "\%" << endl;
+    }
     cout << "--------------------------------------------------" << endl;
   }
   
@@ -114,6 +126,7 @@ void Connection::genStats(struct connStats* cs){
     cs->nrRetrans += nrRetrans;
     cs->bundleCount += bundleCount;
     cs->totUniqueBytes += getNumBytes();
+    cs->redundantBytes += rm->getRedundantBytes();
   }
 }
 
@@ -125,9 +138,9 @@ void Connection::genStats(struct connStats* cs){
    
    if(!(GlobOpts::aggOnly)){
      cout << "Bytewise latency - Conn: " <<  getConnKey() << endl;
-     cout << "Maximum latency  : " << bs->maxLat << "ms" << endl;
      cout << "Minimum latency  : " << bs->minLat << "ms" << endl;
      cout << "Average latency  : " << bs->avgLat << "ms" << endl;
+     cout << "Maximum latency  : " << bs->maxLat << "ms" << endl;
      cout << "--------------------------------------------------" << endl;
      cout << "Occurrences of 1. retransmission : " << bs->retrans[0] << endl;
      cout << "Occurrences of 2. retransmission : " << bs->retrans[1] << endl; 

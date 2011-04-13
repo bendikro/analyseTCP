@@ -81,6 +81,7 @@ struct connStats{
   int nrRetrans;
   int bundleCount;
   int totUniqueBytes;
+  int redundantBytes;
 };
 
 /* Struct used to keep track of bytewise latency stats */
@@ -94,7 +95,7 @@ struct byteStats{
   int maxRetrans; /* MAximum number of retransmissions for a range */
 };
 
-/* Struct used to forward relevant data about an anlyzed packet */
+/* Struct used to forward relevant data about an anlysed packet */
 struct sendData {
   u_int totalSize;   /* Total packet size */
   u_int ipSize;      /* IP size */

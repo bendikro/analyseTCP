@@ -151,7 +151,10 @@ int main(int argc, char *argv[]){
     cerr << "debugLevel = " << GlobOpts::debugLevel << endl;
   
   if(GlobOpts::incTrace){
-    cout << "Incomplete trace option has been specified." << endl << "Beware that maximum and minimum values may be erroneous." << endl << "Statistical methods will be applied to compensate where this is possible." << endl;
+    cout << "Incomplete trace option has been specified." << endl
+	 << "Beware that maximum and minimum values may be erroneous." << endl
+	 << "Statistical methods will be applied to compensate where this is possible." 
+	 << endl;
   }
 
   /* Create Dump - object */

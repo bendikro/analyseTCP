@@ -37,6 +37,7 @@ class RangeManager{
   struct timeval highestRecvd;
   int  nrRanges;
   int nrDummy;
+  int redundantBytes;
   int delBytes;
   long lowestDiff; /* Used to create CDF. */
   long lowestDcDiff; /* Lowest diff when compensated for clock drift */
@@ -58,6 +59,7 @@ class RangeManager{
     memset(&highestRecvd, 0, sizeof(highestRecvd));
     nrRanges = 0;
     nrDummy = 0;
+    redundantBytes = 0;
     delBytes = 0;
   };
   ~RangeManager();
@@ -82,6 +84,7 @@ class RangeManager{
   void genRFiles(string connKey);
   int getNumBytes(){ return lastSeq - firstSeq; }
   int getNrDummy(){ return nrDummy; }
+  int getRedundantBytes(){ return redundantBytes; }
 };
 
 #endif /* RANGEMANAGER_H */

@@ -192,14 +192,19 @@ void Dump::analyseSender (){
 						  / cs.nrPacketsSent) * 100)
 	   << "%" << endl;
       cout << "Number of unique bytes: " << cs.totUniqueBytes << endl;
-      cout << "Redundancy: " << ((float)(sentBytesCount - (cs.totUniqueBytes)) 
-				 / sentBytesCount) * 100 << "\%" << endl;
+      if(GlobOpts::incTrace){
+	cout << "Redundancy: " << ((float)cs.redundantBytes / cs.totUniqueBytes) * 100 
+	     << "\%" << endl;
+      }else{
+	cout << "Redundancy: " << ((float)(sentBytesCount - (cs.totUniqueBytes)) 
+				   / sentBytesCount) * 100 << "\%" << endl;
+      }
       cout << "--------------------------------------------------" <<endl;
       /* Print Aggregate bytewise latency */
       cout << "Bytewise latency" << endl;
       cout << "Minimum latency : " << aggrMinLat << endl;
-      cout << "Maximum latency : " << aggrMaxLat << endl;
       cout << "Average latency : " << aggrCumLat / conns.size() << endl;
+      cout << "Maximum latency : " << aggrMaxLat << endl;
       cout << "--------------------------------------------------" << endl;
       cout << "Occurrences of 1. retransmission : " << r1 << endl;
       cout << "Occurrences of 2. retransmission : " << r2 << endl; 
@@ -261,8 +266,7 @@ void Dump::processSent(const struct pcap_pkthdr* header, const u_char *data){
 
   sentPacketCount++;
   sentBytesCount += sd.payloadSize;
-  
-
+ 
   tmpConn->registerSent(&sd);  
   tmpConn->registerRange(&sd);
 }

@@ -35,10 +35,13 @@ void RangeManager::insertSentRange(uint32_t startSeq, uint32_t endSeq, timeval* 
   /* Check for instances where sent packets are lost from the packet trace */
    
   /* TODO: Add this as a warning if incomplete dump option is not given */
-  // if (startSeq > lastSeq ){ 
-  //   cerr << "RangeManager::insertRange: Missing byte in send range: Exiting." << endl;
-  //   exit(1);
-  // }
+  if (!GlobOpts::incTrace && (startSeq > lastSeq) ){ 
+    cerr << "RangeManager::insertRange: Missing byte in send range." << endl;
+    cerr << "This is an indication that tcpdump has dropped packets" << endl
+	 << "while collecting the trace." << endl
+	 << "Please rerun using the -b option." << endl;
+    exit(1);
+  }
   
   /* If we have missing packets in the sender dump, insert a dummy range
      before the new range. This range will not be used to generate statistics */
@@ -72,8 +75,15 @@ void RangeManager::insertSentRange(uint32_t startSeq, uint32_t endSeq, timeval* 
       for(it = ranges.rbegin(); it != it_end; it++){
 	if (startSeq >= (*it)->getEndSeq())
 	  break;
-	if ( endSeq > (*it)->getStartSeq())
+	if ( endSeq > (*it)->getStartSeq()){
 	  (*it)->incNumRetrans(); /* Count a new retransmssion */
+	  (*it)->printValues();
+	}
+      }
+      redundantBytes += (endSeq - startSeq);
+      if(GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5){
+	    cerr << "Adding " << (endSeq - startSeq)
+		 << " redundant bytes to connection." << endl;
       }
       return;
     }else{ /* Old and new bytes: Bundle */
@@ -157,6 +167,7 @@ void RangeManager::processAck(uint32_t ack, timeval* tv){
       if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5){
 	cerr << "--------Ack covers only parts of this range: Splitting --------" << endl;
 	cerr << " Split range dummy: " << tmpRange->isDummy() << endl;
+	cerr << " Split range nr.retrans: " << tmpRange->getNumRetrans() << endl;
       }
       vector<Range*>::iterator it, it_end;
       it_end = ranges.end();
@@ -223,7 +234,6 @@ void RangeManager::genStats(struct byteStats* bs){
     if (retrans > bs->maxRetrans)
       bs->maxRetrans = retrans;
   }
-  //bs->nrRanges = ranges.size();
 }
 
 /* Check that every byte from firstSeq to lastSeq is present.
@@ -338,7 +348,7 @@ void RangeManager::registerRecvDiffs(){
     /* Traverse recv data structs to find 
        lowest time for all corresponding bytes */
     multimap<uint32_t, struct recvData*>::iterator lowIt, highIt;
-    /* Add and subtract one MTU from the start seq
+    /* Add and subtract one MTU(and some) from the start seq
        to get range of valid packets to process */
     uint32_t absLow = tmpStartSeq - 1600;
     uint32_t absHigh = tmpStartSeq + 1600;
