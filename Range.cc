@@ -39,13 +39,11 @@ int Range::getDiff(){
 
   if (sendTime.tv_sec == 0 && sendTime.tv_usec == 0){
     cerr << "Range without a send time. Skipping." << endl;
-    //removeConnection(); /* Connection has gone bad: Remove it */
     return 0;
   }
 
   if(ackTime.tv_sec == 0 && ackTime.tv_usec == 0){
     cerr << "Range with no ACK time. Skipping." << endl;
-    //removeConnection(); /* Connection has gone bad: Remove it */
     return 0;
   }
 
@@ -69,8 +67,10 @@ int Range::getDiff(){
       cerr << "Strange latency: " << ms << "ms." << endl;
       cerr << "Start seq: " << startSeq << " End seq: " << endSeq << endl;
       cerr << "Size of range: " << endSeq - startSeq << endl;
-      cerr << "sendTime.tv_sec: " << sendTime.tv_sec << " - sendTime.tv_usec: " << sendTime.tv_usec << endl;
-      cerr << "ackTime.tv_sec : " << ackTime.tv_sec << "  - ackTime.tv_usec : " << ackTime.tv_usec << endl;
+      cerr << "sendTime.tv_sec: " << sendTime.tv_sec << " - sendTime.tv_usec: "
+	   << sendTime.tv_usec << endl;
+      cerr << "ackTime.tv_sec : " << ackTime.tv_sec << "  - ackTime.tv_usec : "
+	   << ackTime.tv_usec << endl;
       cerr << "Number of retransmissions: " << numRetrans << endl;
       cerr << "Number of bundles: " << numBundled << endl;
     }
@@ -95,7 +95,12 @@ void Range::setDiff(){
 }
 
 int Range::getNumBytes(){
-  return endSeq - startSeq;
+  int numBytes = endSeq - startSeq;
+  if(numBytes < 0) {
+    cerr << "numBytes less than 0: " << numBytes << endl;
+    exit(1);
+  }
+  return numBytes;
 }
 
 void Range::printValues(){

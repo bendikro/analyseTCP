@@ -153,9 +153,6 @@ void Dump::analyseSender (){
   int r1=0, r2=0, r3=0;
   int maxRetrans = 0;
   
-  //for (int i = 0; i<=sizeof(retrans); i++)
-  // retrans[i] = 0;
-  
   map<string, Connection*>::iterator cIt, cItEnd;
   for(cIt = conns.begin(); cIt != conns.end(); cIt++){
     cIt->second->genStats(&cs);
@@ -239,18 +236,7 @@ void Dump::processSent(const struct pcap_pkthdr* header, const u_char *data){
 	  << "-" << dstIp
 	  << "-" << ntohs(tcp->th_dport);
   
-  // cout << "ipSize: " << ipSize << " - " << "ipHdrLen: " << ipHdrLen << endl;
-  // cout << "tcpHdrLen: " << tcpHdrLen << endl;
-  // cout << &(ip->ip_src) << " - " << inet_ntop(ip->ip_src) << endl;
-  // cout << "sport: " << ntohs(tcp->th_sport) << endl;
-  // cout << &(ip->ip_dst) << " - " << inet_ntop(ip->ip_dst) << endl;
-  // cout << "dport: " << ntohs(tcp->th_dport) << endl;
-  //cout << connKey.str() << endl;
-
-
   /* Check if connection exists. If not, create a new */
-  /* Create connection based on snd IP/port + rcv IP/port */
-
   if (conns.count(connKey.str()) == 0){
     tmpConn = new Connection(ip->ip_src, ntohs(tcp->th_sport),
 			     ip->ip_dst, ntohs(tcp->th_dport), 
@@ -275,8 +261,9 @@ void Dump::processSent(const struct pcap_pkthdr* header, const u_char *data){
 
   sentPacketCount++;
   sentBytesCount += sd.payloadSize;
-  tmpConn->registerSent(&sd);
   
+
+  tmpConn->registerSent(&sd);  
   tmpConn->registerRange(&sd);
 }
 
@@ -578,5 +565,4 @@ void Dump::genRFiles(){
   retr3.close();
   retr4.close();
   all.close();
-
 }

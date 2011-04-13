@@ -124,7 +124,7 @@ void Connection::genStats(struct connStats* cs){
    bs->avgLat = (float)bs->cumLat / bs->nrRanges;
    
    if(!(GlobOpts::aggOnly)){
-     cout << "Bytewise latency - Conn: " <<  srcPort << endl;
+     cout << "Bytewise latency - Conn: " <<  getConnKey() << endl;
      cout << "Maximum latency  : " << bs->maxLat << "ms" << endl;
      cout << "Minimum latency  : " << bs->minLat << "ms" << endl;
      cout << "Average latency  : " << bs->avgLat << "ms" << endl;
@@ -162,13 +162,13 @@ void Connection::makeCDF(){
 
 void Connection::printCDF(){
   cout << endl << endl << endl;
-  cout << "#------CDF - Conn: " << srcPort << " --------" << endl; 
+  cout << "#------CDF - Conn: " << getConnKey() << " --------" << endl; 
   rm->printCDF();
 }
 
 void Connection::printDcCdf(){
   cout << endl << endl << endl;
-  cout << "#------Drift-compensated CDF - Conn: " << srcPort << " --------" << endl; 
+  cout << "#------Drift-compensated CDF - Conn: " << getConnKey() << " --------" << endl; 
   rm->printDcCdf();
 }
 

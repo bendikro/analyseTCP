@@ -50,6 +50,7 @@ class GlobOpts{
   static bool aggOnly;
   static bool transport;
   static int  debugLevel;
+  static bool incTrace;
   static bool withRecv;
   static string sendNatIP;
   static string recvNatIP;

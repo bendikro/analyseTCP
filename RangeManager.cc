@@ -98,7 +98,7 @@ void RangeManager::insertSentRange(uint32_t startSeq, uint32_t endSeq, timeval* 
 
 /* Register all byes with a coomon send time as a range */
 void RangeManager::insertRecvRange(uint32_t startSeq, uint32_t endSeq, timeval* tv){
-  struct recvData *tmpRecv = new struct recvData(); // = new struct recvData();
+  struct recvData *tmpRecv = new struct recvData();
   tmpRecv->startSeq = startSeq;
   tmpRecv->endSeq = endSeq;
   tmpRecv->tv = *tv;

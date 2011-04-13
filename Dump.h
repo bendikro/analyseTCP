@@ -28,7 +28,6 @@ class Dump {
   int recvPacketCount;
   int recvBytesCount;
   int ackCount;
-  //map<uint16_t, Connection*> conns;
   map<string, Connection*> conns;
 
   void processSent(const struct pcap_pkthdr* header, const u_char *data);
