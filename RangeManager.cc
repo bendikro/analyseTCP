@@ -77,7 +77,6 @@ void RangeManager::insertSentRange(uint32_t startSeq, uint32_t endSeq, timeval* 
 	  break;
 	if ( endSeq > (*it)->getStartSeq()){
 	  (*it)->incNumRetrans(); /* Count a new retransmssion */
-	  (*it)->printValues();
 	}
       }
       redundantBytes += (endSeq - startSeq);
