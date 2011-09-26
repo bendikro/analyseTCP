@@ -7,6 +7,8 @@ vector<int> GlobStats::retr1;
 vector<int> GlobStats::retr2;
 vector<int> GlobStats::retr3;
 vector<int> GlobStats::retr4;
+vector<int> GlobStats::retr5;
+vector<int> GlobStats::retr6;
 vector<int> GlobStats::all;
 
 /* Register all bytes with a common send time as a range */
@@ -668,20 +670,24 @@ void RangeManager::genRFiles(string connKey){
   it = ranges.begin();
   it_end = ranges.end();
 
-  ofstream dcDiff, retr1, retr2, retr3, retr4, all;
-  stringstream r1fn, r2fn, r3fn, r4fn, allfn, dcdfn;
+  ofstream dcDiff, retr1, retr2, retr3, retr4, retr5, retr6, all;
+  stringstream r1fn, r2fn, r3fn, r4fn, r5fn, r6fn, allfn, dcdfn;
   
   if(!(GlobOpts::aggOnly)){
     r1fn << GlobOpts::prefix << "-1retr-" << connKey << ".dat";
     r2fn << GlobOpts::prefix << "-2retr-" << connKey << ".dat";
     r3fn << GlobOpts::prefix << "-3retr-" << connKey << ".dat";
     r4fn << GlobOpts::prefix << "-4retr-" << connKey << ".dat";
+    r5fn << GlobOpts::prefix << "-5retr-" << connKey << ".dat";
+    r6fn << GlobOpts::prefix << "-6retr-" << connKey << ".dat";
     allfn << GlobOpts::prefix << "-all-" << connKey << ".dat";
     
     retr1.open((char*)((r1fn.str()).c_str()), ios::out);
     retr2.open((char*)((r2fn.str()).c_str()), ios::out);
     retr3.open((char*)((r3fn.str()).c_str()), ios::out);
     retr4.open((char*)((r4fn.str()).c_str()), ios::out);
+    retr5.open((char*)((r5fn.str()).c_str()), ios::out);
+    retr6.open((char*)((r6fn.str()).c_str()), ios::out);
     all.open((char*)((allfn.str()).c_str()), ios::out);
   }
 
@@ -719,6 +725,22 @@ void RangeManager::genRFiles(string connKey){
       }
     }
     
+    if((*it)->getNumRetrans() == 5){
+      if ( (*it)->getDiff() > 0){
+	GlobStats::retr5.push_back((*it)->getDiff());
+	if(!(GlobOpts::aggOnly))
+	  retr5 << (*it)->getDiff() << endl;
+      }
+    }
+    
+    if((*it)->getNumRetrans() == 6){
+      if ( (*it)->getDiff() > 0){
+	GlobStats::retr6.push_back((*it)->getDiff());
+	if(!(GlobOpts::aggOnly))
+	  retr6 << (*it)->getDiff() << endl;
+      }
+    }
+
     if ( (*it)->getDiff() > 0){
       GlobStats::all.push_back((*it)->getDiff());
       if(!(GlobOpts::aggOnly))  

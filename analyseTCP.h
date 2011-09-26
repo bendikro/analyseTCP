@@ -66,10 +66,14 @@ class GlobStats{
   static map<const int, int> dcCdf;
   static float avgDrift;
   static int totNumBytes;
+  /* TODO: Create list of retranmission statistics based on observed
+     number of retransmissions */
   static vector<int> retr1;
   static vector<int> retr2;
   static vector<int> retr3;
   static vector<int> retr4;
+  static vector<int> retr5;
+  static vector<int> retr6;
   static vector<int> all;
   
 };

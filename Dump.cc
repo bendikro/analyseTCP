@@ -518,19 +518,23 @@ void Dump::genRFiles(){
   }
 
   /* Print aggregate statistics */
-  ofstream dcDiff, retr1, retr2, retr3, retr4, all;
-  stringstream r1fn, r2fn, r3fn, r4fn, allfn, dcdfn;;
+  ofstream dcDiff, retr1, retr2, retr3, retr4, retr5, retr6, all;
+  stringstream r1fn, r2fn, r3fn, r4fn, r5fn, r6fn, allfn, dcdfn;;
   
   r1fn << GlobOpts::prefix << "-1retr-aggr.dat";
   r2fn << GlobOpts::prefix << "-2retr-aggr.dat";
   r3fn << GlobOpts::prefix << "-3retr-aggr.dat";
   r4fn << GlobOpts::prefix << "-4retr-aggr.dat";
+  r5fn << GlobOpts::prefix << "-5retr-aggr.dat";
+  r6fn << GlobOpts::prefix << "-6retr-aggr.dat";
   allfn << GlobOpts::prefix << "-all-aggr.dat";
 
   retr1.open((char*)((r1fn.str()).c_str()), ios::out);
   retr2.open((char*)((r2fn.str()).c_str()), ios::out);
   retr3.open((char*)((r3fn.str()).c_str()), ios::out);
   retr4.open((char*)((r4fn.str()).c_str()), ios::out);
+  retr5.open((char*)((r5fn.str()).c_str()), ios::out);
+  retr6.open((char*)((r6fn.str()).c_str()), ios::out);
   all.open((char*)((allfn.str()).c_str()), ios::out);
   
   vector<int>::iterator it, it_end;
@@ -556,6 +560,18 @@ void Dump::genRFiles(){
   it_end = GlobStats::retr4.end();
   for(; it != it_end; it++){
     retr4 << *it << endl;
+  }
+  
+  it = GlobStats::retr5.begin();
+  it_end = GlobStats::retr5.end();
+  for(; it != it_end; it++){
+    retr5 << *it << endl;
+  }
+  
+  it = GlobStats::retr6.begin();
+  it_end = GlobStats::retr6.end();
+  for(; it != it_end; it++){
+    retr6 << *it << endl;
   }
 
   it = GlobStats::all.begin();
