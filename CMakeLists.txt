@@ -1,7 +1,7 @@
 PROJECT (analyseTCP CXX)
-ENABLE_LANGUAGE(C)
-		  
-#CMAKE_MINIMUM_REQUIRED(VERSION 2.0.5)
+ENABLE_LANGUAGE(CXX)
+
+CMAKE_MINIMUM_REQUIRED(VERSION 2.0.5)
 SET (INCLUDE_DIRS /work/include)
 
 SET (LIB_DIRS /work/lib)
@@ -9,7 +9,7 @@ SET (LIB_DIRS /work/lib)
 # Put executable files in custom dir
 #SET(EXECUTABLE_OUTPUT_PATH dir)
 
-#Added work/include to enable building with locally installed libs on 
+#Added work/include to enable building with locally installed libs on
 INCLUDE_DIRECTORIES (${INCLUDE_DIRS})
 
 # Prepare sources for app.
@@ -18,7 +18,7 @@ SET (APP_SRCS analyseTCP.cc analyseTCP.h
 	      Connection.h Connection.cc
 	      RangeManager.cc RangeManager.h
 	      Range.cc Range.h)
-    
+
 ADD_EXECUTABLE (analyseTCP ${APP_SRCS})
 
 # Some problem with this check on OS X
@@ -47,26 +47,26 @@ SET (INCLUDE_FILES arpa/inet.h netinet/in.h sys/socket.h getopt.h)
 TARGET_LINK_LIBRARIES (analyseTCP pcap)
 
 # Set compiler flags for all configurations
-SET (CMAKE_C_FLAGS "-O1 -lm") # -Werror?
+SET (CMAKE_CXX_FLAGS "-O1 -lm -Wall -g3") # -Werror?
 
 # Add NDEBUG only for release version
 # To activate: cmake -DCMAKE_BUILD_TYPE=Release .
-SET (CMAKE_C_FLAGS_RELEASE "-DNDEBUG")
+SET (CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG")
 
-# Platform specific debug flags   
+# Platform specific debug flags
 IF (APPLE)
-   SET (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-long-double")
+   SET (CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -Wno-long-double")
 ENDIF (APPLE)
 
 # Set debug compiler flags
 # To activate: cmake -DCMAKE_BUILD_TYPE=Debug .
-SET (CMAKE_C_FLAGS_DEBUG "-g3 -Wall")	
-SET (CMAKE_CXX_FLAGS_DEBUG "-g3 -Wall")	
-# Platform specific debug flags   
+SET (CMAKE_C_FLAGS_DEBUG "-g3 -Wall")
+SET (CMAKE_CXX_FLAGS_DEBUG "-g3 -Wall")
+# Platform specific debug flags
 IF (UNIX)
    SET (CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -gdwarf-2")
 ENDIF (UNIX)
-   
+
 # -gstabs+ removed.
 IF (APPLE)
    SET (CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -Wno-long-double")
@@ -76,7 +76,7 @@ ENDIF (APPLE)
 IF (UNIX OR APPLE)
   ADD_CUSTOM_TARGET(distclean DEPENDS clean)
   #ADD_DEPENDENCIES (distclean clean)
-  
+
   SET(DISTCLEAN_FILES
     cmake.depends
     cmake.check_depends

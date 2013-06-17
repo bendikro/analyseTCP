@@ -37,25 +37,46 @@ using namespace std;
 #include <pcap.h>
 #include <ctype.h>
 #include <unistd.h>
+#include <string>
+#include <sstream>
+#include <string>
+#include <map>
+#include <pcap.h>
+#include <iostream>
+#include <sstream>
+#include <limits>
+#include <arpa/inet.h>
+#include <vector>
+#include <iostream>
+#include <string>
+#include <fstream>
+#include <limits.h>
+#include "Range.h"
+#include <deque>
+
 
 /* Local includes */
 #include "Dump.h"
 
 /* Class to keep global options */
-class GlobOpts{
+class GlobOpts {
  private:
 
  public:
   static bool aggregate;
   static bool aggOnly;
+  static bool aggInfo;
   static bool transport;
   static int  debugLevel;
   static bool incTrace;
   static bool withRecv;
+  static bool relative_seq;
+  static bool print_packets;
   static string sendNatIP;
   static string recvNatIP;
   static bool genRFiles;
   static string prefix;
+  static bool rdbDetails;
 };
 
 class GlobStats{
@@ -75,41 +96,72 @@ class GlobStats{
   static vector<int> retr5;
   static vector<int> retr6;
   static vector<int> all;
-  
 };
 
 /* Struct used to pass aggregated data between connections */
-struct connStats{
-  int totPacketSize;
-  int nrPacketsSent;
-  int nrRetrans;
-  int bundleCount;
-  int totUniqueBytes;
-  int redundantBytes;
+struct connStats {
+	int duration;
+	int totBytesSent;
+	int totRetransBytesSent;
+	int totPacketSize;
+	int nrDataPacketsSent;
+	int nrPacketsSent;
+	int nrRetrans;
+	int bundleCount;
+	int totUniqueBytes;
+	int redundantBytes;
+	int rdb_stats_available;
+	int rdb_packet_hits;
+	int rdb_packet_misses;
+	int rdb_bytes_sent;
+	int rdb_byte_misses;
+	int rdb_byte_hits;
+};
+
+struct Triplet {
+	double first, second, third;
+	Triplet(double first_, double second_, double third_) {
+		first = first_;
+		second = second_;
+		third = third_;
+	}
 };
 
 /* Struct used to keep track of bytewise latency stats */
-struct byteStats{
-  int maxLat;     /* Maximum Latency */
-  int minLat;     /* Minimum Latency */
-  int cumLat;     /* Cumulative latency */
-  int nrRanges;   /* Number of ranges in conn */
-  float avgLat;   /* Average latency */
-  int retrans[3]; /* Count 1., 2. and 3. retrans */
-  int maxRetrans; /* MAximum number of retransmissions for a range */
+struct byteStats {
+	int maxLat;     /* Maximum Latency */
+	int minLat;     /* Minimum Latency */
+	int cumLat;     /* Cumulative latency */
+	Triplet *quartilesLat;
+	double stdevLat;
+	int nrRanges;   /* Number of ranges in conn */
+	float avgLat;   /* Average latency */
+	int retrans[3]; /* Count 1., 2. and 3. retrans */
+	int maxRetrans; /* MAximum number of retransmissions for a range */
+	int maxLength;
+	int minLength;
+	int cumLength;
+	int avgLength;
+	double stdevLength;
+	Triplet *quartilesLength;
 };
 
 /* Struct used to forward relevant data about an anlysed packet */
 struct sendData {
-  u_int totalSize;   /* Total packet size */
-  u_int ipSize;      /* IP size */
-  u_int ipHdrLen;    /* Ip header length */
-  u_int tcpHdrLen;   /* TCP header length */
-  u_int payloadSize; /* Payload size */
-  u_long seq;        /* Sequence number */
-  u_long endSeq;     /* Seq + payload size */
-  timeval time;     /* pcap timestamp for packet */
+  u_int totalSize;     /* Total packet size */
+  u_int ipSize;        /* IP size */
+  u_int ipHdrLen;      /* Ip header length */
+  u_int tcpHdrLen;     /* TCP header length */
+  u_int payloadSize;   /* Payload size */
+  u_long seq;          /* Sequence number (relative) */
+  u_long endSeq;       /* Seq + payload size */
+  u_long seq_absolute; /* Absolute value of the sequence number */
+  timeval time;        /* pcap timestamp for packet */
+  bool retrans;        /* is a retransmission */
+  bool is_rdb;         /* is a rdb packet */
+  u_char *data;
 };
+
 
 /* ethernet headers are always exactly 14 bytes [1] */
 #define SIZE_ETHERNET 14
@@ -172,4 +224,7 @@ u_int totalSize;   /* Total packet size */
   bool isSyn;
 };
 
+string file_and_linenum();
+void exit_with_file_and_linenum(int exit_code, string file, int linenum);
+void warn_with_file_and_linenum(int exit_code, string file, int linenum);
 #endif /* ANALYSETCP_H */

@@ -15,7 +15,7 @@
 **     This program is distributed in the hope that it will be useful,              **
 **     but WITHOUT ANY WARRANTY; without even the implied warranty of               **
 **     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the                **
-**     GNU General Public License for more details.                                 ** 
+**     GNU General Public License for more details.                                 **
 **                                                                                  **
 **     You should have received a copy of the GNU General Public License along      **
 **     with this program; if not, write to the Free Software Foundation, Inc.,      **
@@ -29,18 +29,31 @@
 /* Initialize global options */
 bool GlobOpts::aggregate      = false;
 bool GlobOpts::aggOnly        = false;
+bool GlobOpts::aggInfo        = false;
 bool GlobOpts::withRecv       = false;
 bool GlobOpts::transport      = false;
 bool GlobOpts::genRFiles      = false;
 string GlobOpts::prefix       = "";
 int GlobOpts::debugLevel      = 0;
-bool GlobOpts::incTrace        = false;
+bool GlobOpts::incTrace       = false;
+bool GlobOpts::relative_seq   = false;
+bool GlobOpts::print_packets  = false;
 string GlobOpts::sendNatIP    = "";
 string GlobOpts::recvNatIP    = "";
+bool GlobOpts::rdbDetails     = false;
 
+void warn_with_file_and_linenum(int exit_code, string file, int linenum) {
+	cout << "Error at ";
+	cout << "File: " << file << " Line: " << linenum  << endl;
+}
+
+void exit_with_file_and_linenum(int exit_code, string file, int linenum) {
+	warn_with_file_and_linenum(exit_code, file, linenum);
+	exit(exit_code);
+}
 
 void usage (char* argv){
-  printf("Usage: %s [-s|r|p|f|g|t|u|m|n|a|A|d]\n", argv);
+  printf("Usage: %s [-s|r|p|f|g|t|u|m|n|a|A|d|l|y|e]\n", argv);
   printf("Required options:\n");
   printf(" -s <sender ip>     : Sender ip.\n");
   printf(" -f <pcap-file>     : Sender-side dumpfile.\n");
@@ -57,8 +70,12 @@ void usage (char* argv){
   printf(" -n <IP>            : Receiver side local address (as seen on recv dump)\n");
   printf(" -a                 : Produce aggregated statistics (off by default, optional)\n");
   printf(" -A                 : Only print aggregated statistics (off by default, optional)\n");
+  printf(" -e                 : Print aggregated info for all streams\n");
   printf(" -b                 : Give this option if you know that tcpdump has dropped packets.\n");
   printf("                    : Statistical methods will be used to compensate where possible.\n");
+  printf(" -l                 : Print relative sequence numbers.\n");
+  printf(" -y                 : Print details for each packet (requires receiver side dump).\n");
+  printf(" -x                 : Calculate RDB miss/hits (requires receiver side dump).\n");
   printf(" -d                 : Indicate debug level\n");
   printf("                      1 = Only output on reading sender side dump first pass.\n");
   printf("                      2 = Only output on reading sender side second pass.\n");
@@ -80,7 +97,7 @@ int main(int argc, char *argv[]){
   Dump *senderDump;
 
   while(1){
-    c = getopt( argc, argv, "s:r:p:q:f:m:n:o:g:d:u:aAtb");
+    c = getopt(argc, argv, "s:r:p:q:f:m:n:o:g:d:u:aAtblyexh");
     if(c == -1) break;
 
     switch(c){
@@ -95,6 +112,9 @@ int main(int argc, char *argv[]){
       break;
     case 'q':
       src_port = atoi(optarg);
+      break;
+    case 'x':
+      GlobOpts::rdbDetails = true;
       break;
     case 'm':
       GlobOpts::sendNatIP = optarg;
@@ -126,9 +146,20 @@ int main(int argc, char *argv[]){
     case 'b':
       GlobOpts::incTrace = true;
       break;
-    case 'd':
-      GlobOpts::debugLevel = atoi(optarg);
+    case 'l':
+      GlobOpts::relative_seq = true;
       break;
+    case 'y':
+      GlobOpts::print_packets = true;
+      break;
+    case 'e':
+		GlobOpts::aggInfo = true;
+      break;
+    case 'd':
+		GlobOpts::debugLevel = atoi(optarg);
+		break;
+    case 'h':
+	    usage(argv[0]);
     case '?':
       if (optopt == 'c')
 	fprintf(stderr, "Option -%c requires an argument\n", optopt);
@@ -142,32 +173,37 @@ int main(int argc, char *argv[]){
       break;
     }
   }
-  /* TODO Exit if required options are not given */ 
+  /* TODO Exit if required options are not given */
   if(argc < 4){
     usage(argv[0]);
   }
-   
+
   if(GlobOpts::debugLevel < 0)
     cerr << "debugLevel = " << GlobOpts::debugLevel << endl;
-  
+
   if(GlobOpts::incTrace){
     cout << "Incomplete trace option has been specified." << endl
 	 << "Beware that maximum and minimum values may be erroneous." << endl
-	 << "Statistical methods will be applied to compensate where this is possible." 
+	 << "Statistical methods will be applied to compensate where this is possible."
 	 << endl;
   }
 
   /* Create Dump - object */
   senderDump = new Dump(src_ip, dst_ip, src_port, dst_port, sendfn);
   senderDump->analyseSender();
-  
+
   if(GlobOpts::genRFiles)
     senderDump->genRFiles();
-  
+
   if (GlobOpts::withRecv)
     senderDump->processRecvd(recvfn);
-  
+
+  senderDump->printStatistics();
+
   senderDump->printDumpStats();
+  senderDump->free_resources();
+
+  delete senderDump;
 
   return 0;
 }

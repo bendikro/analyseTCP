@@ -2,10 +2,10 @@
 #define DUMP_H
 
 #include <string>
-#include <map>
 #include <pcap.h>
 #include <iostream>
 #include <sstream>
+#include <memory>
 #include <limits>
 #include <arpa/inet.h>
 
@@ -13,6 +13,31 @@
 
 /* Forward declarations */
 class Connection;
+
+struct ConnectionMapKey {
+	struct in_addr ip_src, ip_dst;
+	u_short src_port, dst_port;
+};
+
+struct ConnectionKeyComparator {
+	bool operator()(const ConnectionMapKey*  left, const ConnectionMapKey* right) const {
+		//printf("Compare left  (%15p) : src ip: %ul, dst ip: %ul, src port: %us, dst port: %us\n", left, left->ip_src.s_addr, left->ip_dst.s_addr, left->src_port, left->dst_port);
+		//printf("Compare right (%15p) : src ip: %ul, dst ip: %ul, src port: %us, dst port: %us\n", right, right->ip_src.s_addr, right->ip_dst.s_addr, right->src_port, right->dst_port);
+		bool ret;
+		if (left->ip_src.s_addr != right->ip_src.s_addr)
+			ret = left->ip_src.s_addr < right->ip_src.s_addr;
+		else if (left->src_port != right->src_port)
+			ret = left->src_port < right->src_port;
+		else if (left->ip_dst.s_addr != right->ip_dst.s_addr)
+			ret = left->ip_dst.s_addr < right->ip_dst.s_addr;
+		else if (left->dst_port != right->dst_port)
+			ret = left->dst_port < right->dst_port;
+		else
+			ret = false;
+		return ret;
+	}
+};
+
 
 /* Represents one dump, and keeps globally relevant information */
 class Dump {
@@ -39,16 +64,20 @@ class Dump {
   void printDcCdf();
   void printAggCdf();
   void printAggDcCdf();
-
+  void printPacketStats(struct connStats *cs, struct byteStats *bs);
+  void printBytesLatencyStats(struct byteStats* bs);
   void makeDcCdf();
  public:
   Dump( string src_ip, string dst_ip, int src_port, int dst_port, string fn );
-  ~Dump ();
-
+  ulong get_relative_sequence_number(uint32_t ack, uint32_t firstSeq, ulong largestAckSeq, uint32_t largestAckSeqAbsolute);
+  ulong get_relative_ack_sequence_number(uint32_t ack, uint32_t firstSeq, ulong largestAckSeq, uint32_t largestAckSeqAbsolute);
   void analyseSender();
   void processRecvd(string fn);
   void printDumpStats();
+  void printRDBStats();
+  void printStatistics();
   void genRFiles();
+  void free_resources();
 };
 
 #endif /* DUMP_H */

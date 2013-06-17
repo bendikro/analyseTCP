@@ -1,55 +1,111 @@
 #include "Connection.h"
 
 /* Methods for class Connection */
-Connection::Connection(struct in_addr src_ip, uint16_t src_port, 
-		       struct in_addr dst_ip, uint16_t dst_port, 
+Connection::Connection(struct in_addr src_ip, uint16_t src_port,
+		       struct in_addr dst_ip, uint16_t dst_port,
 		       uint32_t seq){
-  nrPacketsSent  = 0;
-  totPacketSize  = 0;
-  totBytesSent   = 0;
-  nrRetrans      = 0;
-  srcIp          = src_ip;
-  srcPort        = src_port;
-  dstIp          = dst_ip;
-  dstPort        = dst_port;
-  lastLargestSeq = 0;
-  firstSeq       = seq;
-  curSeq         = 0;
-  bundleCount    = 0;
+  nrPacketsSent              = 0;
+  nrDataPacketsSent          = 0;
+  totPacketSize              = 0;
+  totBytesSent               = 0;
+  totRDBBytesSent            = 0;
+  totNewDataSent             = 0;
+  nrRetrans                  = 0;
+  totRetransBytesSent        = 0;
+  srcIp                      = src_ip;
+  srcPort                    = src_port;
+  dstIp                      = dst_ip;
+  dstPort                    = dst_port;
+  lastLargestEndSeq          = 0;
+  lastLargestSeqAbsolute     = seq;
+  lastLargestRecvEndSeq      = 0;
+  lastLargestRecvSeqAbsolute = seq;
+  lastLargestAckSeq          = 0;
+  lastLargestAckSeqAbsolute  = seq;
+  firstSeq                   = seq;
+  curSeq                     = 0;
+  bundleCount                = 0;
   memset(&firstSendTime, 0, sizeof(firstSendTime));
   memset(&endTime, 0, sizeof(endTime));
+  rm = new RangeManager(this, seq);
+}
 
-  rm = new RangeManager();
+Connection::~Connection() {
+	delete rm;
 }
 
 /* Count bundled and retransmitted packets from sent data */
-void Connection::registerSent(struct sendData* sd){
+void Connection::registerSent(struct sendData* sd) {
   totPacketSize += sd->totalSize;
   nrPacketsSent++;
-  
-  if( sd->endSeq > lastLargestSeq){ /* New data */
-    lastLargestSeq = sd->endSeq;
-    if( (sd->seq == curSeq) && (sd->endSeq > endSeq)){
-      bundleCount++;
-    } else if( (sd->seq > curSeq) && (sd->seq < endSeq) && (sd->endSeq > endSeq)){
-      bundleCount++;
-    }
-  } else if(curSeq > 0 && sd->seq <= curSeq){ /* All seen before */
-    nrRetrans++;
-  } 
-  
-  if( ( (sd->seq >= curSeq) && sd->payloadSize > 0) ||
-      ( (sd->seq < firstSeq) && sd->payloadSize > 0)) /* Wrapped seq nr. */
-    {
-      curSeq = sd->seq;
-      curSize = sd->payloadSize;
-      endSeq = sd->endSeq;
-    }
-  totBytesSent += sd->payloadSize; 
+
+/*
+  printf("registerSent -     curSeq: %10lu, lastLargestEndSeq: %10lu      (%lu, %lu), , len: %u\n",
+	 rm->relative_seq(curSeq), rm->relative_seq(lastLargestEndSeq), rm->relative_seq(sd->seq),
+	 rm->relative_seq(sd->endSeq), sd->payloadSize);
+*/
+  // This is ack
+  if (sd->payloadSize == 0) {
+	  return;
+  }
+
+  if (sd->endSeq > lastLargestEndSeq) { /* New data */
+	  if (GlobOpts::debugLevel == 6) {
+		  printf("New Data - sd->endSeq: %lu > lastLargestEndSeq: %lu, sd->seq: %lu, curSeq: %lu, len: %u\n",
+			 rm->relative_seq(sd->endSeq), rm->relative_seq(lastLargestEndSeq),
+			 rm->relative_seq(sd->seq), rm->relative_seq(curSeq), sd->payloadSize);
+	  }
+
+	  // Same seq as previous packet
+	  if ((sd->seq == curSeq) && (sd->endSeq > lastLargestEndSeq)) {
+		  bundleCount++;
+		  totRDBBytesSent += (lastLargestEndSeq - sd->seq +1);
+		  totNewDataSent += (sd->endSeq - lastLargestEndSeq);
+		  sd->is_rdb = true;
+	  } else if ((sd->seq > curSeq) && (sd->seq < lastLargestEndSeq) && (sd->endSeq > lastLargestEndSeq)) {
+		  totRDBBytesSent += (lastLargestEndSeq - sd->seq +1);
+		  totNewDataSent += (sd->endSeq - lastLargestEndSeq);
+		  bundleCount++;
+		  sd->is_rdb = true;
+	  }
+	  else {
+		  // Should only happen on the first call when curSeq and lastLargestEndSeq are 0
+		  totNewDataSent += sd->payloadSize;
+	  }
+	  lastLargestEndSeq = sd->endSeq;
+	  lastLargestSeqAbsolute = sd->seq_absolute + sd->payloadSize;
+  } else if (curSeq > 0 && sd->seq <= curSeq) { /* All seen before */
+	  if (GlobOpts::debugLevel == 6) {
+		  printf("\nRetrans - curSeq: %lu > 0 && sd->seq: %lu <= curSeq: %lu\n", rm->relative_seq(curSeq), rm->relative_seq(sd->seq), rm->relative_seq(curSeq));
+	  }
+//	  printf("    Retrans -      curSeq: %u > 0 && sd->seq: %lu <= curSeq: %u\n\n", curSeq, sd->seq, curSeq);
+	  nrRetrans++;
+	  totRetransBytesSent += sd->payloadSize;
+	  sd->retrans = true;
+  }
+
+  else {
+	  nrRetrans++;
+	  totRetransBytesSent += sd->payloadSize;
+	  sd->retrans = true;
+	  if (GlobOpts::debugLevel == 6) {
+		  printf("\n\nNeither!!----------------------------------\n");
+		  printf("Retrans - curSeq: %lu > 0 && sd->seq: %lu <= curSeq: %lu\n", rm->relative_seq(curSeq), rm->relative_seq(sd->seq), rm->relative_seq(curSeq));
+		  printf("New Data - sd->endSeq: %lu > lastLargestEndSeq: %lu\n", rm->relative_seq(sd->endSeq), rm->relative_seq(lastLargestEndSeq));
+	  }
+  }
+
+//  printf("lastLargestEndSeq: %lu\n", lastLargestEndSeq);
+
+  if (sd->payloadSize) {
+	  nrDataPacketsSent++;
+	  curSeq = sd->seq;
+  }
+  totBytesSent += sd->payloadSize;
 }
 
 /* Process range for outgoing packet */
-void Connection::registerRange(struct sendData* sd){
+Range* Connection::registerRange(struct sendData* sd) {
   if(GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5){
     timeval offset;
     if( firstSendTime.tv_sec == 0 && firstSendTime.tv_usec == 0){
@@ -57,98 +113,96 @@ void Connection::registerRange(struct sendData* sd){
     }
     timersub(&(sd->time), &firstSendTime, &offset);
 
-    cerr << "Registering new outgoing. Conn: " << getConnKey() << " Seq: " << sd->seq << endl;
-    cerr << "Time offset: Secs: " << offset.tv_sec << " uSecs: " << offset.tv_usec << endl;
-    cerr << "Payload: " << sd->payloadSize << endl;
+    cerr << "\nRegistering new outgoing. Conn: " << getConnKey() << " Seq: " << rm->relative_seq(sd->seq) << " - " << rm->relative_seq(sd->endSeq) <<  " Payload: " << sd->payloadSize << endl;
+    cerr << "Time offset: Secs: " << offset.tv_sec << "." << offset.tv_usec << endl;
   }
 
-  rm->insertSentRange(sd->seq, sd->endSeq, &(sd->time));
-  
+  Range *r = rm->insertSentRange(sd);
+
   if(GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5){
-    cerr << "Last range: startSeq: " << rm->getLastRange()->getStartSeq()
-	 << " - endSeq: " << rm->getLastRange()->getEndSeq() << " - size: "
-	 << rm->getLastRange()->getEndSeq() - rm->getLastRange()->getStartSeq()
-	 << endl;
+	  cerr << "Last range: seq: " << rm->relative_seq(rm->getLastRange()->getStartSeq())
+	       << " - " << rm->relative_seq(rm->getLastRange()->getEndSeq()) << " - size: "
+	       << rm->getLastRange()->getEndSeq() - rm->getLastRange()->getStartSeq()
+	       << endl;
   }
+  return r;
 }
 
 /* Register times for first ACK of each byte */
-void Connection::registerAck(uint32_t ack, timeval* tv){
-  if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5){
-    timeval offset;
-    timersub(tv, &firstSendTime, &offset);
-    cerr << endl << "Registering new ACK. Conn: " << getConnKey() << " Ack: " << ack << endl;
-    cerr << "Time offset: Secs: " << offset.tv_sec << " uSecs: " << offset.tv_usec << endl;
-  }
+bool Connection::registerAck(ulong ack, timeval* tv){
+	static bool ret;
+	if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
+		timeval offset;
+		timersub(tv, &firstSendTime, &offset);
+		cerr << endl << "Registering new ACK. Conn: " << getConnKey() << " Ack: " << rm->relative_seq(ack) << endl;
+		cerr << "Time offset: Secs: " << offset.tv_sec << " uSecs: " << offset.tv_usec << endl;
+	}
 
-  rm->processAck(ack, tv);
-  
-  if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
-    if(rm->getHighestAcked()!=NULL){
-      cerr << "highestAcked: startSeq: " << rm->getHighestAcked()->getStartSeq() << " - endSeq: " 
-	   << rm->getHighestAcked()->getEndSeq() << " - size: " 
-	   << rm->getHighestAcked()->getEndSeq() - rm->getHighestAcked()->getStartSeq() << endl;
-    }
-  }
+	ret = rm->processAck(ack, tv);
+
+	if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
+		if(rm->getHighestAcked()!=NULL){
+			cerr << "highestAcked: startSeq: " << rm->relative_seq(rm->getHighestAcked()->getStartSeq()) << " - endSeq: "
+			     << rm->relative_seq(rm->getHighestAcked()->getEndSeq()) << " - size: "
+			     << rm->getHighestAcked()->getEndSeq() - rm->getHighestAcked()->getStartSeq() << endl;
+		}
+	}
+	return ret;
 }
 
 /* Generate statistics for each connection.
    update aggregate stats if requested */
-void Connection::genStats(struct connStats* cs){
-  if(!(GlobOpts::aggOnly)){
-    cout << "Src: " << getSrcIp() << ":" << srcPort << endl;
-    cout << "Dst: " << getDstIp() << ":" << dstPort << endl;
-    cout << "Duration: " << rm->getDuration() << " seconds ( " 
-	 << ((float)rm->getDuration() / 60 / 60) << " hours )" << endl;
-    cout << "Total packets sent: " << nrPacketsSent << endl;
-    cout << "Total bytes sent (payload): " << totBytesSent << endl;
-    cout << "Average payload size: " << (float)(totBytesSent / nrPacketsSent) << endl;
-    cout << "Number of retransmissions: " << nrRetrans << endl;
-    cout << "Number of packets with bundled segments: " << bundleCount << endl;
-    cout << "Estimated loss rate: " << (((float)nrRetrans / nrPacketsSent) * 100) << "%" << endl;
-    cout << "Number of unique bytes: " << getNumBytes() << endl;
-    
-    if(GlobOpts::incTrace){
-      cout << "Number of redundant (retransmitted) bytes: " << rm->getRedundantBytes() << endl;
-      cout << "Redundancy: " <<  ((float)rm->getRedundantBytes() / getNumBytes()) *100
-	   << "%" << endl;
-    }else{
-      cout << "Redundancy: " 
-	   << ((float)(totBytesSent - (getNumBytes())) / totBytesSent) * 100
-	   << "\%" << endl;
-    }
-    cout << "--------------------------------------------------" << endl;
-  }
-  
-  if(GlobOpts::aggregate){
-    cs->totPacketSize += totPacketSize;
-    cs->nrPacketsSent += nrPacketsSent;
-    cs->nrRetrans += nrRetrans;
-    cs->bundleCount += bundleCount;
-    cs->totUniqueBytes += getNumBytes();
-    cs->redundantBytes += rm->getRedundantBytes();
-  }
+void Connection::addPacketStats(struct connStats* cs) {
+	cs->duration += rm->getDuration();
+	cs->totBytesSent += totBytesSent;
+	cs->totRetransBytesSent += totRetransBytesSent;
+	cs->totPacketSize += totPacketSize;
+	cs->nrPacketsSent += nrPacketsSent;
+	cs->nrDataPacketsSent += nrDataPacketsSent;
+	cs->nrRetrans += nrRetrans;
+	cs->bundleCount += bundleCount;
+	cs->totUniqueBytes += getNumUniqueBytes();
+	cs->redundantBytes += rm->getRedundantBytes();
+	// RDB stats
+	cs->rdb_bytes_sent = totRDBBytesSent;
+
+	if (rm->rdb_stats_available) {
+		cs->rdb_stats_available = true;
+		cs->rdb_packet_misses += (bundleCount - rm->rdb_packet_hits);
+		cs->rdb_packet_hits += rm->rdb_packet_hits;
+		cs->rdb_byte_misses += rm->rdb_byte_miss;
+		cs->rdb_byte_hits += rm->rdb_byte_hits;
+	}
 }
 
 /* Generate statistics for bytewise latency */
- void Connection::genBLStats(struct byteStats* bs){
-   /* Iterate through vector and gather data */
-   rm->genStats(bs);
-   bs->avgLat = (float)bs->cumLat / bs->nrRanges;
-   
-   if(!(GlobOpts::aggOnly)){
-     cout << "Bytewise latency - Conn: " <<  getConnKey() << endl;
-     cout << "Minimum latency  : " << bs->minLat << "ms" << endl;
-     cout << "Average latency  : " << bs->avgLat << "ms" << endl;
-     cout << "Maximum latency  : " << bs->maxLat << "ms" << endl;
-     cout << "--------------------------------------------------" << endl;
-     cout << "Occurrences of 1. retransmission : " << bs->retrans[0] << endl;
-     cout << "Occurrences of 2. retransmission : " << bs->retrans[1] << endl; 
-     cout << "Occurrences of 3. retransmission : " << bs->retrans[2] << endl;
-     cout << "Max retransmissions              : " << bs->maxRetrans << endl;
-     cout << "==================================================" << endl << endl;
-   }
- }
+void Connection::genBytesLatencyStats(struct byteStats* bs){
+	/* Iterate through vector and gather data */
+	rm->genStats(bs);
+	bs->avgLat = (float) bs->cumLat / bs->nrRanges;
+}
+
+void Connection::printPacketDetails() {
+
+	multimap<ulong, Range*>::iterator it, it_end;
+	it = rm->ranges.begin();
+	it_end = rm->ranges.end();
+
+	bool received = rm->hasReceiveData();
+
+	for (; it != it_end; it++) {
+
+		if (received && !it->second->exact_match) {
+			printf("Lost  seq: %5lu - (%5lu) - %5lu, len: %4d, retrans: %d, ACK latency: %d\n",
+			       rm->relative_seq(it->second->getRDBSeq()), rm->relative_seq(it->second->getStartSeq()),
+			       rm->relative_seq(it->second->getEndSeq()), it->second->getNumBytes(), it->second->getNumRetrans(), it->second->getDiff());
+		} else {
+			printf("----  seq: %5lu - (%5lu) - %5lu, len: %4d, retrans: %d, ACK latency: %d\n",
+				   rm->relative_seq(it->second->getRDBSeq()), rm->relative_seq(it->second->getStartSeq()),
+			       rm->relative_seq(it->second->getEndSeq()), it->second->getNumBytes(), it->second->getNumRetrans(), it->second->getDiff());
+		}
+	}
+}
 
 /* Check validity of connection range and time data */
 void Connection::validateRanges(){
@@ -165,7 +219,7 @@ void Connection::validateRanges(){
 
 void Connection::registerRecvd(struct sendData *sd){
   /* Insert range into datastructure */
-  rm->insertRecvRange(sd->seq, sd->endSeq, &(sd->time));
+  rm->insertRecvRange(sd);
 }
 
 void Connection::makeCDF(){
@@ -174,14 +228,14 @@ void Connection::makeCDF(){
 }
 
 void Connection::printCDF(){
-  cout << endl << endl << endl;
-  cout << "#------CDF - Conn: " << getConnKey() << " --------" << endl; 
+  cout << endl;
+  cout << "#------CDF - Conn: " << getConnKey() << " --------" << endl;
   rm->printCDF();
 }
 
 void Connection::printDcCdf(){
-  cout << endl << endl << endl;
-  cout << "#------Drift-compensated CDF - Conn: " << getConnKey() << " --------" << endl; 
+  cout << endl;
+  cout << "#------Drift-compensated CDF - Conn: " << getConnKey() << " --------" << endl;
   rm->printDcCdf();
 }
 
@@ -196,12 +250,34 @@ void Connection::genRFiles(){
   rm->genRFiles(getConnKey());
 }
 
-int Connection::getNumBytes(){ 
-  if ( endSeq > firstSeq )
-    return endSeq - firstSeq;
-  else {
-    return (UINT_MAX - firstSeq) + endSeq; 
-  }
+ulong Connection::getNumUniqueBytes(){
+	multimap<ulong, Range*>::iterator it, it_end = rm->ranges.end();
+	ulong first_data_seq = 0, last_data_seq = 0;
+
+	for (it = rm->ranges.begin(); it != it_end; it++) {
+		if (it->second->getNumBytes()) {
+			first_data_seq = it->second->getStartSeq();
+			break;
+		}
+	}
+
+	multimap<ulong, Range*>::reverse_iterator rit, rit_end = rm->ranges.rend();
+	for (rit = rm->ranges.rbegin(); rit != rit_end; rit++) {
+		if (rit->second->getNumBytes()) {
+			last_data_seq = rit->second->getEndSeq();
+			break;
+		}
+	}
+
+	ulong unique_data_bytes = last_data_seq - first_data_seq + 1;
+
+//	printf("lastLargestEndSeq: %lu\n", lastLargestEndSeq);
+//	printf("lastLargestSeqAbsolute: %lu\n", lastLargestSeqAbsolute);
+//
+//	printf("unique_data_bytes: %lu\n", unique_data_bytes);
+//	printf("first_data_seq: %lu (%lu)\n", first_data_seq, rm->relative_seq(first_data_seq));
+//	printf("last_data_seq : %lu (%lu)\n", last_data_seq, rm->relative_seq(last_data_seq));
+	return unique_data_bytes;
 }
 
 string Connection::getConnKey(){
@@ -242,3 +318,5 @@ string Connection::getDstIp(){
   dip << dst_ip;
   return dip.str();
 }
+
+//  LocalWords:  endSeq
