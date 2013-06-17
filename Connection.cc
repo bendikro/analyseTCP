@@ -39,11 +39,6 @@ void Connection::registerSent(struct sendData* sd) {
   totPacketSize += sd->totalSize;
   nrPacketsSent++;
 
-/*
-  printf("registerSent -     curSeq: %10lu, lastLargestEndSeq: %10lu      (%lu, %lu), , len: %u\n",
-	 rm->relative_seq(curSeq), rm->relative_seq(lastLargestEndSeq), rm->relative_seq(sd->seq),
-	 rm->relative_seq(sd->endSeq), sd->payloadSize);
-*/
   // This is ack
   if (sd->payloadSize == 0) {
 	  return;
@@ -78,7 +73,6 @@ void Connection::registerSent(struct sendData* sd) {
 	  if (GlobOpts::debugLevel == 6) {
 		  printf("\nRetrans - curSeq: %lu > 0 && sd->seq: %lu <= curSeq: %lu\n", rm->relative_seq(curSeq), rm->relative_seq(sd->seq), rm->relative_seq(curSeq));
 	  }
-//	  printf("    Retrans -      curSeq: %u > 0 && sd->seq: %lu <= curSeq: %u\n\n", curSeq, sd->seq, curSeq);
 	  nrRetrans++;
 	  totRetransBytesSent += sd->payloadSize;
 	  sd->retrans = true;
@@ -94,8 +88,6 @@ void Connection::registerSent(struct sendData* sd) {
 		  printf("New Data - sd->endSeq: %lu > lastLargestEndSeq: %lu\n", rm->relative_seq(sd->endSeq), rm->relative_seq(lastLargestEndSeq));
 	  }
   }
-
-//  printf("lastLargestEndSeq: %lu\n", lastLargestEndSeq);
 
   if (sd->payloadSize) {
 	  nrDataPacketsSent++;
@@ -270,13 +262,6 @@ ulong Connection::getNumUniqueBytes(){
 	}
 
 	ulong unique_data_bytes = last_data_seq - first_data_seq + 1;
-
-//	printf("lastLargestEndSeq: %lu\n", lastLargestEndSeq);
-//	printf("lastLargestSeqAbsolute: %lu\n", lastLargestSeqAbsolute);
-//
-//	printf("unique_data_bytes: %lu\n", unique_data_bytes);
-//	printf("first_data_seq: %lu (%lu)\n", first_data_seq, rm->relative_seq(first_data_seq));
-//	printf("last_data_seq : %lu (%lu)\n", last_data_seq, rm->relative_seq(last_data_seq));
 	return unique_data_bytes;
 }
 
@@ -318,5 +303,3 @@ string Connection::getDstIp(){
   dip << dst_ip;
   return dip.str();
 }
-
-//  LocalWords:  endSeq

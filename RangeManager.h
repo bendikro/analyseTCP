@@ -115,7 +115,6 @@ public:
 	void registerDcDiffs();
 	void insert_byte_range(ulong start_seq, ulong end_seq, int sent, bool retrans, bool is_rdb, int level);
 	void makeDcCdf();
-	void printRDBStats();
 	void genRFiles(string connKey);
 	void free_recv_vector();
 	int getNumBytes() { return lastSeq - firstSeq; }

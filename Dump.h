@@ -74,7 +74,6 @@ class Dump {
   void analyseSender();
   void processRecvd(string fn);
   void printDumpStats();
-  void printRDBStats();
   void printStatistics();
   void genRFiles();
   void free_resources();

@@ -522,7 +522,6 @@ void Dump::processRecvd(string recvFn) {
   if (!GlobOpts::sendNatIP.empty()) {
     cerr << "sender side NATing handled" << endl;
     tmpSrcIp = GlobOpts::sendNatIP;
-	//srcIp = GlobOpts::sendNatIP;
     cerr << "srcIp: " << srcIp << endl;
     cerr << "tmpSrcIp: " << tmpSrcIp << endl;
   }
@@ -564,10 +563,6 @@ void Dump::processRecvd(string recvFn) {
 
   //filterExp << " && (ip[2:2] - ((ip[0]&0x0f)<<2) - (tcp[12]>>2)) >= 1";
 
-//filterExp << "tcp && src host " << tmpSrcIp << " && dst host "
-//	    << tmpDstIp << " && dst port " << dstPort
-//	    << " && (ip[2:2] - ((ip[0]&0x0f)<<2) - (tcp[12]>>2)) >= 1";
-
   /* Filter to get outgoing packets */
   if (pcap_compile(fd, &compFilter, (char*)((filterExp.str()).c_str()), 0, 0) == -1) {
 	  fprintf(stderr, "Couldn't parse filter '%s'. Error: %s\n", filterExp.str().c_str(), pcap_geterr(fd));
@@ -587,7 +582,6 @@ void Dump::processRecvd(string recvFn) {
 	  data = (const u_char *) pcap_next(fd, &h);
 	  if (data == NULL) {
 		  if (packetCount == 0) {
-//			  char errMsg[50];
 			  printf("No packets found!\n");
 		  }
 		  //pcap_perror(fd, errMsg);
@@ -672,12 +666,6 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data) {
 
   /* define/compute tcp payload (segment) offset */
   sd.data = (u_char *) (data + SIZE_ETHERNET + ipHdrLen + tcpHdrLen);
-
-  //char *str = (char*) malloc(sd.data_len + 1);
-  //snprintf(str, sd.data_len + 1, "%s", sd.data);
-  //printf("Data not found on receiver (%u): %s\n", sd.data_len, str);
-  //free(str);
-
   recvPacketCount++;
   recvBytesCount += sd.payloadSize;
 
@@ -758,43 +746,6 @@ void Dump::printDumpStats() {
     cout << "packetLoss      : " << ((float)(sentPacketCount - recvPacketCount) / sentPacketCount) * 100 <<  "\%" << endl;
   }
 }
-
-void Dump::printRDBStats(){
-  map<string, Connection*>::iterator cIt, cItEnd;
-
-  int rdb_sent = 0;
-  int rdb_miss = 0;
-  int rdb_hits = 0;
-  int totBytesSent = 0;
-
-  printf("NOT SAVE!\n");
-  exit_with_file_and_linenum(1, __FILE__, __LINE__);
-
-  for (cIt = conns.begin(); cIt != conns.end(); cIt++){
-
-//	  cIt->second->addRDBStats(&rdb_sent, &rdb_miss, &rdb_hits, &totBytesSent);
-
-//	  if (!GlobOpts::aggInfo) {
-//		  printf("RDB bytes sent: %d (%f%%)\n", rdb_sent, ((double) rdb_sent)/totBytesSent * 100);
-//		  printf("RDB byte  miss: %d (%f%%)\n", rdb_miss, ((double) rdb_miss)/(rdb_sent) * 100);
-//		  printf("RDB byte  hits: %d (%f%%)\n", rdb_hits, ((double) rdb_hits)/(rdb_sent) * 100);
-//		  rdb_sent = 0;
-//		  rdb_miss = 0;
-//		  rdb_hits = 0;
-//	  }
-
-	  if (GlobOpts::print_packets)
-		  cIt->second->printPacketDetails();
-  }
-
-  if (GlobOpts::aggInfo) {
-	  printf("RDB stats for %ld connections\n", conns.size());
-	  printf("RDB bytes sent: %d (%f%% of total bytes sent)\n", rdb_sent, ((double) rdb_sent)/totBytesSent * 100);
-	  printf("RDB byte  miss: %d (%f%% of rdb bytes)\n", rdb_miss, ((double) rdb_miss)/(rdb_sent) * 100);
-	  printf("RDB byte  hits: %d (%f%% of rdb bytes)\n", rdb_hits, ((double) rdb_hits)/(rdb_sent) * 100);
-  }
-}
-
 
 void Dump::genRFiles() {
  map<string, Connection*>::iterator cIt, cItEnd;

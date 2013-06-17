@@ -59,7 +59,6 @@ class Connection {
   void printCDF();
   void printDcCdf();
   void makeDcCdf();
-  void printRDBStats();
   void addRDBStats(int *rdb_sent, int *rdb_miss, int *rdb_hits, int *totBytesSent);
   void genRFiles();
   ulong getNumUniqueBytes();

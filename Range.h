@@ -4,7 +4,6 @@
 #include <string.h>
 #include "analyseTCP.h"
 #include "RangeManager.h"
-//class RangeManager;
 
 /* Modified timersub macro that has defined behaviour
    also for negative differences */
@@ -71,16 +70,6 @@ public:
     payloadLen = data_len;
     data = NULL;
     rm = rangeManager;
-
-/*
-    if (data_len == 0) {
-	    printf("\nNEW RANGE WITH LEN: %u\n", data_len);
-	    printf("New Range(%u, %u, %u)\n", ss, rdb_orig, es);
-    }
-*/
-
-//    printf("New Range(%u, %u, %u) Len: %u\n", rm->relative_seq(ss), rm->relative_seq(rdb_orig), rm->relative_seq(es), data_len);
-//    printf("New Range(%lu, %lu, %lu) Len: %d\n", ss, rdb_orig, es, data_len);
 
     if (payloadLen > 0 && payload != NULL) {
 	    payloadLen = data_len;

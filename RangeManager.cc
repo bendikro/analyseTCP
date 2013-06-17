@@ -131,8 +131,6 @@ Range* RangeManager::insertSentRange(struct sendData *sd) {
 
 		if (endSeq <= lastSeq) {/* All bytes are already registered: Retransmission */
 
-//			printf("All registered: startSeq: %u, endSeq:  %u, size: %d\n", relative_seq(startSeq), relative_seq(endSeq), endSeq - startSeq);
-
 			if (GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5)
 				cerr << "-------All bytes have already been registered - discarding---------" << endl;
 			/* Traverse all affected ranges and tag all
@@ -245,8 +243,6 @@ bool RangeManager::processAck(ulong ack, timeval* tv) {
 	for (; it != it_end; it++) {
 		tmpRange = it->second;
 
-//		printf("ACK: ack <= tmpRange->getStartSeq -     %4u <= %-4u : %d\n", ack, tmpRange->getStartSeq(), ack <= tmpRange->getStartSeq());
-
 		if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
 			cerr << "tmpRange - startSeq: " << relative_seq(tmpRange->getStartSeq())
 			     << " - endSeq: " << relative_seq(tmpRange->getEndSeq()) << endl;
@@ -259,38 +255,26 @@ bool RangeManager::processAck(ulong ack, timeval* tv) {
 			break;
 		}
 
-//		printf("ACK: ack == getEndSeq + 1 -             %4u == %-4u : %d\n", ack, tmpRange->getEndSeq() + 1, ack == (tmpRange->getEndSeq() + 1));
-
 		/* This ack covers this range, but not more: ack and return */
 		if (ack == (tmpRange->getEndSeq() + 1)) {
 			if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
 				cerr << "--------Ack equivalent with last range --------" << endl;
-
-//			printf("Found exact ack: %lu, data len: %d\n", relative_seq(ack), tmpRange->getNumBytes());
-
 			tmpRange->insertAckTime(tv);
 			highestAckedIt = it;
 			highestAckedIt++;
 			return true;
 		}
 
-//		printf("ACK: ack > tmpRange->getEndSeq() +1 -    %4u > %-4u : %d\n", ack, tmpRange->getEndSeq() + 1, ack > (tmpRange->getEndSeq() +1));
-
 		/* ACK covers more than this range: ACK this range and continue */
 		if (ack > (tmpRange->getEndSeq() +1)) {
 			if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
 				cerr << "--------Ack covers more than this range: Continue to next --------" << endl;
-
-//			printf("Found ack for this and more: %lu, data len: %d\n", relative_seq(ack), tmpRange->getNumBytes());
 			tmpRange->insertAckTime(tv);
 			highestAckedIt = it;
 			highestAckedIt++;
 			ret = true;
 			continue;
 		}
-
-//		printf("ACK: ack > tmpRange->getStartSeq && ack < tmpRange->getEndSeq() + 1 - %4u > %4u && %4u < %4u: %d\n",
-//		       ack, tmpRange->getStartSeq(), ack, tmpRange->getEndSeq() + 1, (ack > tmpRange->getStartSeq() && ack < (tmpRange->getEndSeq() +1)));
 
 		/* ACK covers only part of this range: split range and return */
 		if (ack > tmpRange->getStartSeq() && ack < (tmpRange->getEndSeq() +1)) {
@@ -300,9 +284,6 @@ bool RangeManager::processAck(ulong ack, timeval* tv) {
 				cerr << " Split range nr.retrans: " << tmpRange->getNumRetrans() << endl;
 			}
 
-//			printf("ACK covers only parts of range: %lu\n", relative_seq(ack));
-//			printf("Range:     (%u, %u, %u)\n", tmpRange->getStartSeq(), tmpRange->getRDBSeq(), tmpRange->getEndSeq());
-//			printf("new size: %u - %u: %u\n", ack, tmpRange->getEndSeq(), tmpRange->getEndSeq() - ack + 1);
 			Range* newRange = new Range(ack, ack, tmpRange->getEndSeq(), tmpRange->getEndSeq() - ack + 1, NULL,
 						    tmpRange->getSendTime(), tmpRange->isDummy(), this);
 
@@ -562,6 +543,9 @@ void RangeManager::validateContent() {
 	}
 }
 
+/*
+  This is used to track the data in regards to retrans or rdb. This functionality is somewhat a duplicate of the Range tracking in ranges.
+ */
 void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, int sent, bool retrans, bool is_rdb, int level) {
 	static int debug_print;
 	ByteRange *last_br;
@@ -617,7 +601,6 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, int sent, b
 
 		// Try to find existing range with startSeq > lowIt->second->startSeq and endSeq <= lowIt->second->endSeq
 		for (; lowIt != highIt && lowIt != brIt_end; lowIt++) {
-			//printf("Adding: %lu - %lu\n", start_seq, end_seq);
 			if (debug_print) {
 				printf("FOUND: sent: %d  %lu - %lu\n", sent, lowIt->second->startSeq, lowIt->second->endSeq);
 			}
@@ -634,7 +617,6 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, int sent, b
 			last_br->retrans += retrans;
 			last_br->is_rdb += is_rdb;
 			brMap.insert(pair<ulong, ByteRange*>(start_seq, last_br));
-			//printf("NEW RANGE: %lu - %lu\n", start_seq, new_end_seq);
 		}
 		else {
 		}
@@ -650,7 +632,6 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, int sent, b
 		if ((start_seq - end_seq) == 0) {
 			brIt = brMap.find(start_seq -1);
 			if (brIt != brIt_end) {
-				//brIt->second->retrans += retrans;
 				printf("brIt->second->received_count: %d\n", brIt->second->received_count);
 				brIt->second->received_count += 1;
 				printf("Increase received count of %lu\n", brIt->second->startSeq);
@@ -658,12 +639,10 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, int sent, b
 			return;
 		}
 
-
 		// The end_seq of the new range doesn't correspond to the end-seq of the entry in the map
 		if (brIt->second->endSeq != end_seq) {
 
 			if (!sent) {
-				//printf("Received not handled?!\n");
 				// The ack on the syn-ack
 				if (end_seq == firstSeq +1) {
 					brIt = brMap.find(start_seq -1);
@@ -694,7 +673,6 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, int sent, b
 			}
 			// Reaches less than the range, split current range
 			else {
-				//printf("Splitting %lu - %lu\n", brIt->second->startSeq, brIt->second->endSeq);
 				ByteRange *new_br = new ByteRange(end_seq +1, brIt->second->endSeq);
 				new_br->sent_count = brIt->second->sent_count;
 				brIt->second->endSeq = end_seq;
@@ -756,9 +734,6 @@ void RangeManager::calculateRDBStats() {
 
 		// Data lost
 		if (brIt->second->sent_count != brIt->second->received_count) {
-			//printf("brIt->second->sent_count: %d\n", brIt->second->sent_count);
-			//printf("brIt->second->received_count: %d\n", brIt->second->received_count);
-			//printf("data lost start seq: %lu, end: %lu\n", brIt->second->startSeq, brIt->second->endSeq);
 			bytes_lost += (brIt->second->sent_count - brIt->second->received_count) * brIt->second->byte_count;
 		}
 
@@ -803,7 +778,7 @@ void RangeManager::calculateRDBStats() {
 			}
 
 			if (!brIt->second->retrans && !brIt->second->is_rdb && (miss || hit)) {
-				printf(" FAIL!");
+				printf(" FAIL (RDB hit/miss calculalation has failed)!");
 			}
 
 			if (brIt->second->sent_count > 1)
@@ -933,8 +908,6 @@ void RangeManager::registerRecvDiffs() {
 			if (tmpRd->startSeq <= sndStartSeq && tmpRd->endSeq >= sndEndSeq) {
 				/* Set match time to the lowest observed value that
 				   matches the range */
-				//printf("Sent seq: %lu - %lu, matches receieved \n     seq: %lu - %lu\n\n", sndStartSeq, sndEndSeq, tmpRd->startSeq, tmpRd->endSeq);
-
 				match_count++;
 
 				if (GlobOpts::debugLevel == 7) {
@@ -1034,8 +1007,9 @@ void RangeManager::registerRecvDiffs() {
 		fprintf(stdout, "Found %d ranges that have no corresponding received packet.\n", ranges_not_received);
 	}
 
-	/* Remove invalid ranges
-	   Do in reverse so as not to invalidate iterators */
+/*
+	// Remove invalid ranges
+	// Do in reverse so as not to invalidate iterators 
 	vector<multimap<ulong, Range*>::iterator>::reverse_iterator dit, dit_end;
 	dit = delList.rbegin();
 	dit_end = delList.rend();
@@ -1046,9 +1020,10 @@ void RangeManager::registerRecvDiffs() {
 	//	//delete *(*dit);
 	//}
 
-	/* End of the current connection. Free recv data */
+	// End of the current connection. Free recv data
 	//recvd.~vector();
 	//free_recv_vector();
+*/
 }
 
 
@@ -1286,13 +1261,6 @@ void RangeManager::printDcCdf(){
 		cdfSum += (double)(*nit).second / getTotNumBytes();
 		printf("time: %10d    CDF: %.10f\n",(*nit).first, cdfSum);
 	}
-}
-
-void RangeManager::printRDBStats() {
-	printf("Totnum: %d\n", getTotNumBytes());
-	printf("RDB bytes sent: %d (%f%%)\n", rdb_byte_miss + rdb_byte_hits, ((double) rdb_byte_miss + rdb_byte_hits)/getTotNumBytes()*100);
-	printf("RDB byte  miss: %d (%f%%)\n", rdb_byte_miss, ((double) rdb_byte_miss)/(rdb_byte_miss + rdb_byte_hits) * 100);
-	printf("RDB byte  hits: %d (%f%%)\n", rdb_byte_hits, ((double) rdb_byte_hits)/(rdb_byte_miss + rdb_byte_hits) * 100);
 }
 
 void RangeManager::genRFiles(string connKey){

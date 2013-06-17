@@ -2,11 +2,6 @@
 
 void Range::printSEQ() {
 	printf("New Range(%lu, %lu, %lu) Len: %u\n", rm->relative_seq(startSeq), rm->relative_seq(rdbSeq), rm->relative_seq(endSeq), payloadLen);
-
-	if (rm->relative_seq(startSeq) == 1172922712) {
-		printf("FANT!\n");
-		exit(0);
-	}
 }
 
 /* Range */
@@ -80,15 +75,10 @@ int Range::getDiff() {
      (directly comparable timers) timerSub can be used here */
   timersub(&ackTime, &sendTime, &tv);
 
-  //printf("sendTime sec: %ld, usec: %ld\n", sendTime.tv_sec, sendTime.tv_usec);
-  //printf("ackTime  sec: %ld, usec: %ld\n", ackTime.tv_sec, ackTime.tv_usec);
-  //printf("diffTime sec: %ld, usec: %ld\n", tv.tv_sec, tv.tv_usec);
-
   if (tv.tv_sec > 0) {
     ms += tv.tv_sec * 1000;
   }
   ms += (int) (tv.tv_usec / 1000);
-  //printf("Adding to ms: %d\n", (int)(tv.tv_usec / 1000));
 
   if (ms < 0) { /* Should not be possible */
     cerr << "Found byte with 0ms or less latency. Exiting." << endl;
