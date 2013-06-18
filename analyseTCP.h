@@ -118,12 +118,14 @@ struct connStats {
 	int rdb_byte_hits;
 };
 
-struct Triplet {
-	double first, second, third;
-	Triplet(double first_, double second_, double third_) {
-		first = first_;
-		second = second_;
-		third = third_;
+struct Percentiles {
+	double first_quartile, second_quartile, third_quartile, first_percentile, ninetynine_percentile;
+	Percentiles(double first_q, double second_q, double third_q, double first_p, double ninetynine_p) {
+		first_quartile = first_q;
+		second_quartile = second_q;
+		third_quartile = third_q;
+		first_percentile = first_p;
+		ninetynine_percentile = ninetynine_p;
 	}
 };
 
@@ -132,7 +134,7 @@ struct byteStats {
 	int maxLat;     /* Maximum Latency */
 	int minLat;     /* Minimum Latency */
 	int cumLat;     /* Cumulative latency */
-	Triplet *quartilesLat;
+	Percentiles *percentiles_latencies;
 	double stdevLat;
 	int nrRanges;   /* Number of ranges in conn */
 	float avgLat;   /* Average latency */
@@ -143,7 +145,7 @@ struct byteStats {
 	int cumLength;
 	int avgLength;
 	double stdevLength;
-	Triplet *quartilesLength;
+	Percentiles *percentiles_lengths;
 };
 
 /* Struct used to forward relevant data about an anlysed packet */

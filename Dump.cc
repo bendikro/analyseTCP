@@ -292,15 +292,19 @@ void Dump::printPacketStats(struct connStats *cs, struct byteStats *bs) {
 		       "  Maximum size                               : %-10d\n",
 		       bs->minLength, bs->maxLength);
 
-		if (bs->quartilesLength) {
+		if (bs->percentiles_lengths) {
 			printf("  Standard deviation                         : %f\n" \
+			       "  First percentile                           : %f\n"\
 			       "  First  quartile (25th percentile)          : %f\n" \
 			       "  Second quartile (50th percentile) (median) : %f\n" \
-			       "  Third  quartile (75th percentile)          : %f\n",
+			       "  Third  quartile (75th percentile)          : %f\n"\
+			       "  Ninety ninth percentile                    : %f\n",
 			       bs->stdevLength,
-			       bs->quartilesLength->first,
-			       bs->quartilesLength->second,
-			       bs->quartilesLength->third);
+			       bs->percentiles_lengths->first_percentile,
+			       bs->percentiles_lengths->first_quartile,
+			       bs->percentiles_lengths->second_quartile,
+			       bs->percentiles_lengths->third_quartile,
+			       bs->percentiles_lengths->ninetynine_percentile);
 		}
 	}
 
@@ -336,10 +340,12 @@ void Dump::printBytesLatencyStats(struct byteStats* bs) {
 	cout << "Average latency                              : " << bs->avgLat << " ms" << endl;
 	cout << "Maximum latency                              : " << bs->maxLat << " ms" << endl;
 	cout << "Standard deviation                           : " << bs->stdevLat << " ms" << endl;
-	if (bs->quartilesLat) {
-		cout << "First  quartile (25th percentile)            : " << bs->quartilesLat->first << endl;
-		cout << "Second quartile (50th percentile) (median)   : " << bs->quartilesLat->second << endl;
-		cout << "Third  quartile (75th percentile)            : " << bs->quartilesLat->third << endl;
+	if (bs->percentiles_latencies) {
+		cout << "First percentile                              : " << bs->percentiles_latencies->first_percentile << endl;
+		cout << "First  quartile  (25th percentile)            : " << bs->percentiles_latencies->first_quartile << endl;
+		cout << "Second quartile  (50th percentile) (median)   : " << bs->percentiles_latencies->second_quartile << endl;
+		cout << "Third  quartile  (75th percentile)            : " << bs->percentiles_latencies->third_quartile << endl;
+		cout << "Ninety ninth percentile                       : " << bs->percentiles_latencies->ninetynine_percentile << endl;
 	}
 	cout << "--------------------------------------------------" << endl;
 	cout << "Occurrences of 1. retransmission : " << bs->retrans[0] << endl;

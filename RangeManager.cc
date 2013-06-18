@@ -327,16 +327,20 @@ double median(vector<double>::const_iterator begin,
     return m;
 }
 
-Triplet *quartiles(const vector<double> *v) {
+Percentiles *percentiles(const vector<double> *v) {
     vector<double>::const_iterator it_second_half = v->begin() + v->size() / 2;
     vector<double>::const_iterator it_first_half = it_second_half;
+    vector<double>::const_iterator it_ninetynine_p = v->begin() + ((int) v->size() * 0.99);
+    vector<double>::const_iterator it_first_p = v->begin() + ((int) v->size() * 0.99);
     if ((v->size() % 2) == 0)
 	    --it_first_half;
 
     double q1 = median(v->begin(), it_first_half);
     double q2 = median(v->begin(), v->end());
     double q3 = median(it_second_half, v->end());
-    Triplet *ret = new Triplet(q1, q2, q3);
+    double p1 = median(v->begin(), it_first_p);
+    double p99 = median(it_ninetynine_p, v->end());
+    Percentiles *ret = new Percentiles(q1, q2, q3, p1, p99);
     return ret;
 }
 
@@ -421,7 +425,7 @@ void RangeManager::genStats(struct byteStats *bs) {
 
 		stdev = sqrt(temp / (latencies.size()));
 		bs->stdevLat = stdev;
-		bs->quartilesLat = quartiles(&latencies);
+		bs->percentiles_latencies = percentiles(&latencies);
 	}
 
 	if (payload_lengths.size()) {
@@ -436,7 +440,7 @@ void RangeManager::genStats(struct byteStats *bs) {
 		std::sort(payload_lengths.begin(), payload_lengths.end());
 		stdev = sqrt(temp / (payload_lengths.size()));
 		bs->stdevLength = stdev;
-		bs->quartilesLength = quartiles(&payload_lengths);
+		bs->percentiles_lengths = percentiles(&payload_lengths);
 	}
 }
 
