@@ -371,8 +371,9 @@ void RangeManager::genStats(struct byteStats *bs) {
 		if (tmp_byte_count) {
 			if (tmp_byte_count > bs->maxLength)
 				bs->maxLength = tmp_byte_count;
-			if (tmp_byte_count < bs->minLength)
+			if (tmp_byte_count < bs->minLength) {
 				bs->minLength = tmp_byte_count;
+			}
 		}
 
 		if ((latency = it->second->getDiff())) {
@@ -431,7 +432,8 @@ void RangeManager::genStats(struct byteStats *bs) {
 	if (payload_lengths.size()) {
 		// Payload size stats
 		double sumLen = conn->totBytesSent;
-		double meanLen =  sumLen / conn->nrPacketsSent;
+		double meanLen =  sumLen / conn->nrDataPacketsSent;
+
 		bs->avgLength = meanLen;
 		temp = 0;
 		for (unsigned int i = 0; i < payload_lengths.size(); i++) {
@@ -801,7 +803,6 @@ void RangeManager::calculateRDBStats() {
 
 /* Reads all packets from receiver dump into a vector */
 void RangeManager::registerRecvDiffs() {
-
 	vector<recvData*>::iterator rit, rit_end;
 
 	/* Store ranges with no corresponding packet
@@ -884,7 +885,6 @@ void RangeManager::registerRecvDiffs() {
 		}
 
 		int no_more_matches = 0;
-		int exact_match = 0;
 		int test = 0;
 
 		if (GlobOpts::debugLevel == 7) {
@@ -893,7 +893,6 @@ void RangeManager::registerRecvDiffs() {
 
 		for (; lowIt != highIt; lowIt++) {
 			struct recvData *tmpRd = lowIt->second;
-			exact_match = 0;
 			int match_count = 0;
 
 			if (GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5) {

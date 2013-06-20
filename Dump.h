@@ -64,8 +64,8 @@ class Dump {
   void printDcCdf();
   void printAggCdf();
   void printAggDcCdf();
-  void printPacketStats(struct connStats *cs, struct byteStats *bs);
-  void printBytesLatencyStats(struct byteStats* bs);
+  void printPacketStats(struct connStats *cs, struct byteStats *bs, bool aggregated);
+  void printBytesLatencyStats(struct byteStats* bs, bool aggregated);
   void makeDcCdf();
  public:
   Dump( string src_ip, string dst_ip, int src_port, int dst_port, string fn );

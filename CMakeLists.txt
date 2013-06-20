@@ -1,7 +1,7 @@
 PROJECT (analyseTCP CXX)
-ENABLE_LANGUAGE(CXX)
+ENABLE_LANGUAGE(C)
 
-CMAKE_MINIMUM_REQUIRED(VERSION 2.0.5)
+CMAKE_MINIMUM_REQUIRED(VERSION 2.0)
 SET (INCLUDE_DIRS /work/include)
 
 SET (LIB_DIRS /work/lib)
@@ -24,10 +24,10 @@ ADD_EXECUTABLE (analyseTCP ${APP_SRCS})
 # Some problem with this check on OS X
 IF (NOT APPLE)
    INCLUDE (CheckIncludeFiles)
-   CHECK_INCLUDE_FILES (arpa/inet.h INET_H)
-   CHECK_INCLUDE_FILES (netinet/in.h IN_H)
-   CHECK_INCLUDE_FILES (sys/socket.h SOCKET_H)
-   CHECK_INCLUDE_FILES (getopt.h GETOPT_H)
+   CHECK_INCLUDE_FILES ("arpa/inet.h" INET_H)
+   CHECK_INCLUDE_FILES ("netinet/in.h" IN_H)
+   CHECK_INCLUDE_FILES ("sys/socket.h" SOCKET_H)
+   CHECK_INCLUDE_FILES ("getopt.h" GETOPT_H)
 ENDIF (NOT APPLE)
 
 # Check for library pcap
@@ -85,7 +85,7 @@ IF (UNIX OR APPLE)
     CMakeOutput.log
     core core.*
     gmon.out bb.out
-    *~ 
+    *~
     *%
     SunWS_cache
     ii_files
@@ -95,8 +95,8 @@ IF (UNIX OR APPLE)
     CopyOfCMakeCache.txt
     CMakeCCompiler.cmake
     CMakeCCXXompiler.cmake
-    CMakeSystem.cmake 
-    html latex Doxyfile 
+    CMakeSystem.cmake
+    html latex Doxyfile
     )
 
   SET(DISTCLEAN_DIRS
@@ -115,17 +115,17 @@ SET(DISTCLEAN_RECURSIVE_FILES
   core core.*
   gmon.out bb.out
   bin
-  *~ 
+  *~
   *%
   *.o
   *.a
   CopyOfCMakeCache.txt
   CMakeCCompiler.cmake
   CMakeCCompiler.cmake
-  CMakeSystem.cmake 
+  CMakeSystem.cmake
   html latex Doxyfile
  )
- 
+
  # for 1.8.x:
   ADD_CUSTOM_COMMAND(
     TARGET distclean
@@ -143,5 +143,5 @@ SET(DISTCLEAN_RECURSIVE_FILES
       ARGS . -name ${RMTARGET} -exec rm -rf {} '\;'
       COMMENT
       )
-  ENDFOREACH(RMTARGET ${DISTCLEAN_RECURSIVE_FILES})  
+  ENDFOREACH(RMTARGET ${DISTCLEAN_RECURSIVE_FILES})
 ENDIF (UNIX OR APPLE)

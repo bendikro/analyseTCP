@@ -199,10 +199,9 @@ void Dump::printStatistics() {
 	memset(&cs, 0, sizeof(struct connStats));
 	memset(&csAggregated, 0, sizeof(struct connStats));
 
-	float aggrCumAvgLat = 0;
 	struct byteStats bsAggregated;
 	memset(&bsAggregated, 0, sizeof(struct byteStats));
-	bsAggregated.minLat = (numeric_limits<int>::max)();
+	bsAggregated.minLat = bsAggregated.minLength = (numeric_limits<int>::max)();
 
 	// Print stats for each connection or aggregated
 	map<string, Connection*>::iterator cIt, cItEnd;
@@ -213,18 +212,19 @@ void Dump::printStatistics() {
 		/* Initialize bs struct */
 		struct byteStats bs;
 		memset(&bs, 0, sizeof(struct byteStats));
-		bs.minLat = (numeric_limits<int>::max)();
+		bs.minLat = bs.minLength = (numeric_limits<int>::max)();
 		cIt->second->genBytesLatencyStats(&bs);
 
 		if (!(GlobOpts::aggOnly) && !(GlobOpts::aggInfo)) {
-			printf("\nSTATS FOR CONN: %s:%u -> %s:%u\n", cIt->second->getSrcIp().c_str(), cIt->second->srcPort, cIt->second->getDstIp().c_str(), cIt->second->dstPort);
-			printPacketStats(&cs, &bs);
+			printf("\nSTATS FOR CONN: %s:%u -> %s:%u\n", cIt->second->getSrcIp().c_str(), cIt->second->srcPort,
+			       cIt->second->getDstIp().c_str(), cIt->second->dstPort);
+			printPacketStats(&cs, &bs, false);
 			memset(&cs, 0, sizeof(struct connStats));
 		}
 
 		if (!(GlobOpts::aggOnly) && !(GlobOpts::aggInfo)) {
 			cout << "\nBytewise latency - Conn: " <<  cIt->second->getConnKey() << endl;
-			printBytesLatencyStats(&bs);
+			printBytesLatencyStats(&bs, false);
 		}
 
 		if (GlobOpts::aggregate) {
@@ -232,8 +232,17 @@ void Dump::printStatistics() {
 				bsAggregated.minLat = bs.minLat;
 			if (bs.maxLat > bsAggregated.maxLat)
 				bsAggregated.maxLat = bs.maxLat;
-			aggrCumAvgLat += bs.cumLat;
 
+			if (bs.minLength < bsAggregated.minLength) {
+				bsAggregated.minLength = bs.minLength;
+			}
+			if (bs.maxLength > bsAggregated.maxLength)
+				bsAggregated.maxLength = bs.maxLength;
+
+			bsAggregated.avgLat += bs.avgLat;
+			bsAggregated.cumLat += bs.cumLat;
+			bsAggregated.avgLength += bs.avgLength;
+			bsAggregated.cumLength += bs.cumLength;
 			bsAggregated.retrans[0] += bs.retrans[0];
 			bsAggregated.retrans[1] += bs.retrans[1];
 			bsAggregated.retrans[2] += bs.retrans[2];
@@ -243,62 +252,64 @@ void Dump::printStatistics() {
 		}
 	}
 
-	bsAggregated.avgLat = aggrCumAvgLat / csAggregated.nrDataPacketsSent;
+	bsAggregated.avgLat = bsAggregated.avgLat / conns.size();
+	bsAggregated.avgLength = bsAggregated.avgLength / conns.size();
+
 	csAggregated.duration /= conns.size();
 
 	if (GlobOpts::aggregate || GlobOpts::aggInfo) {
 		if (csAggregated.nrPacketsSent) { /* To avoid division by 0 */
-
 			cout << "\n\nAggregate Statistics for " << conns.size() << " connections:" << endl;
-			printf("&csAggregated2: %p\n", &csAggregated);
-			printf("bsAggregated.avgLength: %u\n", bsAggregated.avgLength);
-			printPacketStats(&csAggregated, &bsAggregated);
+			printPacketStats(&csAggregated, &bsAggregated, true);
 
-			cout << "--------------------------------------------------" <<endl;
 			/* Print Aggregate bytewise latency */
-
-
 			cout << "Bytewise (application layer) latency" << endl;
-			printBytesLatencyStats(&bsAggregated);
+			printBytesLatencyStats(&bsAggregated, true);
 		}
 	}
 }
 
-
 /* Generate statistics for each connection.
    update aggregate stats if requested */
-void Dump::printPacketStats(struct connStats *cs, struct byteStats *bs) {
+void Dump::printPacketStats(struct connStats *cs, struct byteStats *bs, bool aggregated) {
 	printf("Duration: %u seconds (%f hours)\n"			\
-	       "Total packets sent                           : %10d\n"	\
-	       "Total data packets sent                      : %10d\n"	\
-	       "Total pure acks (no payload) (Incl. SYN/FIN) : %10d\n"	\
-	       "Number of retransmissions                    : %10d\n"	\
-	       "Number of packets with bundled segments      : %10d\n"	\
-	       "Total bytes sent (payload)                   : %10d\n"	\
-	       "Number of unique bytes                       : %10d\n"	\
-	       "Number of retransmitted bytes                : %10d\n"	\
-
-	       "Estimated loss rate based on retransmissions : %10f %%\n" \
-	       "Payload stats:\n"					\
-	       "  Average size                               : %-10d\n",
+	       "Total packets sent                            : %10d\n"	\
+	       "Total data packets sent                       : %10d\n"	\
+	       "Total pure acks (no payload) (Incl. SYN/FIN)  : %10d\n"	\
+	       "Number of retransmissions                     : %10d\n"	\
+	       "Number of packets with bundled segments       : %10d\n"	\
+	       "Total bytes sent (payload)                    : %10d\n"	\
+	       "Number of unique bytes                        : %10d\n"	\
+	       "Number of retransmitted bytes                 : %10d\n"	\
+	       "Estimated loss rate based on retransmissions  : %10f %%\n",
 	       cs->duration, ((float) cs->duration / 60 / 60),
 	       cs->nrPacketsSent, cs->nrDataPacketsSent, cs->nrPacketsSent - cs->nrDataPacketsSent, cs->nrRetrans, cs->bundleCount, cs->totBytesSent,
 	       cs->totUniqueBytes, cs->totRetransBytesSent,
-	       (((float) cs->nrRetrans / cs->nrPacketsSent) * 100),(int) floorf((float) (cs->totBytesSent / cs->nrDataPacketsSent)));
+	       (((float) cs->nrRetrans / cs->nrPacketsSent) * 100));
 
+
+	printf("Payload size stats:\n");
+
+	if (aggregated) {
+		printf("  Average of all packets in all connections   : %-10d\n",
+		       (int) floorf((float) (cs->totBytesSent / cs->nrDataPacketsSent)));
+	}
+	else {
+		printf("  Average          : %-10d\n", bs->avgLength);
+	}
 
 	if (bs != NULL) {
-		printf("  Minimum size                               : %-10d\n" \
-		       "  Maximum size                               : %-10d\n",
+		printf("  Minimum                                     : %-10d\n" \
+		       "  Maximum                                     : %-10d\n",
 		       bs->minLength, bs->maxLength);
 
 		if (bs->percentiles_lengths) {
-			printf("  Standard deviation                         : %f\n" \
-			       "  First percentile                           : %f\n"\
-			       "  First  quartile (25th percentile)          : %f\n" \
-			       "  Second quartile (50th percentile) (median) : %f\n" \
-			       "  Third  quartile (75th percentile)          : %f\n"\
-			       "  Ninety ninth percentile                    : %f\n",
+			printf("  Standard deviation                          : %f\n" \
+			       "  First percentile                            : %f\n"\
+			       "  First  quartile (25th percentile)           : %f\n" \
+			       "  Second quartile (50th percentile) (median)  : %f\n" \
+			       "  Third  quartile (75th percentile)           : %f\n"\
+			       "  Ninety ninth percentile                     : %f\n",
 			       bs->stdevLength,
 			       bs->percentiles_lengths->first_percentile,
 			       bs->percentiles_lengths->first_quartile,
@@ -309,11 +320,11 @@ void Dump::printPacketStats(struct connStats *cs, struct byteStats *bs) {
 	}
 
 	if (GlobOpts::incTrace) {
-		printf("Number of retransmitted bytes                : %10d\n"	\
-		       "Redundancy                                   : %10f %%\n",
+		printf("Number of redundant bytes                     : %10d\n"	\
+		       "Redundancy                                    : %10f %%\n",
 		       cs->redundantBytes, ((float) cs->redundantBytes / cs->totUniqueBytes) * 100);
 	} else {
-		cout << "Redundancy: "
+		cout << "Redundancy                                    : "
 		     << ((float) (cs->totBytesSent - cs->totUniqueBytes) / cs->totBytesSent) * 100
 		     << "\%" << endl;
 	}
@@ -335,29 +346,42 @@ void Dump::printPacketStats(struct connStats *cs, struct byteStats *bs) {
 
 
 /* Generate statistics for bytewise latency */
-void Dump::printBytesLatencyStats(struct byteStats* bs) {
-	cout << "Minimum latency                              : " << bs->minLat << " ms" << endl;
-	cout << "Average latency                              : " << bs->avgLat << " ms" << endl;
-	cout << "Maximum latency                              : " << bs->maxLat << " ms" << endl;
-	cout << "Standard deviation                           : " << bs->stdevLat << " ms" << endl;
+void Dump::printBytesLatencyStats(struct byteStats* bs, bool aggregated) {
+	cout << "Latency stats:"  << endl;
+	cout << "  Minimum latency                             : " << bs->minLat << " ms" << endl;
+
+	if (aggregated) {
+		printf("  Average of all packets in all connections   : %-10d\n" \
+		       "  Average of the average for each connections : %-10f\n",
+		       bs->cumLat / sentPacketCount, bs->avgLat);
+	}
+	else {
+		cout << "Average latency                              : " << bs->avgLat << " ms" << endl;
+	}
+
+	cout << "Maximum latency                               : " << bs->maxLat << " ms" << endl;
+
+	if (bs->stdevLat) {
+		cout << "Standard deviation                            : " << bs->stdevLat << " ms" << endl;
+	}
 	if (bs->percentiles_latencies) {
-		cout << "First percentile                              : " << bs->percentiles_latencies->first_percentile << endl;
-		cout << "First  quartile  (25th percentile)            : " << bs->percentiles_latencies->first_quartile << endl;
-		cout << "Second quartile  (50th percentile) (median)   : " << bs->percentiles_latencies->second_quartile << endl;
-		cout << "Third  quartile  (75th percentile)            : " << bs->percentiles_latencies->third_quartile << endl;
-		cout << "Ninety ninth percentile                       : " << bs->percentiles_latencies->ninetynine_percentile << endl;
+		cout << "First percentile                               : " << bs->percentiles_latencies->first_percentile << endl;
+		cout << "First  quartile  (25th percentile)             : " << bs->percentiles_latencies->first_quartile << endl;
+		cout << "Second quartile  (50th percentile) (median)    : " << bs->percentiles_latencies->second_quartile << endl;
+		cout << "Third  quartile  (75th percentile)             : " << bs->percentiles_latencies->third_quartile << endl;
+		cout << "Ninety ninth percentile                        : " << bs->percentiles_latencies->ninetynine_percentile << endl;
 	}
 	cout << "--------------------------------------------------" << endl;
-	cout << "Occurrences of 1. retransmission : " << bs->retrans[0] << endl;
-	cout << "Occurrences of 2. retransmission : " << bs->retrans[1] << endl;
-	cout << "Occurrences of 3. retransmission : " << bs->retrans[2] << endl;
-	cout << "Max retransmissions              : " << bs->maxRetrans << endl;
+	cout << "Occurrences of 1. retransmission              : " << bs->retrans[0] << endl;
+	cout << "Occurrences of 2. retransmission              : " << bs->retrans[1] << endl;
+	cout << "Occurrences of 3. retransmission              : " << bs->retrans[2] << endl;
+	cout << "Max retransmissions                           : " << bs->maxRetrans << endl;
 	cout << "==================================================" << endl;
 }
 
 /* Process outgoing packets */
 void Dump::processSent(const struct pcap_pkthdr* header, const u_char *data) {
-	static const struct sniff_ethernet *ethernet; /* The ethernet header */
+	//static const struct sniff_ethernet *ethernet; /* The ethernet header */
 	static const struct sniff_ip *ip; /* The IP header */
 	static const struct sniff_tcp *tcp; /* The TCP header */
 	static Connection *tmpConn;
@@ -368,7 +392,7 @@ void Dump::processSent(const struct pcap_pkthdr* header, const u_char *data) {
 	static struct sendData sd;
 
 	/* Finds the different headers+payload */
-	ethernet = (struct sniff_ethernet*) data;
+	//ethernet = (struct sniff_ethernet*) data;
 	ip = (struct sniff_ip*) (data + SIZE_ETHERNET);
 	ipSize = ntohs(ip->ip_len);
 	ipHdrLen = IP_HL(ip) * 4;
@@ -539,13 +563,6 @@ void Dump::processRecvd(string recvFn) {
     cerr << "tmpDstIp: " << tmpDstIp << endl;
   }
 
-  char *src_ip_buf = NULL;
-  char *dst_ip_buf = NULL;
-  if (!tmpSrcIp.empty())
-	  src_ip_buf = strdup(tmpSrcIp.c_str());
-  if (!tmpDstIp.empty())
-	  dst_ip_buf = strdup(tmpDstIp.c_str());
-
   pcap_t *fd = pcap_open_offline(recvFn.c_str(), errbuf);
   if ( fd == NULL ) {
     cerr << "pcap: Could not open file" << recvFn << endl;
@@ -624,13 +641,13 @@ void Dump::processRecvd(string recvFn) {
 
 /* Process packets */
 void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data) {
-  const struct sniff_ethernet *ethernet; /* The ethernet header */
+	//const struct sniff_ethernet *ethernet; /* The ethernet header */
   const struct sniff_ip *ip; /* The IP header */
   const struct sniff_tcp *tcp; /* The TCP header */
   static Connection *tmpConn;
 
     /* Finds the different headers+payload */
-  ethernet = (struct sniff_ethernet*)(data);
+//  ethernet = (struct sniff_ethernet*)(data);
   ip = (struct sniff_ip*) (data + SIZE_ETHERNET);
   u_int ipSize = ntohs(ip->ip_len);
   u_int ipHdrLen = IP_HL(ip)*4;
@@ -740,16 +757,15 @@ void Dump::printDumpStats() {
   cout << endl;
   cout << "General info for entire dump:" << endl;
   printf("%s:%d -> %s:%d\n", srcIp.c_str(), srcPort, dstIp.c_str(), dstPort);
-  cout << "filename: " << filename << endl;
-  cout << "sentPacketCount : " << sentPacketCount << endl;
-  cout << "recvPacketCount : " << recvPacketCount << endl;
-  cout << "sentBytesCount  : " << sentBytesCount << endl;
-  cout << "ackCount        : " << ackCount << endl;
+  cout << "Filename: " << filename << endl;
+  cout << "Sent Packet Count     : " << sentPacketCount << endl;
+  cout << "Received Packet Count : " << recvPacketCount << endl;
+  cout << "Sent Bytes Count      : " << sentBytesCount << endl;
+  cout << "ACK Count             : " << ackCount << endl;
   if (GlobOpts::withRecv) {
-    cout << "recvPacketCount : " << recvPacketCount << endl;
-    cout << "recvBytesCount  : " << recvBytesCount << endl;
-    cout << "packets lost    : " << (sentPacketCount - recvPacketCount) << endl;
-    cout << "packetLoss      : " << ((float)(sentPacketCount - recvPacketCount) / sentPacketCount) * 100 <<  "\%" << endl;
+    cout << "Received Bytes Count  : " << recvBytesCount << endl;
+    cout << "Packets lost          : " << (sentPacketCount - recvPacketCount) << endl;
+    cout << "Packet  Loss          : " << ((float)(sentPacketCount - recvPacketCount) / sentPacketCount) * 100 <<  "\%" << endl;
   }
 }
 
