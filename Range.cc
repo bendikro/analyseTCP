@@ -102,7 +102,7 @@ int Range::getDiff() {
   return ms;
 }
 
-void Range::setDiff(){
+void Range::setDiff() {
   struct timeval tv;
   long ms = 0;
   /* Use own macro in order to handle negative diffs */

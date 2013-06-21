@@ -58,6 +58,7 @@ using namespace std;
 /* Local includes */
 #include "Dump.h"
 
+
 /* Class to keep global options */
 class GlobOpts {
  private:

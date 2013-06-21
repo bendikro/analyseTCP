@@ -28,28 +28,29 @@
     }									\
   } while (0)
 
-/* Keeps track of a range of bytes that share send and ack time */
+/* Keeps track of a range of bytes that share send and ack time.
+   Trying to make it use as little memory as possible.
+*/
 class Range {
  private:
-  bool dummy;
   ulong startSeq;
   ulong rdbSeq;
   ulong endSeq;
-  int payloadLen;
-
   struct timeval ackTime;
   struct timeval recvTime;
-  bool acked;
-  int numRetrans;
-  int numBundled;
+  struct timeval sendTime;
   long diff, dcDiff;
   RangeManager *rm;
-
- public:
-  struct timeval sendTime;
-  int received;
-  int exact_match;
+  short payloadLen;
   u_char *data;
+  unsigned char numRetrans;
+  unsigned char numBundled;
+
+  unsigned int dummy : 1;
+  unsigned int acked : 1;
+  unsigned int exact_match : 1;
+
+//  int received;
 
 public:
   Range(ulong ss, ulong rdb_orig, ulong es, int data_len, u_char *payload, timeval *tv, bool dmy, RangeManager *rangeManager) {
@@ -65,14 +66,12 @@ public:
     numBundled = 0;
     diff = 0;
     dcDiff = 0;
-    received = 0;
     exact_match = 0;
     payloadLen = data_len;
     data = NULL;
     rm = rangeManager;
 
     if (payloadLen > 0 && payload != NULL) {
-	    payloadLen = data_len;
 	    data = (u_char*) malloc(payloadLen + 1);
 	    memcpy(data, payload, payloadLen);
     }
@@ -85,13 +84,15 @@ public:
   ulong getRDBSeq() { return rdbSeq; }
   ulong getStartSeq() { return startSeq; }
   ulong getEndSeq() { return endSeq; }
-  uint32_t getNumRetrans() { return numRetrans; }
-  uint32_t getNumBundled() { return numBundled; }
+  uint32_t getNumRetrans() { return (uint32_t) numRetrans; }
+  uint32_t getNumBundled() { return (uint32_t) numBundled; }
   bool isAcked() { return acked; }
   bool isDummy() { return dummy; }
+  bool isExactMatched() { return exact_match; }
   void incNumRetrans() { numRetrans++; }
   void incNumBundled() { numBundled++; }
   void setIsAcked() { acked = true; }
+  void setExactMatchedAcked() { exact_match = true; }
   void setRDBSeq(ulong rdbs) { rdbSeq = rdbs; }
   void setEndSeq(ulong endseq) { endSeq = endseq; }
   void setStartSeq(ulong ss) { startSeq = ss; }
@@ -104,11 +105,11 @@ public:
   long getDcDiff() { return dcDiff;}
   long getRecvDiff() { return diff; }
   timeval* getAckTime();
-  int getNumBytes() { return payloadLen; }
+  int getNumBytes() { return (int) payloadLen; }
   void printSEQ();
 
   /* Debug */
   void printValues();
-};
+} __attribute__((packed)); // Remove if your compiler doesn't support packed
 
 #endif /* RANGE_H */

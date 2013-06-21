@@ -98,26 +98,25 @@ void Connection::registerSent(struct sendData* sd) {
 
 /* Process range for outgoing packet */
 Range* Connection::registerRange(struct sendData* sd) {
-  if(GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5){
-    timeval offset;
-    if( firstSendTime.tv_sec == 0 && firstSendTime.tv_usec == 0){
-      firstSendTime = sd->time;
-    }
-    timersub(&(sd->time), &firstSendTime, &offset);
+	if (GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5) {
+		static timeval offset;
+		if (firstSendTime.tv_sec == 0 && firstSendTime.tv_usec == 0) {
+			firstSendTime = sd->time;
+		}
+		timersub(&(sd->time), &firstSendTime, &offset);
+		cerr << "\nRegistering new outgoing. Conn: " << getConnKey() << " Seq: " << rm->relative_seq(sd->seq) << " - " << rm->relative_seq(sd->endSeq) <<  " Payload: " << sd->payloadSize << endl;
+		cerr << "Time offset: Secs: " << offset.tv_sec << "." << offset.tv_usec << endl;
+	}
 
-    cerr << "\nRegistering new outgoing. Conn: " << getConnKey() << " Seq: " << rm->relative_seq(sd->seq) << " - " << rm->relative_seq(sd->endSeq) <<  " Payload: " << sd->payloadSize << endl;
-    cerr << "Time offset: Secs: " << offset.tv_sec << "." << offset.tv_usec << endl;
-  }
+	Range *r = rm->insertSentRange(sd);
 
-  Range *r = rm->insertSentRange(sd);
-
-  if(GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5){
-	  cerr << "Last range: seq: " << rm->relative_seq(rm->getLastRange()->getStartSeq())
-	       << " - " << rm->relative_seq(rm->getLastRange()->getEndSeq()) << " - size: "
-	       << rm->getLastRange()->getEndSeq() - rm->getLastRange()->getStartSeq()
-	       << endl;
-  }
-  return r;
+	if (GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5) {
+		cerr << "Last range: seq: " << rm->relative_seq(rm->getLastRange()->getStartSeq())
+		     << " - " << rm->relative_seq(rm->getLastRange()->getEndSeq()) << " - size: "
+		     << rm->getLastRange()->getEndSeq() - rm->getLastRange()->getStartSeq()
+		     << endl;
+	}
+	return r;
 }
 
 /* Register times for first ACK of each byte */
@@ -133,7 +132,7 @@ bool Connection::registerAck(ulong ack, timeval* tv){
 	ret = rm->processAck(ack, tv);
 
 	if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
-		if(rm->getHighestAcked()!=NULL){
+		if(rm->getHighestAcked() != NULL){
 			cerr << "highestAcked: startSeq: " << rm->relative_seq(rm->getHighestAcked()->getStartSeq()) << " - endSeq: "
 			     << rm->relative_seq(rm->getHighestAcked()->getEndSeq()) << " - size: "
 			     << rm->getHighestAcked()->getEndSeq() - rm->getHighestAcked()->getStartSeq() << endl;
@@ -184,7 +183,7 @@ void Connection::printPacketDetails() {
 
 	for (; it != it_end; it++) {
 
-		if (received && !it->second->exact_match) {
+		if (received && !it->second->isExactMatched()) {
 			printf("Lost  seq: %5lu - (%5lu) - %5lu, len: %4d, retrans: %d, ACK latency: %d\n",
 			       rm->relative_seq(it->second->getRDBSeq()), rm->relative_seq(it->second->getStartSeq()),
 			       rm->relative_seq(it->second->getEndSeq()), it->second->getNumBytes(), it->second->getNumRetrans(), it->second->getDiff());
@@ -242,7 +241,7 @@ void Connection::genRFiles(){
   rm->genRFiles(getConnKey());
 }
 
-ulong Connection::getNumUniqueBytes(){
+ulong Connection::getNumUniqueBytes() {
 	multimap<ulong, Range*>::iterator it, it_end = rm->ranges.end();
 	ulong first_data_seq = 0, last_data_seq = 0;
 
@@ -260,7 +259,6 @@ ulong Connection::getNumUniqueBytes(){
 			break;
 		}
 	}
-
 	ulong unique_data_bytes = last_data_seq - first_data_seq + 1;
 	return unique_data_bytes;
 }

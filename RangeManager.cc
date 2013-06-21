@@ -32,10 +32,17 @@ bool RangeManager::hasReceiveData() {
 
 /* Register all bytes with a common send time as a range */
 Range* RangeManager::insertSentRange(struct sendData *sd) {
-	uint32_t startSeq = sd->seq;
-	uint32_t endSeq = sd->endSeq;
-	timeval *tv = &(sd->time);
-	Range* range = NULL;
+	static uint32_t startSeq;
+	static uint32_t endSeq;
+	static timeval *tv;
+	static Range* range;
+	static int ranges_size;
+	static multimap<ulong, Range*>::reverse_iterator it, it_end;
+
+	startSeq = sd->seq;
+	endSeq = sd->endSeq;
+	tv = &(sd->time);
+	range = NULL;
 
 	if (GlobOpts::debugLevel == 6) {
 		printf("\ninsertSentRange - retrans: %d, is_rdb %d\n", sd->retrans, sd->is_rdb);
@@ -45,13 +52,13 @@ Range* RangeManager::insertSentRange(struct sendData *sd) {
 	if ((GlobOpts::print_packets || GlobOpts::rdbDetails) && startSeq != endSeq)
 		insert_byte_range(startSeq, endSeq, true, sd->retrans, sd->is_rdb, 0);
 
-	int ranges_size = ranges.size();
+	ranges_size = ranges.size();
 	if (ranges_size <= 1 && sd->payloadSize == 0) { /* First or second packet in stream */
 		if (GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5)
 			cerr << "-------Creating first range---------" << endl;
 
 		if (ranges_size == 0) {
-			range = new Range(startSeq, startSeq, endSeq, sd->payloadSize, sd->data, tv, false, this);
+			range = new Range(startSeq, startSeq, endSeq, sd->payloadSize, NULL, tv, false, this);
 			ranges.insert(pair<uint32_t, Range*>(range->getStartSeq(), range));
 			lastSeq = 1;
 		}
@@ -65,7 +72,7 @@ Range* RangeManager::insertSentRange(struct sendData *sd) {
 			cerr << "-------New range equivalent with packet---------" << endl;
 			printf("%s - inserted Range with startseq: %lu\n", conn->getConnKey().c_str(), relative_seq(startSeq));
 		}
-		range = new Range(startSeq, startSeq, endSeq, sd->payloadSize, sd->data, tv, false, this);
+		range = new Range(startSeq, startSeq, endSeq, sd->payloadSize, NULL, tv, false, this);
 		ranges.insert(pair<uint32_t, Range*>(range->getStartSeq(), range));
 		lastSeq = startSeq + sd->payloadSize;
 
@@ -98,14 +105,14 @@ Range* RangeManager::insertSentRange(struct sendData *sd) {
 
 		// This is an ack
 		if (sd->payloadSize == 0) {
-			range = new Range(startSeq, startSeq, endSeq, sd->payloadSize, sd->data, tv, false, this);
+			range = new Range(startSeq, startSeq, endSeq, sd->payloadSize, NULL, tv, false, this);
 			ranges.insert(pair<uint32_t, Range*>(range->getStartSeq(), range));
 			lastSeq = startSeq + sd->payloadSize;
 		}
 		else {
 
 			/* Insert dummy range */
-			if(GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5){
+			if (GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5) {
 				cerr << "-------Missing packet(s): inserting dummy range---------" << endl;
 				cerr << "Dummy range: lastSeq:  " << relative_seq(lastSeq) << " - startSeq: " << relative_seq(startSeq)
 				     << " - size: " << relative_seq(startSeq +1 - lastSeq) << endl;
@@ -117,7 +124,7 @@ Range* RangeManager::insertSentRange(struct sendData *sd) {
 			ranges.insert(pair<uint32_t, Range*>(range->getStartSeq(), range));
 
 			/* Then insert the new, valid range */
-			range = new Range(startSeq, startSeq, endSeq, sd->payloadSize, sd->data, tv, false, this);
+			range = new Range(startSeq, startSeq, endSeq, sd->payloadSize, NULL, tv, false, this);
 			ranges.insert(pair<uint32_t, Range*>(range->getStartSeq(), range));
 
 			lastSeq = startSeq + sd->payloadSize;
@@ -135,15 +142,11 @@ Range* RangeManager::insertSentRange(struct sendData *sd) {
 				cerr << "-------All bytes have already been registered - discarding---------" << endl;
 			/* Traverse all affected ranges and tag all
 			   ranges that contain retransmitted bytes */
-			multimap<ulong, Range*>::reverse_iterator it, it_end;
 			it_end = ranges.rend();
-			int count = 0;
 			for (it = ranges.rbegin(); it != it_end; it++) {
 				if (startSeq > it->second->getEndSeq())
 					break;
-
 				if ((endSeq + 1) > it->second->getStartSeq()) {
-					count++;
 					it->second->incNumRetrans(); // Count a new retransmssion
 				}
 			}
@@ -161,7 +164,7 @@ Range* RangeManager::insertSentRange(struct sendData *sd) {
 				exit_with_file_and_linenum(1, __FILE__, __LINE__);
 			}
 
-			range = new Range(lastSeq, lastSeq, endSeq, sd->payloadSize, sd->data, tv, false, this);
+			range = new Range(lastSeq, lastSeq, endSeq, sd->payloadSize, NULL, tv, false, this);
 
 			ranges.insert(pair<ulong, Range*>(range->getStartSeq(), range));
 			lastSeq = startSeq + sd->payloadSize;
@@ -171,7 +174,6 @@ Range* RangeManager::insertSentRange(struct sendData *sd) {
 
 			/* Traverse all affected ranges and tag all
 			   ranges that contain bundled bytes */
-			multimap<ulong, Range*>::reverse_iterator it, it_end;
 			it_end = ranges.rend();
 			for (it = ranges.rbegin(); it != it_end; it++) {
 				if (startSeq >= it->second->getEndSeq())
@@ -190,7 +192,8 @@ Range* RangeManager::insertSentRange(struct sendData *sd) {
 
 /* Register all bytes with a coomon send time as a range */
 void RangeManager::insertRecvRange(struct sendData *sd) {
-	struct recvData *tmpRecv = new struct recvData();
+	static struct recvData *tmpRecv;
+	tmpRecv = new struct recvData();
 	tmpRecv->startSeq = sd->seq;
 	tmpRecv->endSeq = sd->endSeq;
 	tmpRecv->tv = (sd->time);
@@ -200,9 +203,9 @@ void RangeManager::insertRecvRange(struct sendData *sd) {
 	if (sd->payloadSize > 0)
 		tmpRecv->endSeq -= 1;
 
-	if(GlobOpts::debugLevel == 3 || GlobOpts::debugLevel == 5 ){
+	if (GlobOpts::debugLevel == 3 || GlobOpts::debugLevel == 5) {
 		cerr << "Inserting receive data: startSeq=" << relative_seq(tmpRecv->startSeq) << ", endSeq=" << relative_seq(tmpRecv->endSeq) << endl;
-		if (tmpRecv->startSeq == 0  || tmpRecv->endSeq == 0){
+		if (tmpRecv->startSeq == 0 || tmpRecv->endSeq == 0) {
 			cerr << "Erroneous seq." << endl;
 		}
 	}
@@ -226,10 +229,10 @@ long get_timeval(timeval* tv) {
 /* Register first ack time for all bytes.
    Organize in ranges that have common send and ack times */
 bool RangeManager::processAck(ulong ack, timeval* tv) {
-	Range* tmpRange;
-	bool ret = false;
-
-	multimap<ulong, Range*>::iterator it, it_end;
+	static Range* tmpRange;
+	static bool ret;
+	static multimap<ulong, Range*>::iterator it, it_end;
+	ret = false;
 	it = ranges.begin();
 	it_end = ranges.end();
 
@@ -924,7 +927,7 @@ void RangeManager::registerRecvDiffs() {
 				if (timercmp(&(tmpRd->tv), &match, <))
 					match = tmpRd->tv;
 				matched = packet_index;
-				it->second->received++;
+				//it->second->received++;
 
 				if (GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5) {
 					cerr << "Found overlapping recvData:     seq: " <<
@@ -941,7 +944,7 @@ void RangeManager::registerRecvDiffs() {
 					if (GlobOpts::debugLevel == 7) {
 						printf("               Found exact match");
 					}
-					it->second->exact_match = 1;
+					it->second->setExactMatchedAcked();
 					break;
 				}
 				else if (tmpRd->startSeq >= sndStartSeq && tmpRd->endSeq <= sndEndSeq) {
@@ -1031,7 +1034,7 @@ void RangeManager::registerRecvDiffs() {
 
 
 ulong RangeManager::relative_seq(ulong seq) {
-	static ulong wrap_index;
+	ulong wrap_index;
 	wrap_index = (conn->firstSeq + seq) / 4294967296L;
 	if (GlobOpts::relative_seq)
 		return seq;
@@ -1135,7 +1138,7 @@ int RangeManager::getTimeInterval(Range *r){
 	return time;
 }
 
-void RangeManager::makeCdf(){
+void RangeManager::makeCdf() {
 	long diff;
 	multimap<ulong, Range*>::iterator it, it_end;
 	it = ranges.begin();

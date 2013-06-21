@@ -52,7 +52,7 @@ string getConnKey(const struct in_addr *srcIp, const struct in_addr *dstIp, cons
 void Dump::analyseSender() {
 	int packetCount = 0;
 	char errbuf[PCAP_ERRBUF_SIZE];
-	struct pcap_pkthdr h;
+	struct pcap_pkthdr header;
 	const u_char *data;
 	map<string, Connection*>::iterator it, it_end;
 
@@ -100,13 +100,13 @@ void Dump::analyseSender() {
 
 	/* Sniff each sent packet in pcap tracefile: */
 	do {
-		data = (const u_char *) pcap_next(fd, &h);
+		data = (const u_char *) pcap_next(fd, &header);
 		if (data == NULL) {
 			char errMsg[50];
 			sprintf(errMsg, "\nNo more data on file. Packets: %d\n", packetCount);
 			//pcap_perror(fd, errMsg);
 		} else {
-			processSent(&h, data); /* Sniff packet */
+			processSent(&header, data); /* Sniff packet */
 			packetCount++;
 		}
 	} while(data != NULL);
@@ -162,13 +162,13 @@ void Dump::analyseSender() {
 	packetCount = 0;
 	/* Sniff each sent packet in pcap tracefile: */
 	do {
-		data = (const u_char *) pcap_next(fd2, &h);
+		data = (const u_char *) pcap_next(fd2, &header);
 		if (data == NULL) {
 			char errMsg[50];
 			sprintf(errMsg, "\nNo more data on file. Packets: %d\n", packetCount);
 			//pcap_perror(fd2, errMsg);
 		} else {
-			processAcks(&h, data); /* Sniff packet */
+			processAcks(&header, data); /* Sniff packet */
 			packetCount++;
 		}
 	} while (data != NULL);
@@ -287,15 +287,24 @@ void Dump::printPacketStats(struct connStats *cs, struct byteStats *bs, bool agg
 	       cs->totUniqueBytes, cs->totRetransBytesSent,
 	       (((float) cs->nrRetrans / cs->nrPacketsSent) * 100));
 
+	if (GlobOpts::incTrace) {
+		printf("Number of redundant bytes                     : %10d\n"	\
+		       "Redundancy                                    : %10f %%\n",
+		       cs->redundantBytes, ((float) cs->redundantBytes / cs->totUniqueBytes) * 100);
+	} else {
+		cout << "Redundancy                                    : "
+		     << ((float) (cs->totBytesSent - cs->totUniqueBytes) / cs->totBytesSent) * 100
+		     << "\%" << endl;
+	}
 
-	printf("Payload size stats:\n");
+	printf("\nPayload size stats:\n");
 
 	if (aggregated) {
 		printf("  Average of all packets in all connections   : %-10d\n",
 		       (int) floorf((float) (cs->totBytesSent / cs->nrDataPacketsSent)));
 	}
 	else {
-		printf("  Average          : %-10d\n", bs->avgLength);
+		printf("  Average                                     : %-10d\n", bs->avgLength);
 	}
 
 	if (bs != NULL) {
@@ -317,16 +326,6 @@ void Dump::printPacketStats(struct connStats *cs, struct byteStats *bs, bool agg
 			       bs->percentiles_lengths->third_quartile,
 			       bs->percentiles_lengths->ninetynine_percentile);
 		}
-	}
-
-	if (GlobOpts::incTrace) {
-		printf("Number of redundant bytes                     : %10d\n"	\
-		       "Redundancy                                    : %10f %%\n",
-		       cs->redundantBytes, ((float) cs->redundantBytes / cs->totUniqueBytes) * 100);
-	} else {
-		cout << "Redundancy                                    : "
-		     << ((float) (cs->totBytesSent - cs->totUniqueBytes) / cs->totBytesSent) * 100
-		     << "\%" << endl;
 	}
 
 	if (cs->rdb_bytes_sent) {
@@ -356,20 +355,20 @@ void Dump::printBytesLatencyStats(struct byteStats* bs, bool aggregated) {
 		       bs->cumLat / sentPacketCount, bs->avgLat);
 	}
 	else {
-		cout << "Average latency                              : " << bs->avgLat << " ms" << endl;
+		cout << "  Average latency                             : " << bs->avgLat << " ms" << endl;
 	}
 
-	cout << "Maximum latency                               : " << bs->maxLat << " ms" << endl;
+	cout << "  Maximum latency                             : " << bs->maxLat << " ms" << endl;
 
 	if (bs->stdevLat) {
-		cout << "Standard deviation                            : " << bs->stdevLat << " ms" << endl;
+		cout << "  Standard deviation                          : " << bs->stdevLat << " ms" << endl;
 	}
 	if (bs->percentiles_latencies) {
-		cout << "First percentile                               : " << bs->percentiles_latencies->first_percentile << endl;
-		cout << "First  quartile  (25th percentile)             : " << bs->percentiles_latencies->first_quartile << endl;
-		cout << "Second quartile  (50th percentile) (median)    : " << bs->percentiles_latencies->second_quartile << endl;
-		cout << "Third  quartile  (75th percentile)             : " << bs->percentiles_latencies->third_quartile << endl;
-		cout << "Ninety ninth percentile                        : " << bs->percentiles_latencies->ninetynine_percentile << endl;
+		cout << "  First percentile                            : " << bs->percentiles_latencies->first_percentile << endl;
+		cout << "  First  quartile  (25th percentile)          : " << bs->percentiles_latencies->first_quartile << endl;
+		cout << "  Second quartile  (50th percentile) (median) : " << bs->percentiles_latencies->second_quartile << endl;
+		cout << "  Third  quartile  (75th percentile)          : " << bs->percentiles_latencies->third_quartile << endl;
+		cout << "  Ninety ninth percentile                     : " << bs->percentiles_latencies->ninetynine_percentile << endl;
 	}
 	cout << "--------------------------------------------------" << endl;
 	cout << "Occurrences of 1. retransmission              : " << bs->retrans[0] << endl;
