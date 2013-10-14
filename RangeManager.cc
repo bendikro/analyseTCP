@@ -1269,7 +1269,7 @@ void RangeManager::printDcCdf(){
 	}
 }
 
-void RangeManager::genRFiles(string connKey){
+void RangeManager::genRFiles(string connKey) {
 	multimap<ulong, Range*>::iterator it, it_end;
 	it = ranges.begin();
 	it_end = ranges.end();
@@ -1277,7 +1277,7 @@ void RangeManager::genRFiles(string connKey){
 	ofstream dcDiff, retr1, retr2, retr3, retr4, retr5, retr6, all;
 	stringstream r1fn, r2fn, r3fn, r4fn, r5fn, r6fn, allfn, dcdfn;
 
-	if(!(GlobOpts::aggOnly)){
+	if (!(GlobOpts::aggOnly)) {
 		r1fn << GlobOpts::prefix << "-1retr-" << connKey << ".dat";
 		r2fn << GlobOpts::prefix << "-2retr-" << connKey << ".dat";
 		r3fn << GlobOpts::prefix << "-3retr-" << connKey << ".dat";
@@ -1292,15 +1292,15 @@ void RangeManager::genRFiles(string connKey){
 		retr4.open((char*)((r4fn.str()).c_str()), ios::out);
 		retr5.open((char*)((r5fn.str()).c_str()), ios::out);
 		retr6.open((char*)((r6fn.str()).c_str()), ios::out);
-		all.open((char*)((allfn.str()).c_str()), ios::out);
+		all.open((char*) ((allfn.str()).c_str()), ios::out);
 	}
 
-	for(; it != it_end; it++){
+	for (; it != it_end; it++) {
 
-		if(it->second->getNumRetrans() == 1){
-			if ( it->second->getDiff() > 0){
+		if (it->second->getNumRetrans() == 1) {
+			if (it->second->getDiff() > 0) {
 				GlobStats::retr1.push_back(it->second->getDiff());
-				if(!(GlobOpts::aggOnly))
+				if (!(GlobOpts::aggOnly))
 					retr1 << it->second->getDiff() << endl;
 			}
 		}
@@ -1308,7 +1308,7 @@ void RangeManager::genRFiles(string connKey){
 		if (it->second->getNumRetrans() == 2) {
 			if (it->second->getDiff() > 0) {
 				GlobStats::retr2.push_back(it->second->getDiff());
-				if(!(GlobOpts::aggOnly))
+				if (!(GlobOpts::aggOnly))
 					retr2 << it->second->getDiff() << endl;
 			}
 		}
@@ -1322,41 +1322,43 @@ void RangeManager::genRFiles(string connKey){
 		}
 
 		if (it->second->getNumRetrans() == 4) {
-			if ( it->second->getDiff() > 0){
+			if (it->second->getDiff() > 0) {
 				GlobStats::retr4.push_back(it->second->getDiff());
-				if(!(GlobOpts::aggOnly))
+				if (!(GlobOpts::aggOnly))
 					retr4 << it->second->getDiff() << endl;
 			}
 		}
 
 		if (it->second->getNumRetrans() == 5) {
-			if ( it->second->getDiff() > 0){
+			if (it->second->getDiff() > 0) {
 				GlobStats::retr5.push_back(it->second->getDiff());
-				if(!(GlobOpts::aggOnly))
+				if (!(GlobOpts::aggOnly))
 					retr5 << it->second->getDiff() << endl;
 			}
 		}
 
 		if (it->second->getNumRetrans() == 6) {
-			if ( it->second->getDiff() > 0){
+			if (it->second->getDiff() > 0) {
 				GlobStats::retr6.push_back(it->second->getDiff());
-				if(!(GlobOpts::aggOnly))
+				if (!(GlobOpts::aggOnly))
 					retr6 << it->second->getDiff() << endl;
 			}
 		}
 
 		if (it->second->getDiff() > 0) {
 			GlobStats::all.push_back(it->second->getDiff());
-			if(!(GlobOpts::aggOnly))
+			if (!(GlobOpts::aggOnly))
 				all << it->second->getDiff() << endl;
 		}
 	}
 
-	if(!(GlobOpts::aggOnly)){
+	if (!(GlobOpts::aggOnly)) {
 		retr1.close();
 		retr2.close();
 		retr3.close();
 		retr4.close();
+		retr5.close();
+		retr6.close();
 		all.close();
 	}
 }

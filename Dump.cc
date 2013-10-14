@@ -215,14 +215,14 @@ void Dump::printStatistics() {
 		bs.minLat = bs.minLength = (numeric_limits<int>::max)();
 		cIt->second->genBytesLatencyStats(&bs);
 
-		if (!(GlobOpts::aggOnly) && !(GlobOpts::aggInfo)) {
+		if (!(GlobOpts::aggOnly)) {
 			printf("\nSTATS FOR CONN: %s:%u -> %s:%u\n", cIt->second->getSrcIp().c_str(), cIt->second->srcPort,
 			       cIt->second->getDstIp().c_str(), cIt->second->dstPort);
 			printPacketStats(&cs, &bs, false);
 			memset(&cs, 0, sizeof(struct connStats));
 		}
 
-		if (!(GlobOpts::aggOnly) && !(GlobOpts::aggInfo)) {
+		if (!(GlobOpts::aggOnly)) {
 			cout << "\nBytewise latency - Conn: " <<  cIt->second->getConnKey() << endl;
 			printBytesLatencyStats(&bs, false);
 		}
@@ -252,13 +252,12 @@ void Dump::printStatistics() {
 		}
 	}
 
-	bsAggregated.avgLat = bsAggregated.avgLat / conns.size();
-	bsAggregated.avgLength = bsAggregated.avgLength / conns.size();
-
-	csAggregated.duration /= conns.size();
-
-	if (GlobOpts::aggregate || GlobOpts::aggInfo) {
+	if (GlobOpts::aggregate) {
 		if (csAggregated.nrPacketsSent) { /* To avoid division by 0 */
+			bsAggregated.avgLat /= conns.size();
+			bsAggregated.avgLength /= conns.size();
+			csAggregated.duration /= conns.size();
+
 			cout << "\n\nAggregate Statistics for " << conns.size() << " connections:" << endl;
 			printPacketStats(&csAggregated, &bsAggregated, true);
 
@@ -292,9 +291,8 @@ void Dump::printPacketStats(struct connStats *cs, struct byteStats *bs, bool agg
 		       "Redundancy                                    : %10f %%\n",
 		       cs->redundantBytes, ((float) cs->redundantBytes / cs->totUniqueBytes) * 100);
 	} else {
-		cout << "Redundancy                                    : "
-		     << ((float) (cs->totBytesSent - cs->totUniqueBytes) / cs->totBytesSent) * 100
-		     << "\%" << endl;
+		printf("Redundancy                                    : %10f %%\n",
+		       ((float) (cs->totBytesSent - cs->totUniqueBytes) / cs->totBytesSent) * 100);
 	}
 
 	printf("\nPayload size stats:\n");
@@ -304,12 +302,12 @@ void Dump::printPacketStats(struct connStats *cs, struct byteStats *bs, bool agg
 		       (int) floorf((float) (cs->totBytesSent / cs->nrDataPacketsSent)));
 	}
 	else {
-		printf("  Average                                     : %-10d\n", bs->avgLength);
+		printf("  Average                                     : %-10lld\n", bs->avgLength);
 	}
 
 	if (bs != NULL) {
-		printf("  Minimum                                     : %-10d\n" \
-		       "  Maximum                                     : %-10d\n",
+		printf("  Minimum                                     : %-10lld\n" \
+		       "  Maximum                                     : %-10lld\n",
 		       bs->minLength, bs->maxLength);
 
 		if (bs->percentiles_lengths) {
@@ -350,7 +348,7 @@ void Dump::printBytesLatencyStats(struct byteStats* bs, bool aggregated) {
 	cout << "  Minimum latency                             : " << bs->minLat << " ms" << endl;
 
 	if (aggregated) {
-		printf("  Average of all packets in all connections   : %-10d\n" \
+		printf("  Average of all packets in all connections   : %-10lld\n" \
 		       "  Average of the average for each connections : %-10f\n",
 		       bs->cumLat / sentPacketCount, bs->avgLat);
 	}

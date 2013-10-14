@@ -134,17 +134,17 @@ struct Percentiles {
 struct byteStats {
 	int maxLat;     /* Maximum Latency */
 	int minLat;     /* Minimum Latency */
-	int cumLat;     /* Cumulative latency */
+	long long int cumLat;     /* Cumulative latency */
 	Percentiles *percentiles_latencies;
 	double stdevLat;
 	int nrRanges;   /* Number of ranges in conn */
 	float avgLat;   /* Average latency */
 	int retrans[3]; /* Count 1., 2. and 3. retrans */
 	int maxRetrans; /* MAximum number of retransmissions for a range */
-	int maxLength;
-	int minLength;
-	int cumLength;
-	int avgLength;
+	long long int maxLength;
+	long long int minLength;
+	long long int cumLength;
+	long long int avgLength;
 	double stdevLength;
 	Percentiles *percentiles_lengths;
 };

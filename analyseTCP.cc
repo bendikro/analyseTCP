@@ -29,7 +29,6 @@
 /* Initialize global options */
 bool GlobOpts::aggregate      = false;
 bool GlobOpts::aggOnly        = false;
-bool GlobOpts::aggInfo        = false;
 bool GlobOpts::withRecv       = false;
 bool GlobOpts::transport      = false;
 bool GlobOpts::genRFiles      = false;
@@ -53,7 +52,7 @@ void exit_with_file_and_linenum(int exit_code, string file, int linenum) {
 }
 
 void usage (char* argv){
-  printf("Usage: %s [-s|r|p|f|g|t|u|m|n|a|A|d|l|y|e]\n", argv);
+  printf("Usage: %s [-s|r|p|f|g|t|u|m|n|a|A|d|l|y]\n", argv);
   printf("Required options:\n");
   printf(" -s <sender ip>     : Sender ip.\n");
   printf(" -f <pcap-file>     : Sender-side dumpfile.\n");
@@ -70,7 +69,6 @@ void usage (char* argv){
   printf(" -n <IP>            : Receiver side local address (as seen on recv dump)\n");
   printf(" -a                 : Produce aggregated statistics (off by default, optional)\n");
   printf(" -A                 : Only print aggregated statistics (off by default, optional)\n");
-  printf(" -e                 : Print aggregated info for all streams\n");
   printf(" -b                 : Give this option if you know that tcpdump has dropped packets.\n");
   printf("                    : Statistical methods will be used to compensate where possible.\n");
   printf(" -l                 : Print relative sequence numbers.\n");
@@ -97,7 +95,7 @@ int main(int argc, char *argv[]){
   Dump *senderDump;
 
   while(1){
-    c = getopt(argc, argv, "s:r:p:q:f:m:n:o:g:d:u:aAtblyexh");
+    c = getopt(argc, argv, "s:r:p:q:f:m:n:o:g:d:u:aAtblyxh");
     if(c == -1) break;
 
     switch(c){
@@ -151,9 +149,6 @@ int main(int argc, char *argv[]){
       break;
     case 'y':
       GlobOpts::print_packets = true;
-      break;
-    case 'e':
-		GlobOpts::aggInfo = true;
       break;
     case 'd':
 		GlobOpts::debugLevel = atoi(optarg);
