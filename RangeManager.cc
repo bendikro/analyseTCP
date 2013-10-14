@@ -1278,13 +1278,13 @@ void RangeManager::genRFiles(string connKey) {
 	stringstream r1fn, r2fn, r3fn, r4fn, r5fn, r6fn, allfn, dcdfn;
 
 	if (!(GlobOpts::aggOnly)) {
-		r1fn << GlobOpts::prefix << "-1retr-" << connKey << ".dat";
-		r2fn << GlobOpts::prefix << "-2retr-" << connKey << ".dat";
-		r3fn << GlobOpts::prefix << "-3retr-" << connKey << ".dat";
-		r4fn << GlobOpts::prefix << "-4retr-" << connKey << ".dat";
-		r5fn << GlobOpts::prefix << "-5retr-" << connKey << ".dat";
-		r6fn << GlobOpts::prefix << "-6retr-" << connKey << ".dat";
-		allfn << GlobOpts::prefix << "-all-" << connKey << ".dat";
+		r1fn << GlobOpts::prefix << "1retr-" << connKey << ".dat";
+		r2fn << GlobOpts::prefix << "2retr-" << connKey << ".dat";
+		r3fn << GlobOpts::prefix << "3retr-" << connKey << ".dat";
+		r4fn << GlobOpts::prefix << "4retr-" << connKey << ".dat";
+		r5fn << GlobOpts::prefix << "5retr-" << connKey << ".dat";
+		r6fn << GlobOpts::prefix << "6retr-" << connKey << ".dat";
+		allfn << GlobOpts::prefix << "all-" << connKey << ".dat";
 
 		retr1.open((char*)((r1fn.str()).c_str()), ios::out);
 		retr2.open((char*)((r2fn.str()).c_str()), ios::out);

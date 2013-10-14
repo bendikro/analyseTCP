@@ -768,21 +768,21 @@ void Dump::printDumpStats() {
 
 void Dump::genRFiles() {
  map<string, Connection*>::iterator cIt, cItEnd;
-  for(cIt = conns.begin(); cIt != conns.end(); cIt++){
+  for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
     cIt->second->genRFiles();
   }
 
   /* Print aggregate statistics */
   ofstream dcDiff, retr1, retr2, retr3, retr4, retr5, retr6, all;
-  stringstream r1fn, r2fn, r3fn, r4fn, r5fn, r6fn, allfn, dcdfn;;
+  stringstream r1fn, r2fn, r3fn, r4fn, r5fn, r6fn, allfn, dcdfn;
 
-  r1fn << GlobOpts::prefix << "-1retr-aggr.dat";
-  r2fn << GlobOpts::prefix << "-2retr-aggr.dat";
-  r3fn << GlobOpts::prefix << "-3retr-aggr.dat";
-  r4fn << GlobOpts::prefix << "-4retr-aggr.dat";
-  r5fn << GlobOpts::prefix << "-5retr-aggr.dat";
-  r6fn << GlobOpts::prefix << "-6retr-aggr.dat";
-  allfn << GlobOpts::prefix << "-all-aggr.dat";
+  r1fn << GlobOpts::prefix << "1retr-aggr.dat";
+  r2fn << GlobOpts::prefix << "2retr-aggr.dat";
+  r3fn << GlobOpts::prefix << "3retr-aggr.dat";
+  r4fn << GlobOpts::prefix << "4retr-aggr.dat";
+  r5fn << GlobOpts::prefix << "5retr-aggr.dat";
+  r6fn << GlobOpts::prefix << "6retr-aggr.dat";
+  allfn << GlobOpts::prefix << "all-aggr.dat";
 
   retr1.open((char*)((r1fn.str()).c_str()), ios::out);
   retr2.open((char*)((r2fn.str()).c_str()), ios::out);

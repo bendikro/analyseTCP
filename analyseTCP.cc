@@ -63,8 +63,8 @@ void usage (char* argv){
   printf(" -g <pcap-file>     : Receiver-side dumpfile\n");
   printf(" -t                 : Calculate transport-layer delays\n");
   printf("                    : (if not set, application-layer delay is calculated)\n");
-  printf(" -u <prefix>        : Write statistics to comma-separated files (for use with R)\n");
-  printf("                      <prefix> assigns an output filename prefix.\n");
+  printf(" -u<prefix>         : Write statistics to comma-separated files (for use with R)\n");
+  printf("                      Optional argument <prefix> assigns an output filename prefix (No space between option and argument).\n");
   printf(" -m <IP>            : Sender side external NAT address (as seen on recv dump)\n");
   printf(" -n <IP>            : Receiver side local address (as seen on recv dump)\n");
   printf(" -a                 : Produce aggregated statistics (off by default, optional)\n");
@@ -94,11 +94,12 @@ int main(int argc, char *argv[]){
   int c;
   Dump *senderDump;
 
-  while(1){
-    c = getopt(argc, argv, "s:r:p:q:f:m:n:o:g:d:u:aAtblyxh");
-    if(c == -1) break;
+  while (1){
+    c = getopt(argc, argv, "s:r:p:q:f:m:n:o:g:d:u::aAtblyxh");
+    if (c == -1)
+		break;
 
-    switch(c){
+    switch(c) {
     case 's':
       src_ip = optarg;
       break;
@@ -130,10 +131,13 @@ int main(int argc, char *argv[]){
     case 't':
       GlobOpts::transport = true;
       break;
-    case 'u':
-      GlobOpts::prefix = optarg;
-      GlobOpts::genRFiles = true;
-      break;
+    case 'u': {
+	    GlobOpts::genRFiles = true;
+	    if (optarg) {
+			GlobOpts::prefix = optarg;
+		}
+		break;
+	}
     case 'a':
       GlobOpts::aggregate = true;
       break;
@@ -156,16 +160,16 @@ int main(int argc, char *argv[]){
     case 'h':
 	    usage(argv[0]);
     case '?':
-      if (optopt == 'c')
-	fprintf(stderr, "Option -%c requires an argument\n", optopt);
-      else if(isprint(optopt))
-	fprintf(stderr,"Unknown option -%c\n", optopt);
-      else
-	fprintf(stderr, "Something is really wrong\n");
+		if (optopt == 'c')
+			fprintf(stderr, "Option -%c requires an argument\n", optopt);
+		else if(isprint(optopt))
+			fprintf(stderr,"Unknown option -%c\n", optopt);
+		else
+			fprintf(stderr, "Something is really wrong\n");
 
       return 1;
     default:
-      break;
+		break;
     }
   }
   /* TODO Exit if required options are not given */
