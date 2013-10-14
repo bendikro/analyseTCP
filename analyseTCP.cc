@@ -33,6 +33,7 @@ bool GlobOpts::withRecv       = false;
 bool GlobOpts::transport      = false;
 bool GlobOpts::genRFiles      = false;
 string GlobOpts::prefix       = "";
+string GlobOpts::RFiles_dir   = "";
 int GlobOpts::debugLevel      = 0;
 bool GlobOpts::incTrace       = false;
 bool GlobOpts::relative_seq   = false;
@@ -52,7 +53,7 @@ void exit_with_file_and_linenum(int exit_code, string file, int linenum) {
 }
 
 void usage (char* argv){
-  printf("Usage: %s [-s|r|p|f|g|t|u|m|n|a|A|d|l|y]\n", argv);
+  printf("Usage: %s [-s|r|p|f|g|t|u|m|n|a|A|d|l|y|o]\n", argv);
   printf("Required options:\n");
   printf(" -s <sender ip>     : Sender ip.\n");
   printf(" -f <pcap-file>     : Sender-side dumpfile.\n");
@@ -65,6 +66,7 @@ void usage (char* argv){
   printf("                    : (if not set, application-layer delay is calculated)\n");
   printf(" -u<prefix>         : Write statistics to comma-separated files (for use with R)\n");
   printf("                      Optional argument <prefix> assigns an output filename prefix (No space between option and argument).\n");
+  printf(" -o <output-dir>    : Directory to write the statistics results (implies -u)\n");
   printf(" -m <IP>            : Sender side external NAT address (as seen on recv dump)\n");
   printf(" -n <IP>            : Receiver side local address (as seen on recv dump)\n");
   printf(" -a                 : Produce aggregated statistics (off by default, optional)\n");
@@ -95,7 +97,7 @@ int main(int argc, char *argv[]){
   Dump *senderDump;
 
   while (1){
-    c = getopt(argc, argv, "s:r:p:q:f:m:n:o:g:d:u::aAtblyxh");
+    c = getopt(argc, argv, "s:r:p:q:f:m:n:o:g:d:u::o:aAtblyxh");
     if (c == -1)
 		break;
 
@@ -136,8 +138,11 @@ int main(int argc, char *argv[]){
 	    if (optarg) {
 			GlobOpts::prefix = optarg;
 		}
-		break;
-	}
+    } break;
+    case 'o':
+	    GlobOpts::genRFiles = true;
+	    GlobOpts::RFiles_dir = optarg;
+      break;
     case 'a':
       GlobOpts::aggregate = true;
       break;
@@ -185,6 +190,10 @@ int main(int argc, char *argv[]){
 	 << "Beware that maximum and minimum values may be erroneous." << endl
 	 << "Statistical methods will be applied to compensate where this is possible."
 	 << endl;
+  }
+
+  if (GlobOpts::RFiles_dir.length()) {
+	  GlobOpts::prefix = GlobOpts::RFiles_dir + "/" + GlobOpts::prefix;
   }
 
   /* Create Dump - object */

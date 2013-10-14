@@ -77,6 +77,7 @@ class GlobOpts {
   static string recvNatIP;
   static bool genRFiles;
   static string prefix;
+  static string RFiles_dir;
   static bool rdbDetails;
 };
 
