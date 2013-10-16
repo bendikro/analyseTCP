@@ -4,11 +4,11 @@ int GlobStats::totNumBytes;
 map<ConnectionMapKey*, string, ConnectionKeyComparator> connKeys;
 
 /* Methods for class Dump */
-Dump::Dump( string src_ip, string dst_ip, int src_port, int dst_port, string fn ){
+Dump::Dump(string src_ip, string dst_ip, string src_port, string dst_port, string fn ){
   srcIp = src_ip;
   dstIp = dst_ip;
-  srcPort = src_port;
-  dstPort = dst_port;
+  srcPort = string(src_port);
+  dstPort = string(dst_port);
   filename = fn;
   sentPacketCount = 0;
   sentBytesCount = 0;
@@ -16,6 +16,13 @@ Dump::Dump( string src_ip, string dst_ip, int src_port, int dst_port, string fn 
   recvBytesCount = 0;
   ackCount = 0;
 }
+
+bool isNumeric(const char* pszInput, int nNumberBase) {
+	string base = "0123456789ABCDEF";
+	string input = pszInput;
+	return (input.find_first_not_of(base.substr(0, nNumberBase)) == string::npos);
+}
+
 
 string getConnKey(const struct in_addr *srcIp, const struct in_addr *dstIp, const uint16_t *srcPort, const uint16_t *dstPort) {
 	static struct ConnectionMapKey connKey;
@@ -47,6 +54,7 @@ string getConnKey(const struct in_addr *srcIp, const struct in_addr *dstIp, cons
 	return connKeyTmp.str();
 }
 
+
 /* Traverse the pcap dump and call methods for processing the packets
    This generates initial one-pass statistics from sender-side dump. */
 void Dump::analyseSender() {
@@ -69,15 +77,20 @@ void Dump::analyseSender() {
 	/* TODO: Add options to crop dumpfiles from front or back with n
 	   minutes */
 
+	bool src_port_range = !isNumeric(srcPort.c_str(), 10);
+	bool dst_port_range = !isNumeric(dstPort.c_str(), 10);
+
 	struct bpf_program compFilter;
 	stringstream filterExp;
 	filterExp << "tcp && src host " << srcIp;
-	if (!srcPort == 0)
-		filterExp << " && src port " << srcPort;
+	if (!srcPort.empty()) {
+		filterExp << " && src " << (src_port_range ? "portrange " : "port ") << srcPort;
+	}
 	if (!dstIp.empty())
 		filterExp << " && dst host " << dstIp;
-	if (!dstPort == 0)
-		filterExp << " && dst port " << dstPort;
+	if (!dstPort.empty())
+		filterExp << " && dst " << (dst_port_range ? "portrange " : "port ") << dstPort;
+
 	// Earlier, only packets with TCP payload were used.
 	//filterExp << " && (ip[2:2] - ((ip[0]&0x0f)<<2) - (tcp[12]>>2)) >= 1";
 
@@ -136,11 +149,11 @@ void Dump::analyseSender() {
 	filterExp << "tcp";
 	if (!dstIp.empty())
 		filterExp << " && src host " << dstIp;
-	if (!dstPort == 0)
-		filterExp << " && src port " << dstPort;
+	if (!dstPort.empty())
+		filterExp << " && src " << (dst_port_range ? "portrange " : "port ") << dstPort;
 	filterExp << " && dst host " << srcIp;
-	if (!srcPort == 0)
-		filterExp << " && dst port " << srcPort;
+	if (!srcPort.empty())
+		filterExp << " && dst " << (src_port_range ? "portrange " : "port ") << srcPort;
 	filterExp << " && ((tcp[tcpflags] & tcp-syn) != tcp-syn)"
 			  << " && ((tcp[tcpflags] & tcp-fin) != tcp-fin)"
 			  << " && ((tcp[tcpflags] & tcp-ack) == tcp-ack)";
@@ -572,14 +585,17 @@ void Dump::processRecvd(string recvFn) {
   struct bpf_program compFilter;
   stringstream filterExp;
 
+  //bool src_port_range = isNumeric(srcPort.c_str(), 10);
+  bool dst_port_range = isNumeric(dstPort.c_str(), 10);
+
   filterExp.str("");
   filterExp << "tcp";
   if (!tmpSrcIp.empty())
 	  filterExp << " && src host " << tmpSrcIp;
   if (!tmpDstIp.empty())
 	  filterExp << " && dst host " << tmpDstIp;
-  if (!dstPort == 0)
-	  filterExp << " && dst port " << dstPort;
+  if (!dstPort.empty())
+	  filterExp << " && dst " << (dst_port_range ? "portrange" : "port") << dstPort;
 
   //filterExp << " && (ip[2:2] - ((ip[0]&0x0f)<<2) - (tcp[12]>>2)) >= 1";
 
@@ -753,7 +769,7 @@ void Dump::makeDcCdf(){
 void Dump::printDumpStats() {
   cout << endl;
   cout << "General info for entire dump:" << endl;
-  printf("%s:%d -> %s:%d\n", srcIp.c_str(), srcPort, dstIp.c_str(), dstPort);
+  printf("%s:%s -> %s:%s\n", srcIp.c_str(), srcPort.c_str(), dstIp.c_str(), dstPort.c_str());
   cout << "Filename: " << filename << endl;
   cout << "Sent Packet Count     : " << sentPacketCount << endl;
   cout << "Received Packet Count : " << recvPacketCount << endl;

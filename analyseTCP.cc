@@ -88,8 +88,8 @@ void usage (char* argv){
 int main(int argc, char *argv[]){
   char *src_ip = (char*)"";
   char *dst_ip = (char*)"";
-  int src_port = 0;
-  int dst_port = 0;
+  string src_port = "";
+  string dst_port = "";
   char *sendfn = (char*)""; /* Sender dump file name */
   char *recvfn = (char*)""; /* Receiver dump filename */
 
@@ -109,10 +109,10 @@ int main(int argc, char *argv[]){
       dst_ip = optarg;
       break;
     case 'p':
-      dst_port = atoi(optarg);
+	    dst_port = string(optarg);
       break;
     case 'q':
-      src_port = atoi(optarg);
+	    src_port = string(optarg);
       break;
     case 'x':
       GlobOpts::rdbDetails = true;

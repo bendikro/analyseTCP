@@ -46,8 +46,8 @@ class Dump {
   string srcIp;
   string dstIp;
   string filename;
-  int srcPort;
-  int dstPort;
+  string srcPort;
+  string dstPort;
   int sentPacketCount;
   int sentBytesCount;
   int recvPacketCount;
@@ -68,7 +68,7 @@ class Dump {
   void printBytesLatencyStats(struct byteStats* bs, bool aggregated);
   void makeDcCdf();
  public:
-  Dump( string src_ip, string dst_ip, int src_port, int dst_port, string fn );
+  Dump( string src_ip, string dst_ip, string src_port, string dst_port, string fn );
   ulong get_relative_sequence_number(uint32_t ack, uint32_t firstSeq, ulong largestAckSeq, uint32_t largestAckSeqAbsolute);
   ulong get_relative_ack_sequence_number(uint32_t ack, uint32_t firstSeq, ulong largestAckSeq, uint32_t largestAckSeqAbsolute);
   void analyseSender();
