@@ -170,7 +170,8 @@ void Connection::addPacketStats(struct connStats* cs) {
 void Connection::genBytesLatencyStats(struct byteStats* bs){
 	/* Iterate through vector and gather data */
 	rm->genStats(bs);
-	bs->avgLat = (float) bs->cumLat / bs->nrRanges;
+	if (bs->nrRanges > 0)
+		bs->avgLat = bs->cumLat / bs->nrRanges;
 }
 
 void Connection::printPacketDetails() {

@@ -323,10 +323,12 @@ bool RangeManager::processAck(ulong ack, timeval* tv) {
 double median(vector<double>::const_iterator begin,
               vector<double>::const_iterator end) {
     int len = end - begin;
-    vector<double>::const_iterator it = begin + len / 2;
+    if (len == 0)
+	    return 0;
+    vector<double>::const_iterator it = begin + (len / 2);
     double m = *it;
     if ((len % 2) == 0)
-		m = (m + *(--it)) / 2;
+	    m = (m + *(--it)) / 2;
     return m;
 }
 
@@ -358,7 +360,7 @@ void RangeManager::genStats(struct byteStats *bs) {
 	vector<double> latencies;
 	vector<double> payload_lengths;
 	int tmp_byte_count = 0;
-	bs->minLength = 5000000;
+	bs->minLat = bs->minLength = (numeric_limits<int>::max)();
 
 	for (; it != it_end; it++) {
 		/* Skip if invalid (negative) latency or dummy range */
@@ -431,6 +433,8 @@ void RangeManager::genStats(struct byteStats *bs) {
 		bs->stdevLat = stdev;
 		bs->percentiles_latencies = percentiles(&latencies);
 	}
+	else
+		bs->minLat = 0;
 
 	if (payload_lengths.size()) {
 		// Payload size stats
@@ -447,6 +451,8 @@ void RangeManager::genStats(struct byteStats *bs) {
 		bs->stdevLength = stdev;
 		bs->percentiles_lengths = percentiles(&payload_lengths);
 	}
+	else
+		bs->minLength = 0;
 }
 
 /* Check that every byte from firstSeq to lastSeq is present.
@@ -481,7 +487,8 @@ void RangeManager::validateContent() {
 	}
 
 	if (conn->totBytesSent != (conn->totNewDataSent + conn->totRDBBytesSent + conn->totRetransBytesSent)) {
-		printf("conn->totBytesSent(%u) does not equal (totNewDataSent + totRDBBytesSent + totRetransBytesSent) (%u)\n", conn->totBytesSent, (conn->totNewDataSent + conn->totRDBBytesSent + conn->totRetransBytesSent));
+		printf("conn->totBytesSent(%u) does not equal (totNewDataSent + totRDBBytesSent + totRetransBytesSent) (%u)\n",
+		       conn->totBytesSent, (conn->totNewDataSent + conn->totRDBBytesSent + conn->totRetransBytesSent));
 		warn_with_file_and_linenum(1, __FILE__, __LINE__);
 	}
 
@@ -508,8 +515,10 @@ void RangeManager::validateContent() {
 				cerr << "RangeManager::validateContent: Byte-stream in ranges not continuous. Exiting." << endl;
 				printf("payload_len: %d\n", it->second->getNumBytes());
 
-				printf("Prev Range (%lu, %lu, %lu) Len: %u\n", relative_seq(prev->second->getStartSeq()), relative_seq(prev->second->getRDBSeq()), relative_seq(prev->second->getEndSeq()), prev->second->getNumBytes());
-				printf("Curr Range (%lu, %lu, %lu) Len: %u\n", relative_seq(it->second->getStartSeq()), relative_seq(it->second->getRDBSeq()), relative_seq(it->second->getEndSeq()), it->second->getNumBytes());
+				printf("Prev Range (%lu, %lu, %lu) Len: %u\n", relative_seq(prev->second->getStartSeq()), relative_seq(prev->second->getRDBSeq()),
+				       relative_seq(prev->second->getEndSeq()), prev->second->getNumBytes());
+				printf("Curr Range (%lu, %lu, %lu) Len: %u\n", relative_seq(it->second->getStartSeq()), relative_seq(it->second->getRDBSeq()),
+				       relative_seq(it->second->getEndSeq()), it->second->getNumBytes());
 				cerr << "tmpEndSeq           : " << relative_seq(tmpEndSeq) << endl;
 				cerr << "Conn KEY           : " << conn->getConnKey() << endl;
 				exit_with_file_and_linenum(1, __FILE__, __LINE__);

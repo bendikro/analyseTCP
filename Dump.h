@@ -65,10 +65,11 @@ class Dump {
   void printAggCdf();
   void printAggDcCdf();
   void printPacketStats(struct connStats *cs, struct byteStats *bs, bool aggregated);
-  void printBytesLatencyStats(struct byteStats* bs, bool aggregated);
+  void printBytesLatencyStats(struct connStats *cs, struct byteStats* bs, bool aggregated, struct byteStats* aggregatedMin, struct byteStats* aggregatedMax);
   void makeDcCdf();
  public:
-  Dump( string src_ip, string dst_ip, string src_port, string dst_port, string fn );
+  Dump(string src_ip, string dst_ip, string src_port, string dst_port, string fn);
+  ~Dump();
   ulong get_relative_sequence_number(uint32_t ack, uint32_t firstSeq, ulong largestAckSeq, uint32_t largestAckSeqAbsolute);
   ulong get_relative_ack_sequence_number(uint32_t ack, uint32_t firstSeq, ulong largestAckSeq, uint32_t largestAckSeqAbsolute);
   void analyseSender();

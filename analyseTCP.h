@@ -139,7 +139,7 @@ struct byteStats {
 	Percentiles *percentiles_latencies;
 	double stdevLat;
 	int nrRanges;   /* Number of ranges in conn */
-	float avgLat;   /* Average latency */
+	long long int avgLat;   /* Average latency */
 	int retrans[3]; /* Count 1., 2. and 3. retrans */
 	int maxRetrans; /* MAximum number of retransmissions for a range */
 	long long int maxLength;
