@@ -55,6 +55,7 @@ class Connection {
   void addPacketStats(struct connStats* cs);
   void genBytesLatencyStats(struct byteStats* bs);
   void validateRanges();
+  timeval get_duration() ;
   void makeCDF();
   void printCDF();
   void printDcCdf();

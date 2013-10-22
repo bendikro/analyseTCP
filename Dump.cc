@@ -255,7 +255,6 @@ void Dump::printStatistics() {
 			bsAggregated.minLength += bs.minLength;
 			bsAggregated.maxLength += bs.maxLength;
 			bsAggregated.avgLat += bs.avgLat;
-			printf("bs.avgLat: %lld\n", bs.avgLat);
 			bsAggregated.cumLat += bs.cumLat;
 			bsAggregated.avgLength += bs.avgLength;
 			bsAggregated.cumLength += bs.cumLength;
@@ -831,8 +830,8 @@ void Dump::genRFiles() {
   }
 
   /* Print aggregate statistics */
-  ofstream dcDiff, retr1, retr2, retr3, retr4, retr5, retr6, all;
-  stringstream r1fn, r2fn, r3fn, r4fn, r5fn, r6fn, allfn, dcdfn;
+  ofstream dcDiff, retr1, retr2, retr3, retr4, retr5, retr6, all, durations_f;
+  stringstream r1fn, r2fn, r3fn, r4fn, r5fn, r6fn, allfn, dcdfn, durations_fn;
 
   r1fn << GlobOpts::prefix << "1retr-aggr.dat";
   r2fn << GlobOpts::prefix << "2retr-aggr.dat";
@@ -841,6 +840,7 @@ void Dump::genRFiles() {
   r5fn << GlobOpts::prefix << "5retr-aggr.dat";
   r6fn << GlobOpts::prefix << "6retr-aggr.dat";
   allfn << GlobOpts::prefix << "all-aggr.dat";
+  durations_fn << GlobOpts::prefix << "all-durations.dat";
 
   retr1.open((char*)((r1fn.str()).c_str()), ios::out);
   retr2.open((char*)((r2fn.str()).c_str()), ios::out);
@@ -849,6 +849,7 @@ void Dump::genRFiles() {
   retr5.open((char*)((r5fn.str()).c_str()), ios::out);
   retr6.open((char*)((r6fn.str()).c_str()), ios::out);
   all.open((char*)((allfn.str()).c_str()), ios::out);
+  durations_f.open((char*)((durations_fn.str()).c_str()), ios::out);
 
   vector<int>::iterator it, it_end;
   it = GlobStats::retr1.begin();
@@ -893,11 +894,24 @@ void Dump::genRFiles() {
     all << *it << endl;
   }
 
+  it = GlobStats::all.begin();
+  it_end = GlobStats::all.end();
+  for(; it != it_end; it++){
+    all << *it << endl;
+  }
+
+  for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
+	  durations_f << cIt->second->rm->getDuration() << endl;
+  }
+
   retr1.close();
   retr2.close();
   retr3.close();
   retr4.close();
+  retr5.close();
+  retr6.close();
   all.close();
+  durations_f.close();
 }
 
 
