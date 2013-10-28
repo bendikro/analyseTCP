@@ -57,8 +57,8 @@ class Connection {
   void validateRanges();
   timeval get_duration() ;
   void makeCDF();
-  void printCDF();
-  void printDcCdf();
+  void printCDF(ofstream *stream);
+  void printDcCdf(ofstream *stream);
   void makeDcCdf();
   void addRDBStats(int *rdb_sent, int *rdb_miss, int *rdb_hits, int *totBytesSent);
   void genRFiles();

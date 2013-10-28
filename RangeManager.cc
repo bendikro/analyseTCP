@@ -24,6 +24,14 @@ RangeManager::~RangeManager() {
 	for (; rit != rit_end; rit++) {
 		delete *rit;
 	}
+
+	multimap<ulong, ByteRange*>::iterator brIt, brIt_end;
+	brIt = brMap.begin();
+	brIt_end = brMap.end();
+
+	for (; brIt != brIt_end; brIt++) {
+		delete brIt->second;
+	}
 }
 
 bool RangeManager::hasReceiveData() {
@@ -1239,26 +1247,29 @@ void RangeManager::makeDcCdf(){
 	}
 }
 
-void RangeManager::printCDF(){
+void RangeManager::printCDF(ofstream *stream) {
 	map<const int, int>::iterator nit, nit_end;
 	double cdfSum = 0;
+	char print_buf[300];
 	nit = cdf.begin();
 	nit_end = cdf.end();
 
-	if(GlobOpts::debugLevel== 4 || GlobOpts::debugLevel== 5){
-		cerr << "lowestDiff: " << lowestDiff << endl;
+	if (GlobOpts::debugLevel== 4 || GlobOpts::debugLevel== 5) {
+		*stream << "lowestDiff: " << lowestDiff << endl;
 	}
 
-	cout << "#Relative delay      Percentage" << endl;
-	for(; nit != nit_end; nit++){
-		cdfSum += (double)(*nit).second / getTotNumBytes();
-		printf("time: %10d    CDF: %.10f\n",(*nit).first, cdfSum);
+	*stream << "#Relative delay      Percentage" << endl;
+	for (; nit != nit_end; nit++) {
+		cdfSum += (double) (*nit).second / getTotNumBytes();
+		sprintf(print_buf, "time: %10d    CDF: %.10f\n", (*nit).first, cdfSum);
+		*stream << print_buf << endl;
 	}
 }
 
-void RangeManager::printDcCdf(){
+void RangeManager::printDcCdf(ofstream *stream) {
 	map<const int, int>::iterator nit, nit_end;
 	double cdfSum = 0;
+	char print_buf[300];
 	nit = dcCdf.begin();
 	nit_end = dcCdf.end();
 
@@ -1270,11 +1281,12 @@ void RangeManager::printDcCdf(){
 	if(drift == -1)
 		return;
 
-	cout << "#------ Drift : " << drift << "ms/s ------" << endl;
-	cout << "#Relative delay      Percentage" << endl;
+	*stream << "#------ Drift : " << drift << "ms/s ------" << endl;
+	*stream << "#Relative delay      Percentage" << endl;
 	for(; nit != nit_end; nit++){
 		cdfSum += (double)(*nit).second / getTotNumBytes();
-		printf("time: %10d    CDF: %.10f\n",(*nit).first, cdfSum);
+		sprintf(print_buf, "time: %10d    CDF: %.10f\n", (*nit).first, cdfSum);
+		*stream << print_buf << endl;
 	}
 }
 

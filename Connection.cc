@@ -219,27 +219,27 @@ void Connection::makeCDF(){
   rm->makeCdf();
 }
 
-void Connection::printCDF(){
-  cout << endl;
-  cout << "#------CDF - Conn: " << getConnKey() << " --------" << endl;
-  rm->printCDF();
+void Connection::printCDF(ofstream *stream) {
+	*stream << endl;
+	*stream << "#------CDF - Conn: " << getConnKey() << " --------" << endl;
+	rm->printCDF(stream);
 }
 
-void Connection::printDcCdf(){
-  cout << endl;
-  cout << "#------Drift-compensated CDF - Conn: " << getConnKey() << " --------" << endl;
-  rm->printDcCdf();
+void Connection::printDcCdf(ofstream *stream) {
+	*stream << endl;
+	*stream << "#------Drift-compensated CDF - Conn: " << getConnKey() << " --------" << endl;
+	rm->printDcCdf(stream);
 }
 
 void Connection::makeDcCdf(){
-  if ( rm->calcDrift() == 0 ){
-    rm->registerDcDiffs();
-    rm->makeDcCdf();
-  }
+	if (rm->calcDrift() == 0) {
+		rm->registerDcDiffs();
+		rm->makeDcCdf();
+	}
 }
 
-void Connection::genRFiles(){
-  rm->genRFiles(getConnKey());
+void Connection::genRFiles() {
+	rm->genRFiles(getConnKey());
 }
 
 ulong Connection::getNumUniqueBytes() {

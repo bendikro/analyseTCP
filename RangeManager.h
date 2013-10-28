@@ -109,8 +109,8 @@ public:
 	void validateContent();
 	void registerRecvDiffs();
 	void makeCdf();
-	void printCDF();
-	void printDcCdf();
+	void printCDF(ofstream *stream);
+	void printDcCdf(ofstream *stream);
 	int calcDrift();
 	void registerDcDiffs();
 	void insert_byte_range(ulong start_seq, ulong end_seq, int sent, bool retrans, bool is_rdb, int level);

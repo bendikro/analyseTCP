@@ -162,6 +162,7 @@ void Dump::analyseSender() {
 	filterExp << " && dst host " << srcIp;
 	if (!srcPort.empty())
 		filterExp << " && dst " << (src_port_range ? "portrange " : "port ") << srcPort;
+
 	filterExp << " && ((tcp[tcpflags] & tcp-syn) != tcp-syn)"
 			  << " && ((tcp[tcpflags] & tcp-fin) != tcp-fin)"
 			  << " && ((tcp[tcpflags] & tcp-ack) == tcp-ack)";
@@ -626,8 +627,8 @@ void Dump::processRecvd(string recvFn) {
   struct bpf_program compFilter;
   stringstream filterExp;
 
-  //bool src_port_range = isNumeric(srcPort.c_str(), 10);
-  bool dst_port_range = isNumeric(dstPort.c_str(), 10);
+  bool src_port_range = !isNumeric(srcPort.c_str(), 10);
+  bool dst_port_range = !isNumeric(dstPort.c_str(), 10);
 
   filterExp.str("");
   filterExp << "tcp";
@@ -635,8 +636,10 @@ void Dump::processRecvd(string recvFn) {
 	  filterExp << " && src host " << tmpSrcIp;
   if (!tmpDstIp.empty())
 	  filterExp << " && dst host " << tmpDstIp;
+  if (!srcPort.empty())
+	  filterExp << " && src " << (src_port_range ? "portrange " : "port ") << srcPort;
   if (!dstPort.empty())
-	  filterExp << " && dst " << (dst_port_range ? "portrange" : "port") << dstPort;
+	  filterExp << " && dst " << (dst_port_range ? "portrange " : "port ") << dstPort;
 
   //filterExp << " && (ip[2:2] - ((ip[0]&0x0f)<<2) - (tcp[12]>>2)) >= 1";
 
@@ -673,23 +676,26 @@ void Dump::processRecvd(string recvFn) {
   /* Traverse ranges in senderDump and compare to
      corresponding bytes / ranges in receiver ranges
      place timestamp diffs in buckets */
-  makeCDF();
 
-  if ((GlobOpts::aggOnly))
-	  printCDF();
+  if (GlobOpts::withCDF) {
+	  makeCDF();
 
-  /* Calculate clock drift for all eligible connections
-     eligible: more than 500 ranges &&
-     more than 2 minutes duration
-	 make drift compensated CDF*/
-  makeDcCdf();
+	  if ((GlobOpts::withCDF))
+		  printCDF();
 
-  if ((GlobOpts::aggOnly))
-	  printDcCdf();
+	  /* Calculate clock drift for all eligible connections
+		 eligible: more than 500 ranges &&
+		 more than 2 minutes duration
+		 make drift compensated CDF*/
+	  makeDcCdf();
 
-  if(GlobOpts::aggregate){
-	  printAggCdf();
-	  printAggDcCdf();
+	  if ((GlobOpts::aggOnly))
+		  printDcCdf();
+
+	  if (GlobOpts::aggregate){
+		  printAggCdf();
+		  printAggDcCdf();
+	  }
   }
 }
 
@@ -752,52 +758,77 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data) {
 void Dump::makeCDF(){
 	map<string, Connection*>::iterator cIt, cItEnd;
 	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
-		printf("MakeCDF on conn %s\n", cIt->second->getConnKey().c_str());
 		cIt->second->makeCDF();
 	}
 }
 
 void Dump::printCDF(){
-  map<string, Connection*>::iterator cIt, cItEnd;
-  for(cIt = conns.begin(); cIt != conns.end(); cIt++){
-    cIt->second->printCDF();
-  }
+	ofstream cdf_f;
+	stringstream cdffn;
+	cdffn << GlobOpts::prefix << "cdf.dat";
+	cdf_f.open((char*)((cdffn.str()).c_str()), ios::out);
+
+	map<string, Connection*>::iterator cIt, cItEnd;
+	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
+		cIt->second->printCDF(&cdf_f);
+	}
+	cdf_f.close();
 }
 
 void Dump::printDcCdf(){
-  map<string, Connection*>::iterator cIt, cItEnd;
-  for(cIt = conns.begin(); cIt != conns.end(); cIt++){
-    cIt->second->printDcCdf();
-  }
+	ofstream dccdf_f;
+	stringstream dccdffn;
+	dccdffn << GlobOpts::prefix << "dccdf.dat";
+	dccdf_f.open((char*)((dccdffn.str()).c_str()), ios::out);
+
+	map<string, Connection*>::iterator cIt, cItEnd;
+	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
+		cIt->second->printDcCdf(&dccdf_f);
+	}
+	dccdf_f.close();
 }
 
 void Dump::printAggCdf(){
-  map<const int, int>::iterator nit, nit_end;
-  double cdfSum = 0;
-  nit = GlobStats::cdf.begin();
-  nit_end = GlobStats::cdf.end();
+	char print_buf[300];
+	ofstream stream;
+	stringstream filename;
+	filename << GlobOpts::prefix << "agg-cdf.dat";
+	stream.open((char*)((filename.str()).c_str()), ios::out);
 
-  cout << endl << endl << "#Aggregated CDF:" << endl;
-  cout << "#Relative delay      Percentage" << endl;
-  for(; nit != nit_end; nit++){
-    cdfSum += (double)(*nit).second / GlobStats::totNumBytes;
-    printf("time: %10d    CDF: %.10f\n",(*nit).first, cdfSum);
-  }
+	map<const int, int>::iterator nit, nit_end;
+	double cdfSum = 0;
+	nit = GlobStats::cdf.begin();
+	nit_end = GlobStats::cdf.end();
+
+	stream << endl << endl << "#Aggregated CDF:" << endl;
+	stream << "#Relative delay      Percentage" << endl;
+	for(; nit != nit_end; nit++){
+		cdfSum += (double)(*nit).second / GlobStats::totNumBytes;
+		sprintf(print_buf, "time: %10d    CDF: %.10f\n", (*nit).first, cdfSum);
+		stream << print_buf;
+	}
 }
 
 void Dump::printAggDcCdf(){
-  map<const int, int>::iterator nit, nit_end;
-  double cdfSum = 0;
-  nit = GlobStats::dcCdf.begin();
-  nit_end = GlobStats::dcCdf.end();
+	char print_buf[300];
+	ofstream stream;
+	stringstream filename;
+	filename << GlobOpts::prefix << "agg-dccdf.dat";
+	stream.open((char*)((filename.str()).c_str()), ios::out);
 
-  cout << endl << "#Aggregated, drift-compensated CDF:" << endl;
-  cout << "#------ Average drift : " << GlobStats::avgDrift << "ms/s ------" << endl;
-  cout << "#Relative delay      Percentage" << endl;
-  for(; nit != nit_end; nit++){
-    cdfSum += (double)(*nit).second / GlobStats::totNumBytes;
-    printf("time: %10d    CDF: %.10f\n",(*nit).first, cdfSum);
-  }
+	map<const int, int>::iterator nit, nit_end;
+	double cdfSum = 0;
+	nit = GlobStats::dcCdf.begin();
+	nit_end = GlobStats::dcCdf.end();
+
+	stream << endl << "#Aggregated, drift-compensated CDF:" << endl;
+	stream << "#------ Average drift : " << GlobStats::avgDrift << "ms/s ------" << endl;
+	stream << "#Relative delay      Percentage" << endl;
+	for (; nit != nit_end; nit++) {
+		cdfSum += (double)(*nit).second / GlobStats::totNumBytes;
+		sprintf(print_buf, "time: %10d    CDF: %.10f\n", (*nit).first, cdfSum);
+		stream << print_buf;
+	}
 }
 
 void Dump::makeDcCdf(){

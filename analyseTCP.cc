@@ -30,6 +30,7 @@
 bool GlobOpts::aggregate      = false;
 bool GlobOpts::aggOnly        = false;
 bool GlobOpts::withRecv       = false;
+bool GlobOpts::withCDF        = false;
 bool GlobOpts::transport      = false;
 bool GlobOpts::genRFiles      = false;
 string GlobOpts::prefix       = "";
@@ -62,6 +63,7 @@ void usage (char* argv){
   printf(" -q <sender port>   : Sender port. If not given, analyse all sender ports\n");
   printf(" -p <receiver port> : Receiver port. If not given, analyse all receiver ports\n");
   printf(" -g <pcap-file>     : Receiver-side dumpfile\n");
+  printf(" -c                 : Write CDF stats to file.\n");
   printf(" -t                 : Calculate transport-layer delays\n");
   printf("                    : (if not set, application-layer delay is calculated)\n");
   printf(" -u<prefix>         : Write statistics to comma-separated files (for use with R)\n");
@@ -97,7 +99,7 @@ int main(int argc, char *argv[]){
   Dump *senderDump;
 
   while (1){
-    c = getopt(argc, argv, "s:r:p:q:f:m:n:o:g:d:u::o:aAtblyxh");
+    c = getopt(argc, argv, "s:r:p:q:f:m:n:o:g:d:u::o:aAtblyxch");
     if (c == -1)
 		break;
 
@@ -129,6 +131,9 @@ int main(int argc, char *argv[]){
     case 'g':
       recvfn = optarg;
       GlobOpts::withRecv = true;
+      break;
+    case 'c':
+      GlobOpts::withCDF = true;
       break;
     case 't':
       GlobOpts::transport = true;

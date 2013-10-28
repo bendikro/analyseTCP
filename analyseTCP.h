@@ -71,6 +71,7 @@ class GlobOpts {
   static int  debugLevel;
   static bool incTrace;
   static bool withRecv;
+  static bool withCDF;
   static bool relative_seq;
   static bool print_packets;
   static string sendNatIP;
