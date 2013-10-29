@@ -74,7 +74,7 @@ void Dump::analyseSender() {
 
 	pcap_t *fd = pcap_open_offline(filename.c_str(), errbuf);
 	if ( fd == NULL ) {
-		cerr << "pcap: Could not open file" << filename << endl;
+		cerr << "pcap: Could not open file: " << filename << endl;
 		exit_with_file_and_linenum(1, __FILE__, __LINE__);
 	}
 
@@ -376,15 +376,15 @@ void Dump::printPacketStats(struct connStats *cs, struct byteStats *bs, bool agg
 	}
 
 	if (cs->rdb_bytes_sent) {
-		printf("RDB stats:\n");
-		printf("RDB packets:       %10d (%f%% of data packets sent)\n", cs->bundleCount, ((double) cs->bundleCount) / cs->nrDataPacketsSent * 100);
-		printf("RDB bytes bundled: %10d (%f%% of total bytes sent)\n", cs->rdb_bytes_sent, ((double) cs->rdb_bytes_sent) / cs->totBytesSent * 100);
+		printf("\nRDB stats:\n");
+		printf("RDB packets                                   : %10d (%f%% of data packets sent)\n", cs->bundleCount, ((double) cs->bundleCount) / cs->nrDataPacketsSent * 100);
+		printf("RDB bytes bundled                             : %10d (%f%% of total bytes sent)\n", cs->rdb_bytes_sent, ((double) cs->rdb_bytes_sent) / cs->totBytesSent * 100);
 
 		if (cs->rdb_stats_available) {
-			printf("RDB packet hits:   %10d (%f%% of RDB packets sent)\n", cs->rdb_packet_hits, ((double) cs->rdb_packet_hits) / cs->bundleCount * 100);
-			printf("RDB packet misses: %10d (%f%% of RDB packets sent)\n", cs->rdb_packet_misses, ((double) cs->rdb_packet_misses) / cs->bundleCount * 100);
-			printf("RDB byte   misses: %10d (%f%% of RDB bytes)\n", cs->rdb_byte_misses, ((double) cs->rdb_byte_misses) / (cs->rdb_bytes_sent) * 100);
-			printf("RDB byte     hits: %10d (%f%% of RDB bytes)\n", cs->rdb_byte_hits, ((double) cs->rdb_byte_hits) / (cs->rdb_bytes_sent) * 100);
+			printf("RDB packet hits                               : %10d (%f%% of RDB packets sent)\n", cs->rdb_packet_hits, ((double) cs->rdb_packet_hits) / cs->bundleCount * 100);
+			printf("RDB packet misses                             : %10d (%f%% of RDB packets sent)\n", cs->rdb_packet_misses, ((double) cs->rdb_packet_misses) / cs->bundleCount * 100);
+			printf("RDB byte   hits                               : %10d (%f%% of RDB bytes)\n", cs->rdb_byte_hits, ((double) cs->rdb_byte_hits) / (cs->rdb_bytes_sent) * 100);
+			printf("RDB byte   misses                             : %10d (%f%% of RDB bytes)\n", cs->rdb_byte_misses, ((double) cs->rdb_byte_misses) / (cs->rdb_bytes_sent) * 100);
 		}
 	}
 	cout << "--------------------------------------------------" << endl;
@@ -617,7 +617,7 @@ void Dump::processRecvd(string recvFn) {
 
   pcap_t *fd = pcap_open_offline(recvFn.c_str(), errbuf);
   if ( fd == NULL ) {
-    cerr << "pcap: Could not open file" << recvFn << endl;
+	  cerr << "pcap: Could not open file: " << recvFn << endl;
 	  exit_with_file_and_linenum(1, __FILE__, __LINE__);
   }
 
@@ -676,6 +676,10 @@ void Dump::processRecvd(string recvFn) {
   /* Traverse ranges in senderDump and compare to
      corresponding bytes / ranges in receiver ranges
      place timestamp diffs in buckets */
+
+  if ((GlobOpts::print_packets || GlobOpts::rdbDetails)) {
+	  calculateRetransAndRDBStats();
+  }
 
   if (GlobOpts::withCDF) {
 	  makeCDF();
@@ -753,6 +757,13 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data) {
   recvBytesCount += sd.payloadSize;
 
   tmpConn->registerRecvd(&sd);
+}
+
+void Dump::calculateRetransAndRDBStats() {
+	map<string, Connection*>::iterator cIt, cItEnd;
+	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
+		cIt->second->rm->calculateRetransAndRDBStats();
+	}
 }
 
 void Dump::makeCDF(){

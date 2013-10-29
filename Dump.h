@@ -74,6 +74,7 @@ class Dump {
   ulong get_relative_ack_sequence_number(uint32_t ack, uint32_t firstSeq, ulong largestAckSeq, uint32_t largestAckSeqAbsolute);
   void analyseSender();
   void processRecvd(string fn);
+  void calculateRetransAndRDBStats();
   void printDumpStats();
   void printStatistics();
   void genRFiles();

@@ -821,6 +821,20 @@ void RangeManager::calculateRDBStats() {
 }
 
 
+void RangeManager::calculateRetransAndRDBStats() {
+	vector<recvData*>::iterator rit, rit_end;
+	/* Create map with references to the ranges */
+	rit = recvd.begin();
+	rit_end = recvd.end();
+
+	for (; rit != rit_end ; rit++) {
+		struct recvData *tmpRd = *rit;
+		insert_byte_range(tmpRd->startSeq, tmpRd->endSeq, false, false, false, 0);
+	}
+
+	calculateRDBStats();
+}
+
 /* Reads all packets from receiver dump into a vector */
 void RangeManager::registerRecvDiffs() {
 	vector<recvData*>::iterator rit, rit_end;
@@ -838,14 +852,7 @@ void RangeManager::registerRecvDiffs() {
 	for (; rit != rit_end ; rit++) {
 		struct recvData *tmpRd = *rit;
 		rsMap.insert(pair<ulong, struct recvData*>(tmpRd->startSeq, tmpRd));
-
-		if ((GlobOpts::print_packets || GlobOpts::rdbDetails) && (tmpRd->payload_len != 0 || 1)) {
-			insert_byte_range(tmpRd->startSeq, tmpRd->endSeq, false, false, false, 0);
-		}
 	}
-
-	if (GlobOpts::print_packets || GlobOpts::rdbDetails)
-		calculateRDBStats();
 
 	std::pair <std::multimap<ulong, struct recvData*>::iterator, std::multimap<ulong, struct recvData*>::iterator> ret;
 

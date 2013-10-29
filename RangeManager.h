@@ -123,6 +123,7 @@ public:
 	ulong relative_seq(ulong seq);
 	bool hasReceiveData();
 	void calculateRDBStats();
+	void calculateRetransAndRDBStats();
 };
 
 class ByteRange {
