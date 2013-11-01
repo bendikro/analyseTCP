@@ -17,7 +17,8 @@ SET (APP_SRCS analyseTCP.cc analyseTCP.h
     	      Dump.cc Dump.h
 	      Connection.h Connection.cc
 	      RangeManager.cc RangeManager.h
-	      Range.cc Range.h)
+	      Range.cc Range.h
+		  color_print.cc color_print.h)
 
 ADD_EXECUTABLE (analyseTCP ${APP_SRCS})
 

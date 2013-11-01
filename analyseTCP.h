@@ -51,12 +51,10 @@ using namespace std;
 #include <string>
 #include <fstream>
 #include <limits.h>
-#include "Range.h"
 #include <deque>
 
-
 /* Local includes */
-#include "Dump.h"
+
 
 
 /* Class to keep global options */
@@ -151,20 +149,31 @@ struct byteStats {
 	Percentiles *percentiles_lengths;
 };
 
+struct DataSeg {
+	ulong seq;
+	ulong endSeq;
+	uint payloadSize;   /* Payload size */
+	bool retrans;        /* is a retransmission */
+	bool is_rdb;         /* is a rdb packet */
+	bool is_rdb2;         /* is a rdb packet */
+	u_long rdb_end_seq;  /* is a rdb packet */
+	struct timeval tstamp;
+	u_char *data;
+};
+
 /* Struct used to forward relevant data about an anlysed packet */
 struct sendData {
-  u_int totalSize;     /* Total packet size */
-  u_int ipSize;        /* IP size */
-  u_int ipHdrLen;      /* Ip header length */
-  u_int tcpHdrLen;     /* TCP header length */
-  u_int payloadSize;   /* Payload size */
-  u_long seq;          /* Sequence number (relative) */
-  u_long endSeq;       /* Seq + payload size */
-  u_long seq_absolute; /* Absolute value of the sequence number */
-  timeval time;        /* pcap timestamp for packet */
-  bool retrans;        /* is a retransmission */
-  bool is_rdb;         /* is a rdb packet */
-  u_char *data;
+	uint totalSize;     /* Total packet size */
+	uint ipSize;        /* IP size */
+	uint ipHdrLen;      /* Ip header length */
+	uint tcpHdrLen;     /* TCP header length */
+	//u_int payloadSize;   /* Payload size */
+	//u_long seq;          /* Sequence number (relative) */
+	//u_long endSeq;       /* Seq + payload size */
+	u_long seq_absolute; /* Absolute value of the sequence number */
+	//timeval time;        /* pcap timestamp for packet */
+	//u_char *data;
+	struct DataSeg data;
 };
 
 
@@ -231,5 +240,5 @@ u_int totalSize;   /* Total packet size */
 
 string file_and_linenum();
 void exit_with_file_and_linenum(int exit_code, string file, int linenum);
-void warn_with_file_and_linenum(int exit_code, string file, int linenum);
+void warn_with_file_and_linenum(string file, int linenum);
 #endif /* ANALYSETCP_H */

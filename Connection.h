@@ -7,6 +7,7 @@ class Range;
 
 #include "RangeManager.h"
 #include <math.h>
+#include <netinet/in.h>
 
 /* Represents one connection (srcport/dstport pair) */
 class Connection {

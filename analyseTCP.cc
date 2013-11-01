@@ -25,6 +25,8 @@
 *************************************************************************************/
 
 #include "analyseTCP.h"
+#include "Dump.h"
+#include "Range.h"
 
 /* Initialize global options */
 bool GlobOpts::aggregate      = false;
@@ -43,13 +45,13 @@ string GlobOpts::sendNatIP    = "";
 string GlobOpts::recvNatIP    = "";
 bool GlobOpts::rdbDetails     = false;
 
-void warn_with_file_and_linenum(int exit_code, string file, int linenum) {
+void warn_with_file_and_linenum(string file, int linenum) {
 	cout << "Error at ";
 	cout << "File: " << file << " Line: " << linenum  << endl;
 }
 
 void exit_with_file_and_linenum(int exit_code, string file, int linenum) {
-	warn_with_file_and_linenum(exit_code, file, linenum);
+	warn_with_file_and_linenum(file, linenum);
 	exit(exit_code);
 }
 
@@ -205,12 +207,13 @@ int main(int argc, char *argv[]){
   senderDump = new Dump(src_ip, dst_ip, src_port, dst_port, sendfn);
   senderDump->analyseSender();
 
-  if(GlobOpts::genRFiles)
+  if (GlobOpts::genRFiles)
     senderDump->genRFiles();
 
-  if (GlobOpts::withRecv)
-    senderDump->processRecvd(recvfn);
-
+  if (GlobOpts::withRecv) {
+	  senderDump->processRecvd(recvfn);
+	  senderDump->write_loss_to_file();
+  }
   senderDump->printStatistics();
 
   senderDump->printDumpStats();

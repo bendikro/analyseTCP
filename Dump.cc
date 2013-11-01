@@ -1,4 +1,5 @@
 #include "Dump.h"
+#include "analyseTCP.h"
 
 int GlobStats::totNumBytes;
 map<ConnectionMapKey*, string, ConnectionKeyComparator> connKeys;
@@ -469,23 +470,25 @@ void Dump::processSent(const struct pcap_pkthdr* header, const u_char *data) {
 	sd.ipSize       = ipSize;
 	sd.ipHdrLen     = ipHdrLen;
 	sd.tcpHdrLen    = tcpHdrLen;
-	sd.payloadSize  = ipSize - (ipHdrLen + tcpHdrLen);
-	sd.time         = header->ts;
+	sd.data.payloadSize  = ipSize - (ipHdrLen + tcpHdrLen);
+	sd.data.tstamp         = header->ts;
 	sd.seq_absolute = ntohl(tcp->th_seq);
-	sd.seq = get_relative_sequence_number(sd.seq_absolute, tmpConn->firstSeq, tmpConn->lastLargestEndSeq, tmpConn->lastLargestSeqAbsolute);
-	sd.endSeq  = sd.seq + sd.payloadSize;
-	sd.retrans = false;
-	sd.is_rdb  = false;
+	sd.data.seq = get_relative_sequence_number(sd.seq_absolute, tmpConn->firstSeq, tmpConn->lastLargestEndSeq, tmpConn->lastLargestSeqAbsolute);
+	sd.data.endSeq  = sd.data.seq + sd.data.payloadSize;
+	sd.data.retrans = false;
+	sd.data.is_rdb  = false;
+	sd.data.is_rdb2  = false;
+	sd.data.rdb_end_seq = 0;
 
-	if (sd.payloadSize > 0) {
-		sd.endSeq -= 1;
+	if (sd.data.payloadSize > 0) {
+		sd.data.endSeq -= 1;
 	}
 
 	/* define/compute tcp payload (segment) offset */
-	sd.data = (u_char *) (data + SIZE_ETHERNET + ipHdrLen + tcpHdrLen);
+	sd.data.data = (u_char *) (data + SIZE_ETHERNET + ipHdrLen + tcpHdrLen);
 
 	sentPacketCount++;
-	sentBytesCount += sd.payloadSize;
+	sentBytesCount += sd.data.payloadSize;
 
 	tmpConn->registerSent(&sd);
 	tmpConn->registerRange(&sd);
@@ -722,7 +725,7 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data) {
 
   /* It should not be possible that the connection is not yet created */
   /* If lingering ack arrives for a closed connection, this may happen */
-  if (conns.count(connKey) == 0){
+  if (conns.count(connKey) == 0) {
 	  cerr << "Connection found in recveiver dump that does not exist in sender: " << connKey << ". Maybe NAT is in effect?  Exiting." << endl;
 	  exit_with_file_and_linenum(1, __FILE__, __LINE__);
   }
@@ -731,30 +734,30 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data) {
 
   /* Prepare packet data struct */
   struct sendData sd;
-  sd.totalSize   = header->len;
-  sd.ipSize      = ipSize;
-  sd.ipHdrLen    = ipHdrLen;
-  sd.tcpHdrLen   = tcpHdrLen;
-  sd.payloadSize = ipSize - (ipHdrLen + tcpHdrLen);
-  sd.seq_absolute = ntohl(tcp->th_seq);
-  sd.seq         = get_relative_sequence_number(sd.seq_absolute, tmpConn->firstSeq, tmpConn->lastLargestRecvEndSeq, tmpConn->lastLargestRecvSeqAbsolute);
-  sd.endSeq      = sd.seq + sd.payloadSize;
-  sd.time        = header->ts;
+  sd.totalSize        = header->len;
+  sd.ipSize           = ipSize;
+  sd.ipHdrLen         = ipHdrLen;
+  sd.tcpHdrLen        = tcpHdrLen;
+  sd.data.payloadSize = ipSize - (ipHdrLen + tcpHdrLen);
+  sd.seq_absolute     = ntohl(tcp->th_seq);
+  sd.data.seq         = get_relative_sequence_number(sd.seq_absolute, tmpConn->firstSeq, tmpConn->lastLargestRecvEndSeq, tmpConn->lastLargestRecvSeqAbsolute);
+  sd.data.endSeq      = sd.data.seq + sd.data.payloadSize;
+  sd.data.tstamp      = header->ts;
 
-  if (sd.seq == ULONG_MAX) {
+  if (sd.data.seq == ULONG_MAX) {
 	  if (tmpConn->lastLargestRecvEndSeq == 0) {
 		  printf("Found invalid sequence numbers in beginning of receive dump. Probably the sender tcpdump didn't start in time to save this packets\n");
 	  }
 	  else {
-		  printf("Found invalid sequence number in received data!: %lu -> %lu\n", sd.seq_absolute, sd.seq);
+		  printf("Found invalid sequence number in received data!: %lu -> %lu\n", sd.seq_absolute, sd.data.seq);
 	  }
 	  return;
   }
 
   /* define/compute tcp payload (segment) offset */
-  sd.data = (u_char *) (data + SIZE_ETHERNET + ipHdrLen + tcpHdrLen);
+  sd.data.data = (u_char *) (data + SIZE_ETHERNET + ipHdrLen + tcpHdrLen);
   recvPacketCount++;
-  recvBytesCount += sd.payloadSize;
+  recvBytesCount += sd.data.payloadSize;
 
   tmpConn->registerRecvd(&sd);
 }
@@ -766,7 +769,40 @@ void Dump::calculateRetransAndRDBStats() {
 	}
 }
 
-void Dump::makeCDF(){
+void Dump::write_loss_to_file() {
+	FILE *loss_file;
+	stringstream lossfn;
+	lossfn << GlobOpts::prefix << "loss" << ".dat";
+	loss_file = fopen(lossfn.str().c_str(), "w");
+
+	if (loss_file == NULL) {
+		printf("Failed to open loss file for writing '%s'\n", lossfn.str().c_str());
+		return;
+	}
+
+	uint32_t timeslice_count = 0;
+
+	map<string, Connection*>::iterator cIt, cItEnd;
+	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
+		timeslice_count = std::max(timeslice_count, cIt->second->rm->getDuration());
+	}
+
+	unsigned timeslice = 1;
+
+	timeslice_count /= timeslice;
+
+	for (unsigned i = 0; i < timeslice_count; i++) {
+		fprintf(loss_file, "%10u", i);
+	}
+	fprintf(loss_file, "\n");
+
+	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
+		cIt->second->rm->write_loss_over_time(timeslice, timeslice_count, loss_file);
+	}
+	fclose(loss_file);
+}
+
+void Dump::makeCDF() {
 	map<string, Connection*>::iterator cIt, cItEnd;
 	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
 		cIt->second->makeCDF();
@@ -859,9 +895,21 @@ void Dump::printDumpStats() {
   cout << "Sent Bytes Count      : " << sentBytesCount << endl;
   cout << "ACK Count             : " << ackCount << endl;
   if (GlobOpts::withRecv) {
+	  map<string, Connection*>::iterator cIt, cItEnd;
+	  long int ranges_count = 0;
+	  long int ranges_lost = 0;
+	  for (cIt = conns.begin(); cIt != conns.end(); cIt++){
+		  ranges_count += cIt->second->rm->getByteRangesCount();
+		  ranges_lost += cIt->second->rm->getByteRangesLost();
+	  }
+
     cout << "Received Bytes Count  : " << recvBytesCount << endl;
     cout << "Packets lost          : " << (sentPacketCount - recvPacketCount) << endl;
-    cout << "Packet  Loss          : " << ((float)(sentPacketCount - recvPacketCount) / sentPacketCount) * 100 <<  "\%" << endl;
+    cout << "Packet  Loss          : " << ((float) (sentPacketCount - recvPacketCount) / sentPacketCount) * 100 <<  "\%" << endl;
+
+    cout << "Ranges received       : " << (ranges_count) << endl;
+    cout << "Ranges lost           : " << (ranges_lost) << endl;
+    cout << "Ranges Loss           : " << ((float) (ranges_lost) / ranges_count) * 100 <<  "\%" << endl;
   }
 }
 

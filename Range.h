@@ -5,6 +5,8 @@
 #include "analyseTCP.h"
 #include "RangeManager.h"
 
+class RangeManager;
+
 /* Modified timersub macro that has defined behaviour
    also for negative differences */
 # define negtimersub(a, b, result)					\

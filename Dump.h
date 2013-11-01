@@ -8,7 +8,7 @@
 #include <memory>
 #include <limits>
 #include <arpa/inet.h>
-
+#include <iomanip>
 #include "Connection.h"
 
 /* Forward declarations */
@@ -78,6 +78,7 @@ class Dump {
   void printDumpStats();
   void printStatistics();
   void genRFiles();
+  void write_loss_to_file();
   void free_resources();
 };
 
