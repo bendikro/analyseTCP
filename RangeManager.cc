@@ -22,6 +22,7 @@ RangeManager::~RangeManager() {
 	for (; it != it_end; it++) {
 		delete it->second;
 	}
+
 	vector<DataSeg*>::iterator rit, rit_end;
 	rit = recvd.begin();
 	rit_end = recvd.end();
@@ -53,8 +54,10 @@ Range* RangeManager::insertSentRange(struct sendData *sd) {
 
 	startSeq = sd->data.seq;
 	endSeq = sd->data.endSeq;
-	tv = &(sd->data.tstamp);
+	tv = &(sd->data.tstamp_pcap);
 	range = NULL;
+
+	//printf("insertSentRange(%4d) (%u - %u)\n", sd->data.payloadSize, relative_seq(startSeq), relative_seq(endSeq));
 
 	if (GlobOpts::debugLevel == 6) {
 		printf("\ninsertSentRange - retrans: %d, is_rdb %d\n", sd->data.retrans, sd->data.is_rdb);
@@ -62,7 +65,7 @@ Range* RangeManager::insertSentRange(struct sendData *sd) {
 
 	// Ignore acks (including SYN/ack and FIN/ack)
 	if ((GlobOpts::print_packets || GlobOpts::rdbDetails) && startSeq != endSeq)
-		insert_byte_range(startSeq, endSeq, tv, true, &(sd->data), 0);
+		insert_byte_range(startSeq, endSeq, true, &(sd->data), 0);
 
 	ranges_size = ranges.size();
 	if (ranges_size <= 1 && sd->data.payloadSize == 0) { /* First or second packet in stream */
@@ -202,11 +205,19 @@ Range* RangeManager::insertSentRange(struct sendData *sd) {
 	return range;
 }
 
-/* Register all bytes with a coomon send time as a range */
+/* Register all bytes with a common send time as a range */
 void RangeManager::insertRecvRange(struct sendData *sd) {
 	static struct DataSeg *tmpSeq;
 	tmpSeq = new struct DataSeg();
-	memcpy(tmpSeq, &sd->data, sizeof(struct DataSeg));
+
+	tmpSeq->seq = sd->data.seq;
+	tmpSeq->endSeq = sd->data.endSeq;
+	tmpSeq->tstamp_pcap = (sd->data.tstamp_pcap);
+	tmpSeq->data = sd->data.data;
+	tmpSeq->payloadSize = sd->data.payloadSize;
+	tmpSeq->is_rdb = sd->data.is_rdb;
+	tmpSeq->retrans = sd->data.retrans;
+	tmpSeq->tstamp_tcp = sd->data.tstamp_tcp;
 
 	if (tmpSeq->payloadSize > 0)
 		tmpSeq->endSeq -= 1;
@@ -219,9 +230,6 @@ void RangeManager::insertRecvRange(struct sendData *sd) {
 	}
 	/* Insert all packets into data structure */
 	recvd.push_back(tmpSeq);
-
-	std::ostringstream key;
-	key << tmpSeq->seq << ":" << tmpSeq->endSeq;
 	return;
 }
 
@@ -232,7 +240,7 @@ void RangeManager::insertRecvRange(struct sendData *sd) {
 	tmpRecv = new struct recvData();
 	tmpRecv->startSeq = sd->data.seq;
 	tmpRecv->endSeq = sd->data.endSeq;
-	tmpRecv->tv = (sd->data.tstamp);
+	tmpRecv->tv = (sd->data.tstamp_pcap);
 	tmpRecv->data = sd->data.data;
 	tmpRecv->payload_len = sd->data.payloadSize;
 
@@ -435,23 +443,16 @@ void RangeManager::genStats(struct byteStats *bs) {
 		}
 
 		int retrans = it->second->getNumRetrans();
-
-		if (retrans > 0) {
-			if (retrans == 1) {
-				bs->retrans[0]++;
-			}
-			if (retrans == 2) {
-				bs->retrans[0]++;
-				bs->retrans[1]++;
-			}
-			if (retrans >= 3) {
-				bs->retrans[0]++;
-				bs->retrans[1]++;
-				bs->retrans[2]++;
-			}
-		}
 		if (retrans > bs->maxRetrans)
 			bs->maxRetrans = retrans;
+
+		retrans = std::min(MAX_STAT_RETRANS, retrans);
+
+		if (retrans > 0) {
+			for (int i = 0; i < retrans; i++) {
+				bs->retrans[i]++;
+			}
+		}
 	}
 
 	double temp;
@@ -602,7 +603,7 @@ void RangeManager::validateContent() {
 /*
   This is used to track the data in regards to retrans or rdb. This functionality is somewhat a duplicate of the Range tracking in ranges.
  */
-void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, timeval *tstamp, bool sent, struct DataSeg *data_seg, int level) {
+void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, struct DataSeg *data_seg, int level) {
 	int debug_print;
 	ByteRange *last_br = NULL;
 	multimap<ulong, ByteRange*>::iterator brIt, brIt_end;
@@ -616,18 +617,35 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, timeval *ts
 	//indent_print("insert seq: %lu, rel: %lu\n", start_seq, relative_seq(start_seq));
 
 	/*
-	if (relative_seq(start_seq) == 2564249192 || relative_seq(start_seq) == 2564247744) {
+
+	  // 1363862162
+	if (relative_seq(start_seq) >= 2670586023 && relative_seq(start_seq) <= 2670587023) {
+		debug_print = 1;
+	}
+
+	if (relative_seq(start_seq) >= 1363862162) {
+		debug_print = 1;
+	}
+
+	if (relative_seq(start_seq) >= 1363862162 && relative_seq(start_seq) <= 1363868162) {
 		debug_print = 1;
 	}
 
 	*/
 
+	if (relative_seq(start_seq) >= 961473761 && relative_seq(start_seq) <= 961474861) {
+		debug_print = 1;
+	}
+
+
 //	max_seq = 2670598023;
 
-	bool this_has_rdb_data = data_seg->is_rdb && data_seg->rdb_end_seq > start_seq;
+	bool this_is_rdb_data = data_seg->is_rdb && data_seg->rdb_end_seq > start_seq;
 
-	if (relative_seq(start_seq) > max_seq)
+	if (relative_seq(start_seq) > max_seq) {
+		printf("RETURN!\n");
 		return;
+	}
 
 	int i;
 	int indent = level * 3;
@@ -642,8 +660,8 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, timeval *ts
 	if (debug_print) {
 		if (!level)
 			printf("\n");
-		indent_print("insert_byte_range (%lu): (%lu - %lu), sent: %d, retrans: %d, is_rdb: %d, is_rdb2: %d\n", end_seq - start_seq +1,
-		       relative_seq(start_seq), relative_seq(end_seq), sent, data_seg->retrans, data_seg->is_rdb, data_seg->is_rdb2);
+		indent_print("insert_byte_range (%lu): (%lu - %lu), sent: %d, retrans: %d, is_rdb: %d\n", end_seq - start_seq +1,
+		       relative_seq(start_seq), relative_seq(end_seq), sent, data_seg->retrans, data_seg->is_rdb);
 	}
 
 	// An ack
@@ -674,10 +692,9 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, timeval *ts
 				last_br = new ByteRange(start_seq, end_seq);
 				last_br->sent_count += 1;
 				last_br->retrans += data_seg->retrans;
-				last_br->is_rdb += data_seg->is_rdb;
-				last_br->is_rdb2 += data_seg->is_rdb2;
-				last_br->tstamps.push_back(*tstamp);
-				//last_br->tstamp = *tstamp;
+				last_br->rdb_count += data_seg->is_rdb;
+				last_br->tstamps.push_back(data_seg->tstamp_tcp);
+				//last_br->tstamp_pcap = data_seg->tstamp_pcap;
 				brMap.insert(pair<ulong, ByteRange*>(start_seq, last_br));
 				return;
 			}
@@ -706,6 +723,8 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, timeval *ts
 		}
 
 		if (start_seq < lastSeq) {
+//			debug_print = 1;
+
 			if (debug_print) {
 				indent_print2("New Range is not newest!\n");
 			}
@@ -713,6 +732,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, timeval *ts
 			//indent_print("lower: %lu\n", lower);
 			lowIt = brMap.lower_bound(lower);
 
+			// Search for existing ranges for this data
 			for (; lowIt != highIt && lowIt != highIt;) {
 				//debug_print = 1;
 
@@ -723,11 +743,19 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, timeval *ts
 				//	       lowIt->second->endSeq >= start_seq);
 				//}
 
+				// Found existing range
+				// The existing range is bigger than the data to be registered, so we split the existing range
 				if (lowIt->second->startSeq <= start_seq && lowIt->second->endSeq >= start_seq) {
 					// Found existing range with matching data for: 4294747345 - 4294748792!
 					//                             Existing range : 4294745897 - 4294748792
 					//                                          New 4294745897 - 4294747345, 4294747346 - 4294748792
 
+					if (lowIt->second->startSeq == start_seq) {
+						printf("New Data is at the beginning of existing range!!\n");
+						printf("Existing Range: %lu - %lu\n", relative_seq(lowIt->second->startSeq), relative_seq(lowIt->second->endSeq));
+						printf("New data Range: %lu - %lu\n", relative_seq(start_seq), relative_seq(end_seq));
+					}
+					assert(lowIt->second->startSeq != start_seq && "New Data is at beginning of existing range!!\n");
 
 					// Splitting existing range
 					//ByteRange *new_br = new ByteRange(lowIt->second->startSeq, start_seq -1);
@@ -741,21 +769,41 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, timeval *ts
 						indent_print("Old Range      : %lu - %lu\n", relative_seq(cur_br->startSeq), relative_seq(cur_br->endSeq));
 					}
 
-					// Remove current Range
-					brMap.erase(lowIt++);
-
+					// Split the current range in two. The new range will be at the beginning of the old (existing range)
+					// The new data matches the existing data
+					//assert(0 && "HMMMM");
 					ByteRange *new_br = cur_br->split_start(cur_br->startSeq, start_seq -1);
-					cur_br->sent_count++;
-					cur_br->retrans += data_seg->retrans;
 
-//					if (data_seg->is_rdb)
-					cur_br->is_rdb += data_seg->is_rdb;
-					cur_br->is_rdb2 += data_seg->is_rdb2;
+					if (sent) {
+						cur_br->sent_count++;
+						cur_br->retrans += data_seg->retrans;
+						cur_br->rdb_count += data_seg->is_rdb;
+					}
+					else {
+						cur_br->increase_received(data_seg->tstamp_tcp);
+						//assert(0 && "TEST\n");
+						assert(cur_br->tstamp_received && "TEST\n");
+					}
+
+					//assert(sent && "Not sent but still sount_count is increased!!!\n");
+
+					//printf("RETRANS: %d\n", data_seg->retrans);
+					//printf("IS  RDB: %d\n", data_seg->is_rdb);
+
+					if (this_is_rdb_data) {
+						cur_br->rdb_tstamps.push_back(data_seg->tstamp_tcp);
+						assert(data_seg->retrans == 0 && "Should not be retrans!\n");
+					}
+					else
+						cur_br->tstamps.push_back(data_seg->tstamp_tcp);
 
 					if (debug_print) {
 						indent_print("New Range      : %lu - %lu\n", relative_seq(new_br->startSeq), relative_seq(new_br->endSeq));
 						indent_print("Old Range      : %lu - %lu\n", relative_seq(cur_br->startSeq), relative_seq(cur_br->endSeq));
 					}
+					// Remove current Range
+					brMap.erase(lowIt++);
+					// Add existing and new range with correct key
 					brMap.insert(pair<ulong, ByteRange*>(new_br->startSeq, new_br));
 					brMap.insert(pair<ulong, ByteRange*>(cur_br->startSeq, cur_br));
 
@@ -767,9 +815,8 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, timeval *ts
 							return;
 						}
 						else {
-							indent_print2("FAAAACK!\n");
+							assert(0 && "FACK!\n");
 						}
-
 					}
 					else {
 						//indent_print("Successfully added tricky range\n");
@@ -782,52 +829,75 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, timeval *ts
 		}
 
 		if (sent) {
-			// This Range has some RDB data and some new data, so make two Ranges
-			indent_print("data_seg->is_rdb: %d, data_seg->is_rdb2: %d\n", data_seg->is_rdb, data_seg->is_rdb2);
-			indent_print("data_seg->rdb_end_seq > start_seq: %lu > %lu: %d\n", data_seg->rdb_end_seq, start_seq, data_seg->rdb_end_seq > start_seq);
 
-			if (this_has_rdb_data) {
-				indent_print2("\n\n\nJAU!!!!!\n");
+			if (debug_print) {
+				indent_print("data_seg->is_rdb: %d\n", data_seg->is_rdb  );
+				indent_print("data_seg->rdb_end_seq > start_seq: %lu > %lu: %d\n", relative_seq(data_seg->rdb_end_seq), relative_seq(start_seq), data_seg->rdb_end_seq > start_seq);
+			}
+
+			// This Range has some RDB data and some new data, so make two Ranges
+			if (this_is_rdb_data) {
+				indent_print("this_is_rdb_data: %d\n", this_is_rdb_data);
+
 				ByteRange *new_br = new ByteRange(start_seq, data_seg->rdb_end_seq);
 				last_br = new ByteRange(data_seg->rdb_end_seq +1, new_end_seq);
 				last_br->sent_count = new_br->sent_count = 1;
-				last_br->tstamp = new_br->tstamp = *tstamp;
-				//last_br->tstamps.push_back(*tstamp);
+				last_br->tstamp_pcap = new_br->tstamp_pcap = data_seg->tstamp_pcap;
+				last_br->rdb_tstamps.push_back(data_seg->tstamp_tcp);
 
-				last_br->retrans += data_seg->retrans; // Shouldn't happen?
+				assert(data_seg->retrans && "Shouldn' be retrans?\n");
+
+				//last_br->retrans += data_seg->retrans; // Shouldn't happen?
 				brMap.insert(pair<ulong, ByteRange*>(new_br->startSeq, new_br));
 				brMap.insert(pair<ulong, ByteRange*>(last_br->startSeq, last_br));
 
 				indent_print("New RDB ByteRange (%lu) (%lu - %lu)\n", new_br->endSeq - new_br->startSeq + 1, relative_seq(new_br->startSeq), relative_seq(new_br->endSeq));
 				indent_print("New     ByteRange (%lu) (%lu - %lu)\n", last_br->endSeq - last_br->startSeq + 1, relative_seq(last_br->startSeq), relative_seq(last_br->endSeq));
-				exit(0);
+				assert(0 && "EXIT\n");
 			}
 			else {
-				indent_print2("YES!!!!!\n");
-				indent_print("New ByteRange (%lu) (%lu - %lu)\n", new_end_seq - start_seq + 1, relative_seq(start_seq), relative_seq(new_end_seq));
-				indent_print("RDB end seq: %lu\n", relative_seq(data_seg->rdb_end_seq));
+				if (debug_print) {
+					indent_print2("YES!!!!!\n");
+					indent_print("New ByteRange (%lu) (%lu - %lu)\n", new_end_seq - start_seq + 1, relative_seq(start_seq), relative_seq(new_end_seq));
+					indent_print("RDB end seq: %lu\n", relative_seq(data_seg->rdb_end_seq));
+				}
 				last_br = new ByteRange(start_seq, new_end_seq);
 				last_br->sent_count = 1;
 
-				if (data_seg->is_rdb)
-					last_br->rdb_tstamps.push_back(*tstamp);
-				else
-					last_br->tstamps.push_back(*tstamp);
+				if (debug_print) {
+					indent_print("this_is_rdb_data: %d\n", this_is_rdb_data);
+					indent_print("data_seg->is_rdb: %d\n", data_seg->is_rdb);
+				}
+
+				if (debug_print) {
+					indent_print("Adding tcp timestamp 5 to reg : %u\n", data_seg->tstamp_tcp);
+					if (data_seg->tstamp_tcp == 1968771524)
+						colored_printf(RED, "TSTAMP: %u\n", data_seg->tstamp_tcp);
+				}
+				last_br->tstamps.push_back(data_seg->tstamp_tcp);
+
 				//last_br->retrans += data_seg->retrans;
 
+				assert(data_seg->retrans == 0 && "Shouldn't be retrans!\n");
+				//assert(data_seg->is_rdb == 0 && "Shouldn't be RDB?!\n");
+				//printf("this_is_rdb_data: %d\n", this_is_rdb_data);
+
+				assert(this_is_rdb_data == 0 && "Shouldn't be RDB?!\n");
 
 				if ((new_end_seq - start_seq) > 100) {
-					indent_print("Inserting new big range: %lu\n", (new_end_seq - start_seq +1));
+					if (debug_print) {
+						indent_print("Inserting new big range: %lu\n", (new_end_seq - start_seq +1));
+					}
 					//exit(0);
 				}
 
 				//last_br->is_rdb += data_seg->is_rdb;
-				//last_br->is_rdb2 += data_seg->is_rdb2;
-				last_br->tstamp = *tstamp;
+				last_br->tstamp_pcap = data_seg->tstamp_pcap;
 				brMap.insert(pair<ulong, ByteRange*>(start_seq, last_br));
 			}
 		}
 		else {
+			assert(sent && "RECEIVED??\n");
 		}
 		if (debug_print) {
 			//indent_print("Exiting debug print!\n");
@@ -862,6 +932,11 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, timeval *ts
 					brIt->second->received_count++;
 					return;
 				}
+				else {
+					//indent_print("insert_byte_range (%lu): (%lu - %lu), sent: %d, retrans: %d, is_rdb: %d\n", end_seq - start_seq +1,
+					//			 relative_seq(start_seq), relative_seq(end_seq), sent, data_seg->retrans, data_seg->is_rdb);
+					//assert(0 && "Should come here??\n");
+				}
 			}
 
 			// Reaches multiple byte ranges
@@ -869,32 +944,51 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, timeval *ts
 				if (debug_print) {
 					indent_print("Overlaps multiple byte ranges: %lu - %lu\n", relative_seq(start_seq), relative_seq(end_seq));
 					indent_print("Increase count of %lu - %lu\n", relative_seq(brIt->second->startSeq), relative_seq(brIt->second->endSeq));
-					indent_print("Adding %lu - %lu\n", relative_seq(brIt->second->endSeq +1), relative_seq(end_seq));
 					indent_print("Setting is_rdb : %d\n", data_seg->is_rdb);
 					indent_print("Setting retrans: %d\n", data_seg->retrans);
 				}
 
-				if (sent)
+				if (sent) {
 					brIt->second->sent_count++;
-				else
-					brIt->second->received_count++;
-
+					if (this_is_rdb_data) {
+						brIt->second->rdb_tstamps.push_back(data_seg->tstamp_tcp);
+						//printf("data_seg->retrans: %d\n", data_seg->retrans);
+						if (debug_print) {
+							indent_print("Adding tcp timestamp 1 to rdb : %u\n", data_seg->tstamp_tcp);
+							if (data_seg->tstamp_tcp == 1968771524)
+								colored_printf(RED, "TSTAMP: %u\n", data_seg->tstamp_tcp);
+						}
+						assert(data_seg->retrans == 0 && "Should not be retrans!\n");
+					}
+					else {
+						brIt->second->tstamps.push_back(data_seg->tstamp_tcp);
+						if (debug_print) {
+							indent_print("Adding tcp timestamp 2 to reg : %u\n", data_seg->tstamp_tcp);
+							if (data_seg->tstamp_tcp == 1968771524)
+								colored_printf(RED, "TSTAMP: %u\n", data_seg->tstamp_tcp);
+						}
+					}
+				}
+				else {
+					brIt->second->increase_received(data_seg->tstamp_tcp);
+					assert(brIt->second->tstamp_received && "TEST\n");
+				}
 				if (!sent) {
-					colored_printf(data_seg->retrans ? RED : NO_COLOR, "REGISTER!!\n");
-					indent_print2("Register received\n");
-					indent_print("retrans %d -> %d\n", brIt->second->retrans, brIt->second->retrans + data_seg->retrans);
-					indent_print("is_rdb  %d -> %d\n", brIt->second->is_rdb, brIt->second->is_rdb + data_seg->is_rdb);
+					//colored_printf(data_seg->retrans ? RED : NO_COLOR, "REGISTER!!\n");
+					//indent_print2("Register received\n");
+					//indent_print("retrans %d -> %d\n", brIt->second->retrans, brIt->second->retrans + data_seg->retrans);
+					//indent_print("is_rdb  %d -> %d\n", brIt->second->is_rdb, brIt->second->is_rdb + data_seg->is_rdb);
 					//exit(0);
 				}
 				brIt->second->retrans += data_seg->retrans;
-				brIt->second->is_rdb += data_seg->is_rdb;
-				brIt->second->is_rdb2 += data_seg->is_rdb2;
+				brIt->second->rdb_count += data_seg->is_rdb;
 
-				insert_byte_range(brIt->second->endSeq +1, end_seq, tstamp, sent, data_seg, level +1);
+				// Recursive call to insert the remaining data
+				insert_byte_range(brIt->second->endSeq +1, end_seq, sent, data_seg, level +1);
 			}
 			// Reaches less than the range, split current range
 			else {
-				ByteRange *new_br = new ByteRange(end_seq +1, brIt->second->endSeq);
+				ByteRange *new_br = brIt->second->split_end(end_seq +1, brIt->second->endSeq);
 				if (debug_print) {
 					indent_print2("Reaches less, split existing Range\n");
 					indent_print("Existing range : %lu - %lu -> %lu - %lu\n", relative_seq(brIt->second->startSeq), relative_seq(brIt->second->endSeq),
@@ -902,28 +996,24 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, timeval *ts
 					indent_print("New range      : %lu - %lu\n", relative_seq(new_br->startSeq), relative_seq(new_br->endSeq));
 				}
 
-				new_br->sent_count = brIt->second->sent_count;
-				new_br->tstamp = brIt->second->tstamp;
-				brIt->second->endSeq = end_seq;
-
-
 				if (sent) {
 					brIt->second->sent_count++;
 					brIt->second->retrans += data_seg->retrans;
-					brIt->second->is_rdb += data_seg->is_rdb;
-					brIt->second->is_rdb2 += data_seg->is_rdb2;
+					brIt->second->rdb_count += data_seg->is_rdb;
 
-					if (this_has_rdb_data)
-						last_br->rdb_tstamps.push_back(*tstamp);
-					else
-						last_br->tstamps.push_back(*tstamp);
-
+					if (this_is_rdb_data) {
+						brIt->second->rdb_tstamps.push_back(data_seg->tstamp_tcp);
+						assert(data_seg->retrans != 0 && "Should not be retrans!\n");
+					}
+					else {
+						brIt->second->tstamps.push_back(data_seg->tstamp_tcp);
+					}
 				}
 				else {
-					brIt->second->received_count++;
+					//assert(0 && "RECEIVED! exit\n");
 					brIt->second->split_after_sent = true;
-
-//					if (tstamp_received)
+					brIt->second->increase_received(data_seg->tstamp_tcp);
+					assert(brIt->second->tstamp_received && "TEST\n");
 				}
 				brMap.insert(pair<ulong, ByteRange*>(new_br->startSeq, new_br));
 			}
@@ -936,11 +1026,30 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, timeval *ts
 			if (sent) {
 				brIt->second->sent_count++;
 				brIt->second->retrans += data_seg->retrans;
-				brIt->second->is_rdb += data_seg->is_rdb;
-				brIt->second->is_rdb2 += data_seg->is_rdb2;
+				brIt->second->rdb_count += data_seg->is_rdb;
+
+				if (this_is_rdb_data) {
+					brIt->second->rdb_tstamps.push_back(data_seg->tstamp_tcp);
+					assert(data_seg->retrans == 0 && "Should not be retrans!\n");
+
+					if (debug_print) {
+						indent_print("Adding tcp timestamp 3 to rdb : %u\n", data_seg->tstamp_tcp);
+					}
+				}
+				else {
+					brIt->second->tstamps.push_back(data_seg->tstamp_tcp);
+					if (debug_print) {
+						indent_print("Adding tcp timestamp 4 to reg : %u\n", data_seg->tstamp_tcp);
+					}
+				}
 			}
 			else {
-				brIt->second->received_count++;
+				brIt->second->increase_received(data_seg->tstamp_tcp);
+				if (debug_print) {
+					printf("Setting received timestamp: %u\n", brIt->second->tstamp_received);
+					printf("tstamps: %lu, rdb-stamps: %lu", brIt->second->tstamps.size(), brIt->second->rdb_tstamps.size());
+				}
+				assert(brIt->second->tstamp_received && "TEST\n");
 			}
 		}
 	}
@@ -962,12 +1071,14 @@ void RangeManager::write_loss_over_time(unsigned slice_interval, unsigned timesl
 	t_slice.tv_sec = slice_interval;
 	t_slice.tv_usec = 0;
 
-	timeradd(&(brIt->second->tstamp), &t_slice, &next);
+	if (brIt != brIt_end)
+		timeradd(&(brIt->second->tstamp_pcap), &t_slice, &next);
+
 	int retrans_count = 0;
 
 	for (; brIt != brIt_end; brIt++) {
 
-		if (timercmp(&(brIt->second->tstamp), &next, <)) {
+		if (timercmp(&(brIt->second->tstamp_pcap), &next, <)) {
 			fprintf(out_stream, "%10d", retrans_count);
 			retrans_count = 0;
 			memcpy(&next_tmp, &next, sizeof(struct timeval));
@@ -1021,19 +1132,16 @@ void RangeManager::calculateRDBStats() {
 	ByteRange *prev = NULL;
 	int index = 0;
 	int lost_tmp = 0;
-	int sent_count = 0;
-	int recv_count = 0;
-	int bytes_lost = 0;
-	int rdb = 0;
 	multimap<ulong, ByteRange*>::iterator brIt, brIt_end;
-	brIt = brMap.begin();
-	brIt_end = brMap.end();
 	rdb_stats_available = true;
 
 	if (GlobOpts::print_packets) {
 		cout << endl << "Packet details for conn: " << conn->getConnKey() << endl;
 	}
+	int fails = 0;
 
+	brIt = brMap.begin();
+	brIt_end = brMap.end();
 	for (; brIt != brIt_end; brIt++) {
 		if (prev) {
 			if (prev->endSeq +1 != brIt->second->startSeq && prev->startSeq != prev->endSeq) {
@@ -1041,58 +1149,45 @@ void RangeManager::calculateRDBStats() {
 			}
 		}
 		prev = brIt->second;
-
 		index++;
 
-		sent_count += brIt->second->sent_count;
-		recv_count += brIt->second->received_count;
-
-		// Data lost
-		if (brIt->second->sent_count != brIt->second->received_count) {
-			bytes_lost += (brIt->second->sent_count - brIt->second->received_count) * brIt->second->byte_count;
+		bool ret = brIt->second->match_received_type();
+		if (ret == false) {
+			fails++;
+			//printf("Failed to find timestamp for (%lu) (%lu - %lu) ", brIt->second->endSeq - brIt->second->startSeq + 1, relative_seq(brIt->second->startSeq), relative_seq(brIt->second->endSeq));
+			//brIt->second->match_received_type(true);
+			//printf("Received timestamp: %u\n", brIt->second->tstamp_received);
 		}
 
-		int miss = 0;
-		int hit = 0;
-		int recv_tmp = 0;
-		int send_tmp = 0;
-
-		// Substract the 1 which is the normal transfer of data
-		recv_tmp = brIt->second->received_count -1;
-		send_tmp = brIt->second->sent_count -1;
-
-		// Retransfers were made
-		if (brIt->second->retrans) {
-			recv_tmp -= brIt->second->retrans;
-			send_tmp -= brIt->second->retrans;
+		int rdb_miss;
+		int rdb_hit = 0;
+		int rdb_count = brIt->second->rdb_count;
+		if (rdb_count && brIt->second->recv_type == RDB) {
+			rdb_count -= 1; // Remove the successful rdb transfer
+			rdb_hit += brIt->second->byte_count;
+			rdb_byte_hits += brIt->second->byte_count;
 		}
 
-		rdb += send_tmp * brIt->second->byte_count;
-
-		// Bytes were received more than once, RDB...
-		if (recv_tmp > 0) {
-			miss = recv_tmp * brIt->second->byte_count;
-			rdb_byte_miss += miss;
-		}
-
-		if (recv_tmp < 0) {
-			//printf("recv_tmp: %d\n", recv_tmp);
-			//printf("send_tmp: %d\n", send_tmp);
-			//printf("send_tmp - recv_tmp: %d\n", send_tmp - recv_tmp);
-			recv_tmp = 0;
-		}
-
-		if ((send_tmp - recv_tmp) > 0) {
-			hit = (send_tmp - recv_tmp) * brIt->second->byte_count;
-			rdb_byte_hits += hit;
+		if (brIt->second->recv_type == RDB) {
 			rdb_packet_hits++;
 		}
 
-		if (GlobOpts::print_packets) {
+		rdb_miss = rdb_count * brIt->second->byte_count;
+		rdb_byte_miss += rdb_miss;
 
-			printf("Byte range (%4lu): %lu - %lu: sent: %d, received: %d, retrans: %d, is_rdb: %d, is_rdb2: %d, rdb-miss: %-3d rdb-hit: %-3d", brIt->second->endSeq - brIt->second->startSeq +1,
+		if (GlobOpts::print_packets) {
+			string type;
+			switch (brIt->second->recv_type) {
+			case DATA: type = "DTA"; break;
+			case RDB: type = "RDB"; break;
+			case RETR: type = "RTR"; break;
+			case DEF: type = "DEF"; break;
+			default: printf("INVALID TYPE!\n");
+			}
+
+			printf("Byte range (%4lu): %lu - %lu: sent: %d, received: %d, retrans: %d, rdb_count: %d, recv_t: %s, rdb-miss: %-3d rdb-hit: %-3d", brIt->second->endSeq - brIt->second->startSeq +1,
 			       relative_seq(brIt->second->startSeq), relative_seq(brIt->second->endSeq), brIt->second->sent_count, brIt->second->received_count,
-			       brIt->second->retrans, brIt->second->is_rdb, brIt->second->is_rdb2, miss, hit);
+			       brIt->second->retrans, brIt->second->rdb_count, type.c_str(), rdb_miss, rdb_hit);
 		}
 
 		if (brIt->second->sent_count != brIt->second->received_count) {
@@ -1103,13 +1198,9 @@ void RangeManager::calculateRDBStats() {
 		}
 
 		if (GlobOpts::print_packets) {
-			if (!brIt->second->retrans && !brIt->second->is_rdb && (miss || hit)) {
+			if (!brIt->second->retrans && !brIt->second->rdb_count && (rdb_miss || rdb_hit)) {
 				printf(" FAIL (RDB hit/miss calculalation has failed)!");
 			}
-
-			//if (brIt->second->sent_count != (brIt->second->received_count + brIt->second->retrans)) {
-			//	printf(" SENT RECIVED RETRANS COUNT MISMATCH!");
-			//}
 		}
 
 		if (brIt->second->sent_count > 1)
@@ -1123,6 +1214,8 @@ void RangeManager::calculateRDBStats() {
 			printf("\n");
 		}
 	}
+	if (fails)
+		printf("Failed to find timestamp for %d out of %ld packets.\n", fails, brMap.size());
 }
 
 
@@ -1134,7 +1227,7 @@ void RangeManager::calculateRetransAndRDBStats() {
 
 	for (; rit != rit_end ; rit++) {
 		struct DataSeg *tmpRd = *rit;
-		insert_byte_range(tmpRd->seq, tmpRd->endSeq, 0, false, tmpRd, 0);
+		insert_byte_range(tmpRd->seq, tmpRd->endSeq, false, tmpRd, 0);
 	}
 	calculateRDBStats();
 }
@@ -1229,7 +1322,7 @@ void RangeManager::registerRecvDiffs() {
 			if (GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5) {
 				cerr << "\nProcessing received packet with seq: " <<
 					relative_seq(tmpRd->seq) << " - " << relative_seq(tmpRd->endSeq) << " | Recvd:"
-					 << tmpRd->tstamp.tv_sec << "." << tmpRd->tstamp.tv_usec << endl;
+					 << tmpRd->tstamp_pcap.tv_sec << "." << tmpRd->tstamp_pcap.tv_usec << endl;
 				if (GlobOpts::debugLevel == 5) {
 					cerr << "absLow: " << relative_seq(absLow) << " - absHigh: " << relative_seq(absHigh) << endl;
 				}
@@ -1252,15 +1345,15 @@ void RangeManager::registerRecvDiffs() {
 					printf("Encountered matching packet after the current limit (%d)!!!\n", packet_match_limit);
 				}
 
-				if (timercmp(&(tmpRd->tstamp), &match, <))
-					match = tmpRd->tstamp;
+				if (timercmp(&(tmpRd->tstamp_pcap), &match, <))
+					match = tmpRd->tstamp_pcap;
 				matched = packet_index;
 				//it->second->received++;
 
 				if (GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5) {
 					cerr << "Found overlapping DataSeg:     seq: " <<
 						relative_seq(tmpRd->seq) << " - " << relative_seq(tmpRd->endSeq) << " - Recvd:"
-						 << tmpRd->tstamp.tv_sec << "." << tmpRd->tstamp.tv_usec << endl;
+						 << tmpRd->tstamp_pcap.tv_sec << "." << tmpRd->tstamp_pcap.tv_usec << endl;
 				}
 
 				if (tmpRd->seq == sndStartSeq && tmpRd->endSeq == sndEndSeq) {

@@ -102,21 +102,21 @@ class GlobStats{
 /* Struct used to pass aggregated data between connections */
 struct connStats {
 	int duration;
-	int totBytesSent;
+	uint64_t totBytesSent;
 	int totRetransBytesSent;
 	int totPacketSize;
 	int nrDataPacketsSent;
 	int nrPacketsSent;
 	int nrRetrans;
 	int bundleCount;
-	int totUniqueBytes;
-	int redundantBytes;
+	uint64_t totUniqueBytes;
+	uint64_t redundantBytes;
 	int rdb_stats_available;
 	int rdb_packet_hits;
 	int rdb_packet_misses;
-	int rdb_bytes_sent;
-	int rdb_byte_misses;
-	int rdb_byte_hits;
+	uint64_t rdb_bytes_sent;
+	uint64_t rdb_byte_misses;
+	uint64_t rdb_byte_hits;
 };
 
 struct Percentiles {
@@ -130,6 +130,8 @@ struct Percentiles {
 	}
 };
 
+#define MAX_STAT_RETRANS 4
+
 /* Struct used to keep track of bytewise latency stats */
 struct byteStats {
 	int maxLat;     /* Maximum Latency */
@@ -139,7 +141,7 @@ struct byteStats {
 	double stdevLat;
 	int nrRanges;   /* Number of ranges in conn */
 	long long int avgLat;   /* Average latency */
-	int retrans[3]; /* Count 1., 2. and 3. retrans */
+	int retrans[MAX_STAT_RETRANS]; /* Count 1., 2. and 3. retrans */
 	int maxRetrans; /* MAximum number of retransmissions for a range */
 	long long int maxLength;
 	long long int minLength;
@@ -152,12 +154,12 @@ struct byteStats {
 struct DataSeg {
 	ulong seq;
 	ulong endSeq;
-	uint payloadSize;   /* Payload size */
+	uint payloadSize;    /* Payload size */
 	bool retrans;        /* is a retransmission */
 	bool is_rdb;         /* is a rdb packet */
-	bool is_rdb2;         /* is a rdb packet */
-	u_long rdb_end_seq;  /* is a rdb packet */
-	struct timeval tstamp;
+	ulong rdb_end_seq;   /* end seq of rdb data */
+	struct timeval tstamp_pcap;
+	uint32_t tstamp_tcp;
 	u_char *data;
 };
 
@@ -167,12 +169,8 @@ struct sendData {
 	uint ipSize;        /* IP size */
 	uint ipHdrLen;      /* Ip header length */
 	uint tcpHdrLen;     /* TCP header length */
-	//u_int payloadSize;   /* Payload size */
-	//u_long seq;          /* Sequence number (relative) */
-	//u_long endSeq;       /* Seq + payload size */
+	uint tcpOptionLen;  /* TCP header option length */
 	u_long seq_absolute; /* Absolute value of the sequence number */
-	//timeval time;        /* pcap timestamp for packet */
-	//u_char *data;
 	struct DataSeg data;
 };
 

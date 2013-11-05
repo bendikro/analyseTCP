@@ -86,30 +86,22 @@ void Connection::registerSent(struct sendData* sd) {
 		  totNewDataSent += (sd->data.endSeq - lastLargestEndSeq);
 		  sd->data.is_rdb = true;
 		  sd->data.rdb_end_seq = lastLargestEndSeq;
-		  printf("Set rdb_end_seq1: %lu\n", rm->relative_seq(sd->data.rdb_end_seq));
-		  //printf("Set rdb 1\n");
-
 	  } else if ((sd->data.seq > curSeq) && (sd->data.seq < lastLargestEndSeq) && (sd->data.endSeq > lastLargestEndSeq)) {
 		  totRDBBytesSent += (lastLargestEndSeq - sd->data.seq +1);
 		  totNewDataSent += (sd->data.endSeq - lastLargestEndSeq);
 		  bundleCount++;
 		  sd->data.is_rdb = true;
 		  sd->data.rdb_end_seq = lastLargestEndSeq;
-		  printf("Set rdb_end_seq2: %lu\n", rm->relative_seq(sd->data.rdb_end_seq));
 	  } else if ((sd->data.seq < lastLargestEndSeq) && (sd->data.endSeq > lastLargestEndSeq)) {
-		  printf("\n\nRDB!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n");
 		  totRDBBytesSent += (lastLargestEndSeq - sd->data.seq +1);
 		  totNewDataSent += (sd->data.endSeq - lastLargestEndSeq);
 		  bundleCount++;
-		  sd->data.is_rdb2 = true;
 		  sd->data.is_rdb = true;
 		  sd->data.rdb_end_seq = lastLargestEndSeq;
-		  printf("Set rdb_end_seq3: %lu\n", rm->relative_seq(sd->data.rdb_end_seq));
 	  }
 	  else {
 		  // Should only happen on the first call when curSeq and lastLargestEndSeq are 0
 		  totNewDataSent += sd->data.payloadSize;
-		  printf("Set NO RDB end_seq: %lu\n", sd->data.rdb_end_seq);
 	  }
 	  lastLargestEndSeq = sd->data.endSeq;
 	  lastLargestSeqAbsolute = sd->seq_absolute + sd->data.payloadSize;
@@ -144,9 +136,9 @@ Range* Connection::registerRange(struct sendData* sd) {
 	if (GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5) {
 		static timeval offset;
 		if (firstSendTime.tv_sec == 0 && firstSendTime.tv_usec == 0) {
-			firstSendTime = sd->data.tstamp;
+			firstSendTime = sd->data.tstamp_pcap;
 		}
-		timersub(&(sd->data.tstamp), &firstSendTime, &offset);
+		timersub(&(sd->data.tstamp_pcap), &firstSendTime, &offset);
 		cerr << "\nRegistering new outgoing. Conn: " << getConnKey() << " Seq: " << rm->relative_seq(sd->data.seq) << " - " << rm->relative_seq(sd->data.endSeq) <<  " Payload: " << sd->data.payloadSize << endl;
 		cerr << "Time offset: Secs: " << offset.tv_sec << "." << offset.tv_usec << endl;
 	}
@@ -198,7 +190,7 @@ void Connection::addPacketStats(struct connStats* cs) {
 	cs->totUniqueBytes += getNumUniqueBytes();
 	cs->redundantBytes += rm->getRedundantBytes();
 	// RDB stats
-	cs->rdb_bytes_sent = totRDBBytesSent;
+	cs->rdb_bytes_sent += totRDBBytesSent;
 
 	if (rm->rdb_stats_available) {
 		cs->rdb_stats_available = true;

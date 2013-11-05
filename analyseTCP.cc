@@ -89,6 +89,63 @@ void usage (char* argv){
   exit(0);
 }
 
+void test(Dump *d) {
+	uint32_t first_seq = 1000;
+	uint32_t seq = 2000;
+	ulong lastLargestEndSeq = 1999;
+	ulong largestSeqAbsolute = 999;
+
+	// TEST 1
+	printf("\n\nTEST1:\n");
+	printf("SEQ 1: %lu\n", d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute));
+
+	// TEST 2
+	first_seq = 4294967000;
+	seq = UINT_MAX -50;
+	lastLargestEndSeq = UINT_MAX +100;
+	largestSeqAbsolute = first_seq + lastLargestEndSeq;
+	printf("\n\nTEST2:\n");
+	//printf("seq: %u\n", seq);
+	printf("first_seq: %u\n", first_seq);
+	printf("SEQ 2: %lu\n", d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute));
+
+	// TEST 3
+	first_seq = 4294967000;
+	seq = UINT_MAX + 20;
+	lastLargestEndSeq = 10;
+	largestSeqAbsolute = first_seq + lastLargestEndSeq;
+	printf("\n\nTEST3:\n");
+	printf("seq: %u\n", seq);
+	printf("first_seq: %u\n", first_seq);
+	printf("SEQ 3: %lu\n", d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute));
+
+	// TEST 4
+	first_seq = 4294967000;
+	seq = UINT_MAX + 1;
+	lastLargestEndSeq = 294;
+	largestSeqAbsolute = first_seq + lastLargestEndSeq;
+	printf("\n\nTEST4:\n");
+	printf("seq: %u\n", seq);
+	printf("first_seq: %u\n", first_seq);
+	printf("largestSeqAbsolute: %lu\n", largestSeqAbsolute);
+	printf("SEQ 4: %lu\n", d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute));
+
+	int i;
+	for (i = 0; i < 10; i++) {
+		first_seq = 4294967000;
+		seq = UINT_MAX + i -1;
+		lastLargestEndSeq = 293;
+		largestSeqAbsolute = first_seq + lastLargestEndSeq;
+		printf("\nTEST %d:\n", i + 5);
+		printf("seq: %u\n", seq);
+		printf("first_seq: %u\n", first_seq);
+		printf("largestSeqAbsolute: %lu\n", largestSeqAbsolute);
+		printf("SEQ %d: %lu\n", i + 5, d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute));
+	}
+
+	exit(1);
+}
+
 int main(int argc, char *argv[]){
   char *src_ip = (char*)"";
   char *dst_ip = (char*)"";
@@ -205,6 +262,7 @@ int main(int argc, char *argv[]){
 
   /* Create Dump - object */
   senderDump = new Dump(src_ip, dst_ip, src_port, dst_port, sendfn);
+  //test(senderDump);
   senderDump->analyseSender();
 
   if (GlobOpts::genRFiles)

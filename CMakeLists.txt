@@ -18,7 +18,8 @@ SET (APP_SRCS analyseTCP.cc analyseTCP.h
 	      Connection.h Connection.cc
 	      RangeManager.cc RangeManager.h
 	      Range.cc Range.h
-		  color_print.cc color_print.h)
+		  color_print.cc color_print.h
+		  time_util.cc time_util.h)
 
 ADD_EXECUTABLE (analyseTCP ${APP_SRCS})
 
@@ -48,7 +49,8 @@ SET (INCLUDE_FILES arpa/inet.h netinet/in.h sys/socket.h getopt.h)
 TARGET_LINK_LIBRARIES (analyseTCP pcap)
 
 # Set compiler flags for all configurations
-SET (CMAKE_CXX_FLAGS "-O2 -lm -Wall -g3") # -Werror?
+#SET (CMAKE_CXX_FLAGS "-O2 -lm -Wall -g3") # -Werror?
+SET (CMAKE_CXX_FLAGS "-lm -Wall -g3") # -Werror?
 
 # Add NDEBUG only for release version
 # To activate: cmake -DCMAKE_BUILD_TYPE=Release .

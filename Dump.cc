@@ -229,9 +229,14 @@ void Dump::printStatistics() {
 	bsAggregatedMin.minLat = bsAggregatedMin.minLength = bsAggregatedMin.avgLat = bsAggregatedMin.maxLat = (numeric_limits<int>::max)();
 	bsAggregatedMax.maxLength = (numeric_limits<int>::max)();
 
+	csAggregated.rdb_byte_hits = 0;
+	csAggregated.rdb_byte_misses = 0;
+	csAggregated.rdb_bytes_sent = 0;
+
 	// Print stats for each connection or aggregated
 	map<string, Connection*>::iterator cIt, cItEnd;
 	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
+		memset(&cs, 0, sizeof(struct connStats));
 		cIt->second->addPacketStats(&cs);
 		cIt->second->addPacketStats(&csAggregated);
 
@@ -243,7 +248,6 @@ void Dump::printStatistics() {
 			printf("\nSTATS FOR CONN: %s:%u -> %s:%u\n", cIt->second->getSrcIp().c_str(), cIt->second->srcPort,
 			       cIt->second->getDstIp().c_str(), cIt->second->dstPort);
 			printPacketStats(&cs, &bs, false);
-			memset(&cs, 0, sizeof(struct connStats));
 		}
 
 		if (!(GlobOpts::aggOnly)) {
@@ -319,29 +323,29 @@ void Dump::printPacketStats(struct connStats *cs, struct byteStats *bs, bool agg
 	       "Total pure acks (no payload) (Incl. SYN/FIN)  : %10d\n"	\
 	       "Number of retransmissions                     : %10d\n"	\
 	       "Number of packets with bundled segments       : %10d\n"	\
-	       "Total bytes sent (payload)                    : %10d\n"	\
-	       "Number of unique bytes                        : %10d\n"	\
+	       "Total bytes sent (payload)                    : %10lu\n"	\
+	       "Number of unique bytes                        : %10lu\n"	\
 	       "Number of retransmitted bytes                 : %10d\n"	\
 	       "Estimated loss rate based on retransmissions  : %10.2f %%\n",
-	       cs->duration, ((float) cs->duration / 60 / 60),
+	       cs->duration, ((double) cs->duration / 60 / 60),
 	       cs->nrPacketsSent, cs->nrDataPacketsSent, cs->nrPacketsSent - cs->nrDataPacketsSent, cs->nrRetrans, cs->bundleCount, cs->totBytesSent,
 	       cs->totUniqueBytes, cs->totRetransBytesSent,
-	       (((float) cs->nrRetrans / cs->nrPacketsSent) * 100));
+	       (((double) cs->nrRetrans / cs->nrPacketsSent) * 100));
 
 	if (GlobOpts::incTrace) {
-		printf("Number of redundant bytes                     : %10d\n"	\
+		printf("Number of redundant bytes                     : %10lu\n"	\
 		       "Redundancy                                    : %10.2f %%\n",
-		       cs->redundantBytes, ((float) cs->redundantBytes / cs->totUniqueBytes) * 100);
+		       cs->redundantBytes, ((double) cs->redundantBytes / cs->totUniqueBytes) * 100);
 	} else {
 		printf("Redundancy                                    : %10.2f %%\n",
-		       ((float) (cs->totBytesSent - cs->totUniqueBytes) / cs->totBytesSent) * 100);
+		       ((double) (cs->totBytesSent - cs->totUniqueBytes) / cs->totBytesSent) * 100);
 	}
 
 	printf("\nPayload size stats:\n");
 
 	if (aggregated) {
 		printf("  Average of all packets in all connections   : %10d\n",
-		       (int) floorf((float) (cs->totBytesSent / cs->nrDataPacketsSent)));
+		       (int) floorf((double) (cs->totBytesSent / cs->nrDataPacketsSent)));
 		printf("  Average of the average for each connection  : %10lld\n", bs->avgLength);
 	}
 	else {
@@ -378,14 +382,14 @@ void Dump::printPacketStats(struct connStats *cs, struct byteStats *bs, bool agg
 
 	if (cs->rdb_bytes_sent) {
 		printf("\nRDB stats:\n");
-		printf("RDB packets                                   : %10d (%f%% of data packets sent)\n", cs->bundleCount, ((double) cs->bundleCount) / cs->nrDataPacketsSent * 100);
-		printf("RDB bytes bundled                             : %10d (%f%% of total bytes sent)\n", cs->rdb_bytes_sent, ((double) cs->rdb_bytes_sent) / cs->totBytesSent * 100);
+		printf("  RDB packets                                 : %10d (%.2f%% of data packets sent)\n", cs->bundleCount, ((double) cs->bundleCount) / cs->nrDataPacketsSent * 100);
+		printf("  RDB bytes bundled                           : %10lu (%.2f%% of total bytes sent)\n", cs->rdb_bytes_sent, ((double) cs->rdb_bytes_sent) / cs->totBytesSent * 100);
 
 		if (cs->rdb_stats_available) {
-			printf("RDB packet hits                               : %10d (%f%% of RDB packets sent)\n", cs->rdb_packet_hits, ((double) cs->rdb_packet_hits) / cs->bundleCount * 100);
-			printf("RDB packet misses                             : %10d (%f%% of RDB packets sent)\n", cs->rdb_packet_misses, ((double) cs->rdb_packet_misses) / cs->bundleCount * 100);
-			printf("RDB byte   hits                               : %10d (%f%% of RDB bytes)\n", cs->rdb_byte_hits, ((double) cs->rdb_byte_hits) / (cs->rdb_bytes_sent) * 100);
-			printf("RDB byte   misses                             : %10d (%f%% of RDB bytes)\n", cs->rdb_byte_misses, ((double) cs->rdb_byte_misses) / (cs->rdb_bytes_sent) * 100);
+			printf("  RDB packet hits                             : %10d (%.2f%% of RDB packets sent)\n", cs->rdb_packet_hits, ((double) cs->rdb_packet_hits) / cs->bundleCount * 100);
+			printf("  RDB packet misses                           : %10d (%.2f%% of RDB packets sent)\n", cs->rdb_packet_misses, ((double) cs->rdb_packet_misses) / cs->bundleCount * 100);
+			printf("  RDB byte   hits                             : %10lu (%.2f%% of RDB bytes)\n", cs->rdb_byte_hits, ((double) cs->rdb_byte_hits / cs->rdb_bytes_sent) * 100);
+			printf("  RDB byte   misses                           : %10lu (%.2f%% of RDB bytes)\n", cs->rdb_byte_misses, ((double) cs->rdb_byte_misses / cs->rdb_bytes_sent) * 100);
 		}
 	}
 	cout << "--------------------------------------------------" << endl;
@@ -425,12 +429,40 @@ void Dump::printBytesLatencyStats(struct connStats *cs, struct byteStats* bs, bo
 		cout << "  Ninety ninth percentile                     : " << bs->percentiles_latencies->ninetynine_percentile << endl;
 	}
 	cout << "--------------------------------------------------" << endl;
-	cout << "Occurrences of 1. retransmission              : " << bs->retrans[0] << endl;
-	cout << "Occurrences of 2. retransmission              : " << bs->retrans[1] << endl;
-	cout << "Occurrences of 3. retransmission              : " << bs->retrans[2] << endl;
+
+	for (int i = 0; i < MAX_STAT_RETRANS; i++) {
+		cout << "Occurrences of " << (i +1) << ". retransmission              : " << bs->retrans[i] << endl;
+	}
 	cout << "Max retransmissions                           : " << bs->maxRetrans << endl;
 	cout << "==================================================" << endl;
 }
+
+void Dump::getTCPTimeStamp(struct DataSeg* data, uint8_t* opts, int option_length) {
+
+	typedef struct {
+		uint8_t kind;
+		uint8_t size;
+	} tcp_option_t;
+	int offset = 0;
+
+	while (*opts != 0 && offset < option_length) {
+		tcp_option_t* _opt = (tcp_option_t*) (opts + offset);
+		if (_opt->kind == 1 /* NOP */) {
+			offset += 1;
+			continue;
+		}
+		if (_opt->kind == 8 /* Timestamp */) {
+			data->tstamp_tcp = ntohl(*(((uint32_t*) (opts + offset + 2))));
+			break;
+		}
+		if (_opt->size == 0) {
+			assert(0 && "opt->size is null!\n");
+			break;
+		}
+		offset += _opt->size;
+	}
+}
+
 
 /* Process outgoing packets */
 void Dump::processSent(const struct pcap_pkthdr* header, const u_char *data) {
@@ -470,19 +502,22 @@ void Dump::processSent(const struct pcap_pkthdr* header, const u_char *data) {
 	sd.ipSize       = ipSize;
 	sd.ipHdrLen     = ipHdrLen;
 	sd.tcpHdrLen    = tcpHdrLen;
+	sd.tcpOptionLen = tcpHdrLen - 20;
 	sd.data.payloadSize  = ipSize - (ipHdrLen + tcpHdrLen);
-	sd.data.tstamp         = header->ts;
+	sd.data.tstamp_pcap  = header->ts;
 	sd.seq_absolute = ntohl(tcp->th_seq);
-	sd.data.seq = get_relative_sequence_number(sd.seq_absolute, tmpConn->firstSeq, tmpConn->lastLargestEndSeq, tmpConn->lastLargestSeqAbsolute);
+	sd.data.seq     = get_relative_sequence_number(sd.seq_absolute, tmpConn->firstSeq, tmpConn->lastLargestEndSeq, tmpConn->lastLargestSeqAbsolute);
 	sd.data.endSeq  = sd.data.seq + sd.data.payloadSize;
 	sd.data.retrans = false;
 	sd.data.is_rdb  = false;
-	sd.data.is_rdb2  = false;
 	sd.data.rdb_end_seq = 0;
 
 	if (sd.data.payloadSize > 0) {
 		sd.data.endSeq -= 1;
 	}
+
+	uint8_t* opt = (uint8_t*) tcp + 20;
+	getTCPTimeStamp(&sd.data, opt, sd.tcpOptionLen);
 
 	/* define/compute tcp payload (segment) offset */
 	sd.data.data = (u_char *) (data + SIZE_ETHERNET + ipHdrLen + tcpHdrLen);
@@ -516,9 +551,9 @@ static inline bool after_or_equal(uint32_t seq1, uint32_t seq2) {
  *
  * Returns the relative sequence number or ULONG_MAX if it failed.
 **/
-ulong Dump::get_relative_sequence_number(uint32_t seq, uint32_t firstSeq, ulong largestSeq, uint32_t largestSeqAbsolute) {
+uint64_t Dump::get_relative_sequence_number(uint32_t seq, uint32_t firstSeq, ulong largestSeq, uint32_t largestSeqAbsolute) {
 	static ulong wrap_index;
-	static ulong seq_relative;
+	static uint64_t seq_relative;
 	wrap_index = firstSeq + largestSeq;
 
 	// Either seq has wrapped, or a retrans (or maybe reorder if netem is run on sender machine)
@@ -544,10 +579,13 @@ ulong Dump::get_relative_sequence_number(uint32_t seq, uint32_t firstSeq, ulong 
 			wrap_index -= (0 - seq) - largestSeqAbsolute;
 		}
 	}
-	wrap_index /= 4294967295;
-	seq_relative = seq + (wrap_index * 4294967296) - firstSeq;
+
+	wrap_index /= 4294967296L;
+
+	// When seq has wrapped, wrap_index will make sure the relative sequence number continues to grow
+	seq_relative = seq + (wrap_index * 4294967296L) - firstSeq;
 	if (seq_relative > 9999999999) {
-		return ULONG_MAX;
+		assert(0 && "Incorrect sequence number calculation!\n");
 	}
 	return seq_relative;
 }
@@ -587,7 +625,6 @@ void Dump::processAcks(const struct pcap_pkthdr* header, const u_char *data) {
 	else {
 		it->second->lastLargestAckSeqAbsolute = ack;
 		it->second->lastLargestAckSeq = ack_relative;
-
 	}
 	ackCount++;
 }
@@ -738,11 +775,15 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data) {
   sd.ipSize           = ipSize;
   sd.ipHdrLen         = ipHdrLen;
   sd.tcpHdrLen        = tcpHdrLen;
+  sd.tcpOptionLen     = tcpHdrLen - 20;
   sd.data.payloadSize = ipSize - (ipHdrLen + tcpHdrLen);
   sd.seq_absolute     = ntohl(tcp->th_seq);
   sd.data.seq         = get_relative_sequence_number(sd.seq_absolute, tmpConn->firstSeq, tmpConn->lastLargestRecvEndSeq, tmpConn->lastLargestRecvSeqAbsolute);
   sd.data.endSeq      = sd.data.seq + sd.data.payloadSize;
-  sd.data.tstamp      = header->ts;
+  sd.data.tstamp_pcap = header->ts;
+  sd.data.is_rdb = false;
+  sd.data.rdb_end_seq = 0;
+  sd.data.retrans = 0;
 
   if (sd.data.seq == ULONG_MAX) {
 	  if (tmpConn->lastLargestRecvEndSeq == 0) {
@@ -754,11 +795,13 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data) {
 	  return;
   }
 
+  uint8_t* opt = (uint8_t*) tcp + 20;
+  getTCPTimeStamp(&sd.data, opt, sd.tcpOptionLen);
+
   /* define/compute tcp payload (segment) offset */
   sd.data.data = (u_char *) (data + SIZE_ETHERNET + ipHdrLen + tcpHdrLen);
   recvPacketCount++;
   recvBytesCount += sd.data.payloadSize;
-
   tmpConn->registerRecvd(&sd);
 }
 
@@ -905,105 +948,68 @@ void Dump::printDumpStats() {
 
     cout << "Received Bytes Count  : " << recvBytesCount << endl;
     cout << "Packets lost          : " << (sentPacketCount - recvPacketCount) << endl;
-    cout << "Packet  Loss          : " << ((float) (sentPacketCount - recvPacketCount) / sentPacketCount) * 100 <<  "\%" << endl;
+    cout << "Packet  Loss          : " << ((double) (sentPacketCount - recvPacketCount) / sentPacketCount) * 100 <<  "\%" << endl;
 
     cout << "Ranges received       : " << (ranges_count) << endl;
     cout << "Ranges lost           : " << (ranges_lost) << endl;
-    cout << "Ranges Loss           : " << ((float) (ranges_lost) / ranges_count) * 100 <<  "\%" << endl;
+    cout << "Ranges Loss           : " << ((double) (ranges_lost) / ranges_count) * 100 <<  "\%" << endl;
   }
 }
 
 void Dump::genRFiles() {
- map<string, Connection*>::iterator cIt, cItEnd;
-  for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
-    cIt->second->genRFiles();
-  }
+	map<string, Connection*>::iterator cIt, cItEnd;
+	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
+		cIt->second->genRFiles();
+	}
 
-  /* Print aggregate statistics */
-  ofstream dcDiff, retr1, retr2, retr3, retr4, retr5, retr6, all, durations_f;
-  stringstream r1fn, r2fn, r3fn, r4fn, r5fn, r6fn, allfn, dcdfn, durations_fn;
+	stringstream filename_tmp;
+	vector<ofstream*> streams;
 
-  r1fn << GlobOpts::prefix << "1retr-aggr.dat";
-  r2fn << GlobOpts::prefix << "2retr-aggr.dat";
-  r3fn << GlobOpts::prefix << "3retr-aggr.dat";
-  r4fn << GlobOpts::prefix << "4retr-aggr.dat";
-  r5fn << GlobOpts::prefix << "5retr-aggr.dat";
-  r6fn << GlobOpts::prefix << "6retr-aggr.dat";
-  allfn << GlobOpts::prefix << "all-aggr.dat";
-  durations_fn << GlobOpts::prefix << "all-durations.dat";
+	vector<string> filenames;
+	filenames.push_back(string("1retr-aggr.dat"));
+	filenames.push_back(string("2retr-aggr.dat"));
+	filenames.push_back(string("3retr-aggr.dat"));
+	filenames.push_back(string("4retr-aggr.dat"));
+	filenames.push_back(string("5retr-aggr.dat"));
+	filenames.push_back(string("6retr-aggr.dat"));
+	filenames.push_back(string("all-aggr.dat"));
+	filenames.push_back(string("all-durations.dat"));
 
-  retr1.open((char*)((r1fn.str()).c_str()), ios::out);
-  retr2.open((char*)((r2fn.str()).c_str()), ios::out);
-  retr3.open((char*)((r3fn.str()).c_str()), ios::out);
-  retr4.open((char*)((r4fn.str()).c_str()), ios::out);
-  retr5.open((char*)((r5fn.str()).c_str()), ios::out);
-  retr6.open((char*)((r6fn.str()).c_str()), ios::out);
-  all.open((char*)((allfn.str()).c_str()), ios::out);
-  durations_f.open((char*)((durations_fn.str()).c_str()), ios::out);
+	vector<vector <int> > vectors;
+	vectors.push_back(GlobStats::retr1);
+	vectors.push_back(GlobStats::retr2);
+	vectors.push_back(GlobStats::retr3);
+	vectors.push_back(GlobStats::retr4);
+	vectors.push_back(GlobStats::retr5);
+	vectors.push_back(GlobStats::retr6);
+	vectors.push_back(GlobStats::all);
 
-  vector<int>::iterator it, it_end;
-  it = GlobStats::retr1.begin();
-  it_end = GlobStats::retr1.end();
-  for(; it != it_end; it++){
-    retr1 << *it << endl;
-  }
+	for (unsigned long int i = 0; i < filenames.size(); i++) {
+		filename_tmp.str("");
+		filename_tmp << GlobOpts::prefix << filenames[i];
+		streams.push_back(new ofstream(filename_tmp.str().c_str(), ios::out));
+	}
 
-  it = GlobStats::retr2.begin();
-  it_end = GlobStats::retr2.end();
-  for(; it != it_end; it++){
-    retr2 << *it << endl;
-  }
+	vector<int>::iterator it, it_end;
+	unsigned long int i;
+	for (i = 0; i < vectors.size(); i++) {
+		it = vectors[i].begin();
+		it_end = vectors[i].end();
+		for (; it != it_end; it++){
+			*streams[i] << *it << endl;
+		}
+	}
 
-  it = GlobStats::retr3.begin();
-  it_end = GlobStats::retr3.end();
-  for(; it != it_end; it++){
-    retr3 << *it << endl;
-  }
+	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
+		*streams[i] << cIt->second->rm->getDuration() << endl;
+	}
+	i++;
 
-  it = GlobStats::retr4.begin();
-  it_end = GlobStats::retr4.end();
-  for(; it != it_end; it++){
-    retr4 << *it << endl;
-  }
-
-  it = GlobStats::retr5.begin();
-  it_end = GlobStats::retr5.end();
-  for(; it != it_end; it++){
-    retr5 << *it << endl;
-  }
-
-  it = GlobStats::retr6.begin();
-  it_end = GlobStats::retr6.end();
-  for(; it != it_end; it++){
-    retr6 << *it << endl;
-  }
-
-  it = GlobStats::all.begin();
-  it_end = GlobStats::all.end();
-  for(; it != it_end; it++){
-    all << *it << endl;
-  }
-
-  it = GlobStats::all.begin();
-  it_end = GlobStats::all.end();
-  for(; it != it_end; it++){
-    all << *it << endl;
-  }
-
-  for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
-	  durations_f << cIt->second->rm->getDuration() << endl;
-  }
-
-  retr1.close();
-  retr2.close();
-  retr3.close();
-  retr4.close();
-  retr5.close();
-  retr6.close();
-  all.close();
-  durations_f.close();
+	for (unsigned long int i = 0; i < filenames.size(); i++) {
+		streams[i]->close();
+		delete streams[i];
+	}
 }
-
 
 void Dump::free_resources() {
 	map<string, Connection*>::iterator cIt, cItEnd;

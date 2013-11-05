@@ -70,8 +70,7 @@ class Dump {
  public:
   Dump(string src_ip, string dst_ip, string src_port, string dst_port, string fn);
   ~Dump();
-  ulong get_relative_sequence_number(uint32_t ack, uint32_t firstSeq, ulong largestAckSeq, uint32_t largestAckSeqAbsolute);
-  ulong get_relative_ack_sequence_number(uint32_t ack, uint32_t firstSeq, ulong largestAckSeq, uint32_t largestAckSeqAbsolute);
+  uint64_t get_relative_sequence_number(uint32_t ack, uint32_t firstSeq, ulong largestAckSeq, uint32_t largestAckSeqAbsolute);
   void analyseSender();
   void processRecvd(string fn);
   void calculateRetransAndRDBStats();
@@ -80,6 +79,7 @@ class Dump {
   void genRFiles();
   void write_loss_to_file();
   void free_resources();
+  void getTCPTimeStamp(struct DataSeg* data, uint8_t* opts, int option_length);
 };
 
 #endif /* DUMP_H */

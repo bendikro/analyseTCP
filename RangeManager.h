@@ -13,8 +13,10 @@ using namespace std;
 #include <algorithm>
 #include <string.h>
 #include <stdint.h>
+#include <assert.h>
 
 #include "analyseTCP.h"
+#include "time_util.h"
 
 /* Forward declarations */
 class Range;
@@ -121,7 +123,7 @@ public:
 	void printDcCdf(ofstream *stream);
 	int calcDrift();
 	void registerDcDiffs();
-	void insert_byte_range(ulong start_seq, ulong end_seq, timeval *tstamp, bool sent, struct DataSeg *data_seq, int level);
+	void insert_byte_range(ulong start_seq, ulong end_seq, bool sent, struct DataSeg *data_seq, int level);
 	void makeDcCdf();
 	void genRFiles(string connKey);
 	void free_recv_vector();
@@ -137,6 +139,8 @@ public:
 	void write_loss_over_time(unsigned slice_interval, unsigned timeslice_count, FILE *out_stream);
 };
 
+enum received_type {DEF, DATA, RDB, RETR};
+
 class ByteRange {
 public:
 	ulong startSeq;
@@ -145,14 +149,16 @@ public:
 	int sent_count;
 	int byte_count;
 	int retrans;
-	int is_rdb;
-	int is_rdb2;
-	int split_after_sent;
-	timeval tstamp;
+	int rdb_count;
+	received_type recv_type; // 0 == first transfer, 1 == RDB, 2 == retrans
+	int recv_type_num; // Which packet of the specific type was first received
 
-	timeval tstamp_received;
-	vector<timeval> tstamps; // For regular packet and retrans
-	vector<timeval> rdb_tstamps; // For data in RDB packets
+	int split_after_sent;
+	timeval tstamp_pcap;
+	uint32_t tstamp_received;
+
+	vector<uint32_t> tstamps; // For regular packet and retrans
+	vector<uint32_t> rdb_tstamps; // For data in RDB packets
 
 	ByteRange(uint32_t start, uint32_t end) {
 		startSeq = start;
@@ -163,14 +169,80 @@ public:
 
 		update_byte_count();
 		retrans = 0;
-		is_rdb = 0;
-		is_rdb2 = 0;
+		rdb_count = 0;
+		recv_type = DEF;
+		recv_type_num = 1;
+		tstamp_received = 0;
+	}
+
+	void increase_received(uint32_t tstamp) {
+		if (!received_count) {
+			tstamp_received = tstamp;
+		}
+		received_count++;
+	}
+
+	bool match_received_type() {
+		return match_received_type(false);
+	}
+
+	bool match_received_type(bool print) {
+		if (print) {
+			printf("recv timestamp: %u ", tstamp_received);
+			printf("tstamps: %lu, rdb-stamps: %lu", tstamps.size(), rdb_tstamps.size());
+		}
+		// Find which data packet was received first
+		for (ulong i = 0; i < tstamps.size(); i++) {
+			if (print) {
+				printf("     timestamp: %u\n", tstamps[i]);
+			}
+			if (tstamps[i] == tstamp_received) {
+				// Retrans
+				if (i > 0) {
+					recv_type = RETR;
+					recv_type_num = i;
+					return true;
+				}
+				// First regular TCP packet
+				else {
+					recv_type = DATA;
+					return true;
+				}
+			}
+		}
+		for (ulong i = 0; i < rdb_tstamps.size(); i++) {
+			if (print) {
+				printf(" rdb_timestamp: %u\n", rdb_tstamps[i]);
+			}
+
+			if (rdb_tstamps[i] == tstamp_received) {
+				recv_type = RDB;
+				recv_type_num = i + 1;
+				return true;
+			}
+		}
+		if (print) {
+			printf("\n");
+		}
+		return false;
+	}
+
+	void print_tstamps() {
+		printf("recv timestamp: %u ", tstamp_received);
+		printf("tstamps: %lu, rdb-stamps: %lu", tstamps.size(), rdb_tstamps.size());
+
+		for (ulong i = 0; i < tstamps.size(); i++) {
+			printf("     timestamp: %u\n", tstamps[i]);
+		}
+		for (ulong i = 0; i < rdb_tstamps.size(); i++) {
+				printf(" rdb_timestamp: %u\n", rdb_tstamps[i]);
+		}
 	}
 
 	void update_byte_count() {
 		byte_count = endSeq - startSeq;
 		if (endSeq != startSeq)
-			byte_count += +1;
+			byte_count += 1;
 	}
 
 	// Split and make a new range at the end
@@ -189,11 +261,15 @@ public:
 		new_br->retrans = retrans;
 		new_br->sent_count = sent_count;
 		new_br->received_count = received_count;
-		new_br->tstamp = tstamp;
+		new_br->tstamp_pcap = tstamp_pcap;
+		new_br->tstamp_received = tstamp_received;
+		new_br->tstamps = tstamps;
+		new_br->rdb_tstamps = rdb_tstamps;
+		//printf("rdb_tstamps: %p\n", &rdb_tstamps);
+		//printf("new_br amps: %p\n", &(new_br->rdb_tstamps));
 		update_byte_count();
 		return new_br;
 	}
-
 };
 
 #endif /* RANGEMANAGER_H */
