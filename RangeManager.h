@@ -20,6 +20,7 @@ using namespace std;
 
 /* Forward declarations */
 class Range;
+class ByteRange;
 class Connection;
 
 /*
@@ -59,6 +60,7 @@ class RangeManager {
 	int maximum_segment_size;
 
 	multimap<ulong, Range*>::iterator highestAckedIt;
+	multimap<ulong, ByteRange*>::iterator highestAckedByteRangeIt;
 	vector<struct DataSeg*> recvd;
 	vector<struct ByteRange*> recvd_bytes;
 	map<const int, int> cdf;
@@ -76,6 +78,8 @@ public:
 	int rdb_byte_hits;
 	int rdb_stats_available;
 	int lost_range_count;
+	int lost_bytes;
+
 	Connection *conn;
 	ulong max_seq;
 public:
@@ -88,6 +92,7 @@ public:
 		lowestDiff = LONG_MAX;
 		lowestDcDiff = LONG_MAX;
 		highestAckedIt = ranges.end();
+		highestAckedByteRangeIt = brMap.end();
 		memset(&highestRecvd, 0, sizeof(highestRecvd));
 		nrRanges = 0;
 		nrDummy = 0;
@@ -99,6 +104,7 @@ public:
 		rdb_packet_hits = 0;
 		rdb_stats_available = 0;
 		lost_range_count = 0;
+		lost_bytes = 0;
 		max_seq = ULONG_MAX;
 	};
 
@@ -107,6 +113,7 @@ public:
 	Range* insertSentRange(struct sendData *sd);
 	void insertRecvRange(struct sendData *sd);
 	bool processAck(ulong ack, timeval* tv);
+	bool processAckByteRange(ulong ack, timeval* tv);
 	void genStats(struct byteStats* bs);
 	Range* getLastRange() {
 		multimap<ulong, Range*>::reverse_iterator last = ranges.rbegin();
@@ -137,139 +144,8 @@ public:
 	void calculateRDBStats();
 	void calculateRetransAndRDBStats();
 	void write_loss_over_time(unsigned slice_interval, unsigned timeslice_count, FILE *out_stream);
+	void write_retrans_over_time(unsigned slice_interval, unsigned timeslice_count, FILE *out_stream);
 };
 
-enum received_type {DEF, DATA, RDB, RETR};
-
-class ByteRange {
-public:
-	ulong startSeq;
-	ulong endSeq;
-	int received_count;
-	int sent_count;
-	int byte_count;
-	int retrans;
-	int rdb_count;
-	received_type recv_type; // 0 == first transfer, 1 == RDB, 2 == retrans
-	int recv_type_num; // Which packet of the specific type was first received
-
-	int split_after_sent;
-	timeval tstamp_pcap;
-	uint32_t tstamp_received;
-
-	vector<uint32_t> tstamps; // For regular packet and retrans
-	vector<uint32_t> rdb_tstamps; // For data in RDB packets
-
-	ByteRange(uint32_t start, uint32_t end) {
-		startSeq = start;
-		endSeq = end;
-		sent_count = 0;
-		received_count = 0;
-		split_after_sent = 0;
-
-		update_byte_count();
-		retrans = 0;
-		rdb_count = 0;
-		recv_type = DEF;
-		recv_type_num = 1;
-		tstamp_received = 0;
-	}
-
-	void increase_received(uint32_t tstamp) {
-		if (!received_count) {
-			tstamp_received = tstamp;
-		}
-		received_count++;
-	}
-
-	bool match_received_type() {
-		return match_received_type(false);
-	}
-
-	bool match_received_type(bool print) {
-		if (print) {
-			printf("recv timestamp: %u ", tstamp_received);
-			printf("tstamps: %lu, rdb-stamps: %lu", tstamps.size(), rdb_tstamps.size());
-		}
-		// Find which data packet was received first
-		for (ulong i = 0; i < tstamps.size(); i++) {
-			if (print) {
-				printf("     timestamp: %u\n", tstamps[i]);
-			}
-			if (tstamps[i] == tstamp_received) {
-				// Retrans
-				if (i > 0) {
-					recv_type = RETR;
-					recv_type_num = i;
-					return true;
-				}
-				// First regular TCP packet
-				else {
-					recv_type = DATA;
-					return true;
-				}
-			}
-		}
-		for (ulong i = 0; i < rdb_tstamps.size(); i++) {
-			if (print) {
-				printf(" rdb_timestamp: %u\n", rdb_tstamps[i]);
-			}
-
-			if (rdb_tstamps[i] == tstamp_received) {
-				recv_type = RDB;
-				recv_type_num = i + 1;
-				return true;
-			}
-		}
-		if (print) {
-			printf("\n");
-		}
-		return false;
-	}
-
-	void print_tstamps() {
-		printf("recv timestamp: %u ", tstamp_received);
-		printf("tstamps: %lu, rdb-stamps: %lu", tstamps.size(), rdb_tstamps.size());
-
-		for (ulong i = 0; i < tstamps.size(); i++) {
-			printf("     timestamp: %u\n", tstamps[i]);
-		}
-		for (ulong i = 0; i < rdb_tstamps.size(); i++) {
-				printf(" rdb_timestamp: %u\n", rdb_tstamps[i]);
-		}
-	}
-
-	void update_byte_count() {
-		byte_count = endSeq - startSeq;
-		if (endSeq != startSeq)
-			byte_count += 1;
-	}
-
-	// Split and make a new range at the end
-	ByteRange* split_end(uint32_t start, uint32_t end) {
-		endSeq = start - 1;
-		return split(start, end);
-	}
-
-	// Split and make a new range at the beginning
-	ByteRange* split_start(uint32_t start, uint32_t end) {
-		startSeq = end + 1;
-		return split(start, end);
-	}
-	ByteRange* split(uint32_t start, uint32_t end) {
-		ByteRange *new_br = new ByteRange(start, end);
-		new_br->retrans = retrans;
-		new_br->sent_count = sent_count;
-		new_br->received_count = received_count;
-		new_br->tstamp_pcap = tstamp_pcap;
-		new_br->tstamp_received = tstamp_received;
-		new_br->tstamps = tstamps;
-		new_br->rdb_tstamps = rdb_tstamps;
-		//printf("rdb_tstamps: %p\n", &rdb_tstamps);
-		//printf("new_br amps: %p\n", &(new_br->rdb_tstamps));
-		update_byte_count();
-		return new_br;
-	}
-};
 
 #endif /* RANGEMANAGER_H */

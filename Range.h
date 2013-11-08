@@ -52,8 +52,6 @@ class Range {
   unsigned int acked : 1;
   unsigned int exact_match : 1;
 
-//  int received;
-
 public:
   Range(ulong ss, ulong rdb_orig, ulong es, int data_len, u_char *payload, timeval *tv, bool dmy, RangeManager *rangeManager) {
     startSeq = ss;
@@ -82,7 +80,7 @@ public:
   }
 
   void insertAckTime(timeval *tv);
-  int getDiff(); /* Returns the ACK latency in ms */
+  int getSendAckTimeDiff(); /* Returns the ACK latency in ms */
   ulong getRDBSeq() { return rdbSeq; }
   ulong getStartSeq() { return startSeq; }
   ulong getEndSeq() { return endSeq; }
@@ -109,6 +107,7 @@ public:
   timeval* getAckTime();
   int getNumBytes() { return (int) payloadLen; }
   void printSEQ();
+
 
   /* Debug */
   void printValues();

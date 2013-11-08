@@ -28,22 +28,27 @@
 #include "Dump.h"
 #include "Range.h"
 
+vector<string> GlobStats::retrans_filenames;
+vector<vector <int> *> GlobStats::retrans_vectors;
+
 /* Initialize global options */
-bool GlobOpts::aggregate      = false;
-bool GlobOpts::aggOnly        = false;
-bool GlobOpts::withRecv       = false;
-bool GlobOpts::withCDF        = false;
-bool GlobOpts::transport      = false;
-bool GlobOpts::genRFiles      = false;
-string GlobOpts::prefix       = "";
-string GlobOpts::RFiles_dir   = "";
-int GlobOpts::debugLevel      = 0;
-bool GlobOpts::incTrace       = false;
-bool GlobOpts::relative_seq   = false;
-bool GlobOpts::print_packets  = false;
-string GlobOpts::sendNatIP    = "";
-string GlobOpts::recvNatIP    = "";
-bool GlobOpts::rdbDetails     = false;
+bool GlobOpts::aggregate        = false;
+bool GlobOpts::aggOnly          = false;
+bool GlobOpts::withRecv         = false;
+bool GlobOpts::withCDF          = false;
+bool GlobOpts::transport        = false;
+bool GlobOpts::genRFiles        = false;
+string GlobOpts::prefix         = "";
+string GlobOpts::RFiles_dir     = "";
+int GlobOpts::debugLevel        = 0;
+bool GlobOpts::incTrace         = false;
+bool GlobOpts::relative_seq     = false;
+bool GlobOpts::print_packets    = false;
+string GlobOpts::sendNatIP      = "";
+string GlobOpts::recvNatIP      = "";
+bool GlobOpts::rdbDetails       = false;
+int GlobOpts::max_retrans_stats = 6;
+
 
 void warn_with_file_and_linenum(string file, int linenum) {
 	cout << "Error at ";
@@ -93,7 +98,7 @@ void test(Dump *d) {
 	uint32_t first_seq = 1000;
 	uint32_t seq = 2000;
 	ulong lastLargestEndSeq = 1999;
-	ulong largestSeqAbsolute = 999;
+	uint32_t largestSeqAbsolute = 999;
 
 	// TEST 1
 	printf("\n\nTEST1:\n");
@@ -108,6 +113,8 @@ void test(Dump *d) {
 	//printf("seq: %u\n", seq);
 	printf("first_seq: %u\n", first_seq);
 	printf("SEQ 2: %lu\n", d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute));
+
+	//lastLargestSeqAbsolute
 
 	// TEST 3
 	first_seq = 4294967000;
@@ -127,19 +134,20 @@ void test(Dump *d) {
 	printf("\n\nTEST4:\n");
 	printf("seq: %u\n", seq);
 	printf("first_seq: %u\n", first_seq);
-	printf("largestSeqAbsolute: %lu\n", largestSeqAbsolute);
+	printf("largestSeqAbsolute: %u\n", largestSeqAbsolute);
 	printf("SEQ 4: %lu\n", d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute));
 
 	int i;
 	for (i = 0; i < 10; i++) {
 		first_seq = 4294967000;
 		seq = UINT_MAX + i -1;
-		lastLargestEndSeq = 293;
+		lastLargestEndSeq = 293 + i;
 		largestSeqAbsolute = first_seq + lastLargestEndSeq;
 		printf("\nTEST %d:\n", i + 5);
-		printf("seq: %u\n", seq);
 		printf("first_seq: %u\n", first_seq);
-		printf("largestSeqAbsolute: %lu\n", largestSeqAbsolute);
+		printf("seq      : %u\n", seq);
+		printf("largestSeqAbsolute: %u\n", largestSeqAbsolute);
+		printf("lastLargestEndSeq: %lu\n", lastLargestEndSeq);
 		printf("SEQ %d: %lu\n", i + 5, d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute));
 	}
 
@@ -246,6 +254,9 @@ int main(int argc, char *argv[]){
     usage(argv[0]);
   }
 
+  //GlobStats::_init GlobStats::_initializer;
+  //GlobStats::_initializer;
+
   if(GlobOpts::debugLevel < 0)
     cerr << "debugLevel = " << GlobOpts::debugLevel << endl;
 
@@ -260,6 +271,9 @@ int main(int argc, char *argv[]){
 	  GlobOpts::prefix = GlobOpts::RFiles_dir + "/" + GlobOpts::prefix;
   }
 
+  // Define once to run the constructor of GlobStats
+  GlobStats s;
+
   /* Create Dump - object */
   senderDump = new Dump(src_ip, dst_ip, src_port, dst_port, sendfn);
   //test(senderDump);
@@ -272,6 +286,11 @@ int main(int argc, char *argv[]){
 	  senderDump->processRecvd(recvfn);
 	  senderDump->write_loss_to_file();
   }
+
+  if ((GlobOpts::print_packets)) {
+	  senderDump->calculateRDBStats();
+  }
+
   senderDump->printStatistics();
 
   senderDump->printDumpStats();

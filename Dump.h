@@ -74,12 +74,13 @@ class Dump {
   void analyseSender();
   void processRecvd(string fn);
   void calculateRetransAndRDBStats();
+  void calculateRDBStats();
   void printDumpStats();
   void printStatistics();
   void genRFiles();
   void write_loss_to_file();
   void free_resources();
-  void getTCPTimeStamp(struct DataSeg* data, uint8_t* opts, int option_length);
+  void findTCPTimeStamp(struct DataSeg* data, uint8_t* opts, int option_length);
 };
 
 #endif /* DUMP_H */

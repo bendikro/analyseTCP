@@ -139,7 +139,8 @@ Range* Connection::registerRange(struct sendData* sd) {
 			firstSendTime = sd->data.tstamp_pcap;
 		}
 		timersub(&(sd->data.tstamp_pcap), &firstSendTime, &offset);
-		cerr << "\nRegistering new outgoing. Conn: " << getConnKey() << " Seq: " << rm->relative_seq(sd->data.seq) << " - " << rm->relative_seq(sd->data.endSeq) <<  " Payload: " << sd->data.payloadSize << endl;
+		cerr << "\nRegistering new outgoing. Conn: " << getConnKey() << " Seq: " << rm->relative_seq(sd->data.seq) << " - "
+		     << rm->relative_seq(sd->data.endSeq) <<  " Payload: " << sd->data.payloadSize << endl;
 		cerr << "Time offset: Secs: " << offset.tv_sec << "." << offset.tv_usec << endl;
 	}
 
@@ -165,6 +166,7 @@ bool Connection::registerAck(ulong ack, timeval* tv){
 	}
 
 	ret = rm->processAck(ack, tv);
+	rm->processAckByteRange(ack, tv);
 
 	if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
 		if(rm->getHighestAcked() != NULL){
@@ -222,11 +224,11 @@ void Connection::printPacketDetails() {
 		if (received && !it->second->isExactMatched()) {
 			printf("Lost  seq: %5lu - (%5lu) - %5lu, len: %4d, retrans: %d, ACK latency: %d\n",
 			       rm->relative_seq(it->second->getRDBSeq()), rm->relative_seq(it->second->getStartSeq()),
-			       rm->relative_seq(it->second->getEndSeq()), it->second->getNumBytes(), it->second->getNumRetrans(), it->second->getDiff());
+			       rm->relative_seq(it->second->getEndSeq()), it->second->getNumBytes(), it->second->getNumRetrans(), it->second->getSendAckTimeDiff());
 		} else {
 			printf("----  seq: %5lu - (%5lu) - %5lu, len: %4d, retrans: %d, ACK latency: %d\n",
 				   rm->relative_seq(it->second->getRDBSeq()), rm->relative_seq(it->second->getStartSeq()),
-			       rm->relative_seq(it->second->getEndSeq()), it->second->getNumBytes(), it->second->getNumRetrans(), it->second->getDiff());
+			       rm->relative_seq(it->second->getEndSeq()), it->second->getNumBytes(), it->second->getNumRetrans(), it->second->getSendAckTimeDiff());
 		}
 	}
 }

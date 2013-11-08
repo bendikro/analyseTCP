@@ -53,9 +53,7 @@ using namespace std;
 #include <limits.h>
 #include <deque>
 
-/* Local includes */
-
-
+#define MAX_STAT_RETRANS 15
 
 /* Class to keep global options */
 class GlobOpts {
@@ -78,25 +76,37 @@ class GlobOpts {
   static string prefix;
   static string RFiles_dir;
   static bool rdbDetails;
+  static int max_retrans_stats;
 };
 
-class GlobStats{
- private:
+class GlobStats {
+public:
+	static map<const int, int> cdf;
+	static map<const int, int> dcCdf;
+	static float avgDrift;
+	static int totNumBytes;
+	/* TODO: Create list of retransission statistics based on observed
+	   number of retransmissions */
+	static vector<string> retrans_filenames;
+	static vector<vector <int> *> retrans_vectors;
 
- public:
-  static map<const int, int> cdf;
-  static map<const int, int> dcCdf;
-  static float avgDrift;
-  static int totNumBytes;
-  /* TODO: Create list of retranmission statistics based on observed
-     number of retransmissions */
-  static vector<int> retr1;
-  static vector<int> retr2;
-  static vector<int> retr3;
-  static vector<int> retr4;
-  static vector<int> retr5;
-  static vector<int> retr6;
-  static vector<int> all;
+	GlobStats() {
+		stringstream filename_tmp;
+		retrans_filenames.push_back(GlobOpts::prefix + string("all-retr-"));
+		for (int i = 1; i < GlobOpts::max_retrans_stats +1; i++) {
+			filename_tmp.str("");
+			filename_tmp << GlobOpts::prefix << i << "retr-";
+			retrans_filenames.push_back(filename_tmp.str());
+		}
+		for (ulong i = 0; i < retrans_filenames.size(); i++) {
+			retrans_vectors.push_back(new vector<int>());
+		}
+	}
+	 ~GlobStats() {
+		 for (ulong i = 0; i < retrans_vectors.size(); i++) {
+			 delete retrans_vectors[i];
+		 }
+	 }
 };
 
 /* Struct used to pass aggregated data between connections */
@@ -130,8 +140,6 @@ struct Percentiles {
 	}
 };
 
-#define MAX_STAT_RETRANS 4
-
 /* Struct used to keep track of bytewise latency stats */
 struct byteStats {
 	int maxLat;     /* Maximum Latency */
@@ -160,6 +168,7 @@ struct DataSeg {
 	ulong rdb_end_seq;   /* end seq of rdb data */
 	struct timeval tstamp_pcap;
 	uint32_t tstamp_tcp;
+	uint32_t tstamp_tcp_echo;
 	u_char *data;
 };
 
@@ -170,7 +179,7 @@ struct sendData {
 	uint ipHdrLen;      /* Ip header length */
 	uint tcpHdrLen;     /* TCP header length */
 	uint tcpOptionLen;  /* TCP header option length */
-	u_long seq_absolute; /* Absolute value of the sequence number */
+	uint32_t seq_absolute; /* Absolute value of the sequence number */
 	struct DataSeg data;
 };
 

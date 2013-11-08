@@ -30,7 +30,7 @@ class Connection {
   ulong curSeq;
   // Used for calulcating relative sequence number
   ulong lastLargestEndSeq;      // This is the last largest relative end-seq
-  ulong lastLargestSeqAbsolute; // This is the last largest raw seq number
+  uint32_t lastLargestSeqAbsolute; // This is the last largest raw seq number
   ulong lastLargestRecvEndSeq;
   ulong lastLargestRecvSeqAbsolute;
 

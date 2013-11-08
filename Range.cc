@@ -32,7 +32,7 @@ timeval* Range::getRecvTime() {
 }
 
 /* Get the difference between send and ack time for this range */
-int Range::getDiff() {
+int Range::getSendAckTimeDiff() {
   struct timeval tv;
   int ms = 0;
 
