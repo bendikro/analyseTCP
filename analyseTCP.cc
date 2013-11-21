@@ -26,21 +26,24 @@
 
 #include "analyseTCP.h"
 #include "Dump.h"
-#include "Range.h"
+#include "color_print.h"
 
 vector<string> GlobStats::retrans_filenames;
-vector<vector <int> *> GlobStats::retrans_vectors;
+vector<vector <int> *> GlobStats::ack_latency_vectors;
+GlobStats *globStats;
 
 /* Initialize global options */
 bool GlobOpts::aggregate        = false;
 bool GlobOpts::aggOnly          = false;
 bool GlobOpts::withRecv         = false;
+bool GlobOpts::withLoss         = false;
 bool GlobOpts::withCDF          = false;
 bool GlobOpts::transport        = false;
 bool GlobOpts::genRFiles        = false;
 string GlobOpts::prefix         = "";
 string GlobOpts::RFiles_dir     = "";
 int GlobOpts::debugLevel        = 0;
+int GlobOpts::lossAggrSeconds   = 1;
 bool GlobOpts::incTrace         = false;
 bool GlobOpts::relative_seq     = false;
 bool GlobOpts::print_packets    = false;
@@ -60,8 +63,12 @@ void exit_with_file_and_linenum(int exit_code, string file, int linenum) {
 	exit(exit_code);
 }
 
+bool endsWith(const string& s, const string& suffix) {
+    return s.rfind(suffix) == (s.size()-suffix.size());
+}
+
 void usage (char* argv){
-  printf("Usage: %s [-s|r|p|f|g|t|u|m|n|a|A|d|l|y|o]\n", argv);
+  printf("Usage: %s [-s|r|p|f|g|t|u|m|n|a|A|d|l|j|y|o]\n", argv);
   printf("Required options:\n");
   printf(" -s <sender ip>     : Sender ip.\n");
   printf(" -f <pcap-file>     : Sender-side dumpfile.\n");
@@ -71,6 +78,7 @@ void usage (char* argv){
   printf(" -p <receiver port> : Receiver port. If not given, analyse all receiver ports\n");
   printf(" -g <pcap-file>     : Receiver-side dumpfile\n");
   printf(" -c                 : Write CDF stats to file.\n");
+  printf(" -l<interval>       : Write loss over time to file with optional time slice interval (Default is 1 second).\n");
   printf(" -t                 : Calculate transport-layer delays\n");
   printf("                    : (if not set, application-layer delay is calculated)\n");
   printf(" -u<prefix>         : Write statistics to comma-separated files (for use with R)\n");
@@ -82,7 +90,7 @@ void usage (char* argv){
   printf(" -A                 : Only print aggregated statistics (off by default, optional)\n");
   printf(" -b                 : Give this option if you know that tcpdump has dropped packets.\n");
   printf("                    : Statistical methods will be used to compensate where possible.\n");
-  printf(" -l                 : Print relative sequence numbers.\n");
+  printf(" -j                 : Print relative sequence numbers.\n");
   printf(" -y                 : Print details for each packet (requires receiver side dump).\n");
   printf(" -x                 : Calculate RDB miss/hits (requires receiver side dump).\n");
   printf(" -d                 : Indicate debug level\n");
@@ -151,6 +159,18 @@ void test(Dump *d) {
 		printf("SEQ %d: %lu\n", i + 5, d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute));
 	}
 
+	// Seq just wrapped, but received out of order (or older packet with unwrapped seq number)
+	seq = 4294962347;
+	first_seq = 4286361190;
+	lastLargestEndSeq = 8609844;
+	largestSeqAbsolute = 3739;
+	printf("\nTEST %d:\n", i + 5);
+	printf("first_seq: %u\n", first_seq);
+	printf("seq      : %u\n", seq);
+	printf("largestSeqAbsolute: %u\n", largestSeqAbsolute);
+	printf("lastLargestEndSeq: %lu\n", lastLargestEndSeq);
+	printf("SEQ %d: %lu\n", i + 5, d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute));
+
 	exit(1);
 }
 
@@ -166,7 +186,7 @@ int main(int argc, char *argv[]){
   Dump *senderDump;
 
   while (1){
-    c = getopt(argc, argv, "s:r:p:q:f:m:n:o:g:d:u::o:aAtblyxch");
+    c = getopt(argc, argv, "s:r:p:q:f:m:n:o:g:d:u::l::o:aAtbjyxch");
     if (c == -1)
 		break;
 
@@ -199,6 +219,18 @@ int main(int argc, char *argv[]){
       recvfn = optarg;
       GlobOpts::withRecv = true;
       break;
+    case 'l':
+      GlobOpts::withLoss = true;
+	  if (optarg) {
+		  char *sptr = NULL;
+		  long int ret = strtol(optarg, &sptr, 10);
+		  if (ret <= 0 || sptr == NULL || *sptr != '\0') {
+			  colored_printf(RED, "Option -l requires a valid integer: '%s'\n", optarg);
+			  usage(argv[0]);
+		  }
+		  GlobOpts::lossAggrSeconds = ret;
+		}
+      break;
     case 'c':
       GlobOpts::withCDF = true;
       break;
@@ -225,7 +257,7 @@ int main(int argc, char *argv[]){
     case 'b':
       GlobOpts::incTrace = true;
       break;
-    case 'l':
+    case 'j':
       GlobOpts::relative_seq = true;
       break;
     case 'y':
@@ -268,11 +300,14 @@ int main(int argc, char *argv[]){
   }
 
   if (GlobOpts::RFiles_dir.length()) {
-	  GlobOpts::prefix = GlobOpts::RFiles_dir + "/" + GlobOpts::prefix;
+	  if (!endsWith(GlobOpts::RFiles_dir, string("/")))
+		  GlobOpts::RFiles_dir += "/";
+	  GlobOpts::prefix = GlobOpts::RFiles_dir + GlobOpts::prefix;
   }
 
   // Define once to run the constructor of GlobStats
   GlobStats s;
+  globStats = &s;
 
   /* Create Dump - object */
   senderDump = new Dump(src_ip, dst_ip, src_port, dst_port, sendfn);
@@ -284,8 +319,9 @@ int main(int argc, char *argv[]){
 
   if (GlobOpts::withRecv) {
 	  senderDump->processRecvd(recvfn);
-	  senderDump->write_loss_to_file();
   }
+
+  senderDump->write_loss_to_file();
 
   if ((GlobOpts::print_packets)) {
 	  senderDump->calculateRDBStats();

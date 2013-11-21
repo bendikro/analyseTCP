@@ -1,16 +1,16 @@
 #include "RangeManager.h"
 #include "Connection.h"
-#include "Range.h"
 #include "ByteRange.h"
 #include "analyseTCP.h"
 #include "color_print.h"
+#include "util.h"
 
-map<const int, int> GlobStats::cdf;
+map<const long, int> GlobStats::cdf;
 map<const int, int> GlobStats::dcCdf;
 float GlobStats::avgDrift = 0;
 
 RangeManager::~RangeManager() {
-	multimap<ulong, Range*>::iterator it, it_end;
+	multimap<ulong, ByteRange*>::iterator it, it_end;
 	it = ranges.begin();
 	it_end = ranges.end();
 	for (; it != it_end; it++) {
@@ -23,57 +23,35 @@ RangeManager::~RangeManager() {
 	for (; rit != rit_end; rit++) {
 		delete *rit;
 	}
-
-	multimap<ulong, ByteRange*>::iterator brIt, brIt_end;
-	brIt = brMap.begin();
-	brIt_end = brMap.end();
-
-	for (; brIt != brIt_end; brIt++) {
-		delete brIt->second;
-	}
 }
 
 bool RangeManager::hasReceiveData() {
 	return !recvd.empty();
 }
 
+
 /* Register all bytes with a common send time as a range */
-Range* RangeManager::insertSentRange(struct sendData *sd) {
+void RangeManager::insertSentRange(struct sendData *sd) {
 	static ulong startSeq;
 	static ulong endSeq;
-	static timeval *tv;
-	static Range* range;
 	static int ranges_size;
-	static multimap<ulong, Range*>::reverse_iterator it, it_end;
 
 	startSeq = sd->data.seq;
 	endSeq = sd->data.endSeq;
-	tv = &(sd->data.tstamp_pcap);
-	range = NULL;
 
-	//printf("insertSentRange(%4d) (%u - %u)\n", sd->data.payloadSize, relative_seq(startSeq), relative_seq(endSeq));
+	//printf("insertSentRange(%4d) (%lu - %lu) (%lu - %lu)\n", sd->data.payloadSize, relative_seq(startSeq), relative_seq(endSeq), startSeq, endSeq);
 
 	if (GlobOpts::debugLevel == 6) {
 		printf("\ninsertSentRange - retrans: %d, is_rdb %d\n", sd->data.retrans, sd->data.is_rdb);
 	}
 
-	// Ignore acks (including SYN/ack and FIN/ack)
-	if ((GlobOpts::print_packets || GlobOpts::rdbDetails) && startSeq != endSeq)
-		insert_byte_range(startSeq, endSeq, true, &(sd->data), 0);
+	insert_byte_range(startSeq, endSeq, true, &(sd->data), 0);
 
 	ranges_size = ranges.size();
 	if (ranges_size <= 1 && sd->data.payloadSize == 0) { /* First or second packet in stream */
 		if (GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5)
 			cerr << "-------Creating first range---------" << endl;
-
-		if (ranges_size == 0) {
-			range = new Range(startSeq, startSeq, endSeq, sd->data.payloadSize, NULL, tv, false, this);
-			ranges.insert(pair<uint32_t, Range*>(range->getStartSeq(), range));
-			lastSeq = 1;
-		}
-		else {
-			lastSeq = endSeq;
-		}
+		lastSeq = endSeq;
 	}
 	else if (startSeq == lastSeq) { /* Next packet in correct sequence */
 
@@ -81,8 +59,6 @@ Range* RangeManager::insertSentRange(struct sendData *sd) {
 			cerr << "-------New range equivalent with packet---------" << endl;
 			printf("%s - inserted Range with startseq: %lu\n", conn->getConnKey().c_str(), relative_seq(startSeq));
 		}
-		range = new Range(startSeq, startSeq, endSeq, sd->data.payloadSize, NULL, tv, false, this);
-		ranges.insert(pair<uint32_t, Range*>(range->getStartSeq(), range));
 		lastSeq = startSeq + sd->data.payloadSize;
 
 		if (GlobOpts::debugLevel == 3 || GlobOpts::debugLevel == 5) {
@@ -100,9 +76,9 @@ Range* RangeManager::insertSentRange(struct sendData *sd) {
 		// This is most probably the ack on the FIN ack from receiver, so ignore
 		if (sd->data.payloadSize != 0) {
 			cerr << "RangeManager::insertRange: Missing byte in send range in conn '" << conn->getConnKey() << "'. " << endl;
-			printf("lastSeq: %lu, startSeq: %lu\n", relative_seq(lastSeq), relative_seq(startSeq));
-			cerr << "This is an indication that tcpdump has dropped packets" << endl
-			     << "while collecting the trace." << endl
+			printf("Absolute: lastSeq: %lu, startSeq: %lu. Relative: lastSeq: %lu, startSeq: %lu\n",
+				   lastSeq, startSeq, relative_seq(lastSeq), relative_seq(startSeq));
+			cerr << "This is an indication that tcpdump has dropped packets while collecting the trace." << endl
 			     << "Please rerun using the -b option." << endl;
 			exit_with_file_and_linenum(1, __FILE__, __LINE__);
 		}
@@ -114,8 +90,6 @@ Range* RangeManager::insertSentRange(struct sendData *sd) {
 
 		// This is an ack
 		if (sd->data.payloadSize == 0) {
-			range = new Range(startSeq, startSeq, endSeq, sd->data.payloadSize, NULL, tv, false, this);
-			ranges.insert(pair<uint32_t, Range*>(range->getStartSeq(), range));
 			lastSeq = startSeq + sd->data.payloadSize;
 		}
 		else {
@@ -128,13 +102,6 @@ Range* RangeManager::insertSentRange(struct sendData *sd) {
 				cerr << "Valid range: startSeq: " << relative_seq(startSeq) << " - endSeq:   " << relative_seq(endSeq)
 				     << " - size: " << relative_seq(endSeq +1 - startSeq ) << endl;
 			}
-
-			range = new Range(lastSeq, lastSeq, startSeq -1, startSeq - lastSeq, NULL, tv, true, this);
-			ranges.insert(pair<uint32_t, Range*>(range->getStartSeq(), range));
-
-			/* Then insert the new, valid range */
-			range = new Range(startSeq, startSeq, endSeq, sd->data.payloadSize, NULL, tv, false, this);
-			ranges.insert(pair<uint32_t, Range*>(range->getStartSeq(), range));
 
 			lastSeq = startSeq + sd->data.payloadSize;
 			if (lastSeq != (endSeq + 1)) {
@@ -149,16 +116,6 @@ Range* RangeManager::insertSentRange(struct sendData *sd) {
 
 			if (GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5)
 				cerr << "-------All bytes have already been registered - discarding---------" << endl;
-			/* Traverse all affected ranges and tag all
-			   ranges that contain retransmitted bytes */
-			it_end = ranges.rend();
-			for (it = ranges.rbegin(); it != it_end; it++) {
-				if (startSeq > it->second->getEndSeq())
-					break;
-				if ((endSeq + 1) > it->second->getStartSeq()) {
-					it->second->incNumRetrans(); // Count a new retransmission
-				}
-			}
 			redundantBytes += (endSeq +1 - startSeq);
 			if (GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5) {
 				cerr << "Adding " << (endSeq +1 - startSeq)
@@ -173,22 +130,9 @@ Range* RangeManager::insertSentRange(struct sendData *sd) {
 				exit_with_file_and_linenum(1, __FILE__, __LINE__);
 			}
 
-			range = new Range(lastSeq, lastSeq, endSeq, sd->data.payloadSize, NULL, tv, false, this);
-
-			ranges.insert(pair<ulong, Range*>(range->getStartSeq(), range));
 			lastSeq = startSeq + sd->data.payloadSize;
 			if (lastSeq != (endSeq + 1)) {
 				printf("INCORRECT: %u\n", sd->data.payloadSize);
-			}
-
-			/* Traverse all affected ranges and tag all
-			   ranges that contain bundled bytes */
-			it_end = ranges.rend();
-			for (it = ranges.rbegin(); it != it_end; it++) {
-				if (startSeq >= it->second->getEndSeq())
-					break;
-				if (endSeq > it->second->getStartSeq())
-					it->second->incNumBundled(); /* Count a new bundling */
 			}
 		}
 	}
@@ -196,7 +140,6 @@ Range* RangeManager::insertSentRange(struct sendData *sd) {
 	if ((startSeq + sd->data.payloadSize) > largestEndSeq) {
 		largestEndSeq = startSeq + sd->data.payloadSize;
 	}
-	return range;
 }
 
 /* Register all bytes with a common send time as a range */
@@ -227,163 +170,24 @@ void RangeManager::insertRecvRange(struct sendData *sd) {
 	return;
 }
 
-/* Register all bytes with a coomon send time as a range */
-/*
-void RangeManager::insertRecvRange(struct sendData *sd) {
-	static struct recvData *tmpRecv;
-	tmpRecv = new struct recvData();
-	tmpRecv->startSeq = sd->data.seq;
-	tmpRecv->endSeq = sd->data.endSeq;
-	tmpRecv->tv = (sd->data.tstamp_pcap);
-	tmpRecv->data = sd->data.data;
-	tmpRecv->payload_len = sd->data.payloadSize;
-
-	if (sd->data.payloadSize > 0)
-		tmpRecv->endSeq -= 1;
-
-	if (GlobOpts::debugLevel == 3 || GlobOpts::debugLevel == 5) {
-		cerr << "Inserting receive data: startSeq=" << relative_seq(tmpRecv->startSeq) << ", endSeq=" << relative_seq(tmpRecv->endSeq) << endl;
-		if (tmpRecv->startSeq == 0 || tmpRecv->endSeq == 0) {
-			cerr << "Erroneous seq." << endl;
-		}
-	}
-
-	recvd.push_back(tmpRecv);
-
-	std::ostringstream key;
-	key << tmpRecv->startSeq << ":" << tmpRecv->endSeq;
-	return;
-}
-*/
-/*
-long get_timeval(timeval* tv) {
-	long ms = 0;
-	if (tv->tv_sec > 0) {
-		ms += tv->tv_sec * 1000;
-	}
-	ms += (tv->tv_usec / 1000);
-	return ms;
-}
-*/
 
 /* Register first ack time for all bytes.
    Organize in ranges that have common send and ack times */
 bool RangeManager::processAck(ulong ack, timeval* tv) {
-	static Range* tmpRange;
-	static bool ret;
-	static multimap<ulong, Range*>::iterator it, it_end;
-	ret = false;
-	it = ranges.begin();
-	it_end = ranges.end();
-
-	if (highestAckedIt == ranges.end()) {
-		it = ranges.begin();
-	}
-	else {
-		it = highestAckedIt;
-	}
-
-	for (; it != it_end; it++) {
-		tmpRange = it->second;
-
-		if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
-			cerr << "tmpRange - startSeq: " << relative_seq(tmpRange->getStartSeq())
-			     << " - endSeq: " << relative_seq(tmpRange->getEndSeq()) << endl;
-
-		/* All data from this ack has been acked before: return */
-		if (ack <= tmpRange->getStartSeq()) {
-			if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
-				cerr << "--------All data has been ACKed before - skipping--------" << endl;
-			ret = true;
-			break;
-		}
-
-		/* This ack covers this range, but not more: ack and return */
-		if (ack == (tmpRange->getEndSeq() + 1)) {
-			if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
-				cerr << "--------Ack equivalent with last range --------" << endl;
-			tmpRange->insertAckTime(tv);
-			highestAckedIt = it;
-			highestAckedIt++;
-			return true;
-		}
-
-		/* ACK covers more than this range: ACK this range and continue */
-		if (ack > (tmpRange->getEndSeq() +1)) {
-			if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
-				cerr << "--------Ack covers more than this range: Continue to next --------" << endl;
-			tmpRange->insertAckTime(tv);
-			highestAckedIt = it;
-			highestAckedIt++;
-			ret = true;
-			continue;
-		}
-
-		/* ACK covers only part of this range: split range and return */
-		if (ack > tmpRange->getStartSeq() && ack < (tmpRange->getEndSeq() +1)) {
-			if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
-				cerr << "--------Ack covers only parts of this range: Splitting --------" << endl;
-				cerr << " Split range dummy: " << tmpRange->isDummy() << endl;
-				cerr << " Split range nr.retrans: " << tmpRange->getNumRetrans() << endl;
-			}
-
-			Range* newRange = new Range(ack, ack, tmpRange->getEndSeq(), tmpRange->getEndSeq() - ack + 1, NULL,
-						    tmpRange->getSendTime(), tmpRange->isDummy(), this);
-
-			/* First part of range: increase startSeq = ack + 1 no ack*/
-			tmpRange->setEndSeq(ack - 1);
-			if (tmpRange->getRDBSeq() > ack) {
-				printf("RDB SEQ greater than ACK!\n");
-			}
-
-			if (relative_seq(tmpRange->getStartSeq()) == 1785761810) {
-				printf("Set acktime for RANGE3!!\n");
-			}
-
-
-			tmpRange->insertAckTime(tv);
-			/* Second part of range: insert before it (tmpRange) */
-			highestAckedIt = ranges.insert(pair<ulong, Range*>(newRange->getStartSeq(), newRange));
-			return true;
-		}
-
-		/* If we get here, something's gone wrong */
-		cerr << "tmpRange->startSeq : " << relative_seq(tmpRange->getStartSeq()) << endl;
-		cerr << "tmpRange->endSeq   : " << relative_seq(tmpRange->getEndSeq()) << endl;
-		cerr << "ack                : " << relative_seq(ack) << endl;
-		cerr << "RangeManager::processAck: Error in ack processing. Exiting." << endl;
-		exit_with_file_and_linenum(1, __FILE__, __LINE__);
-	}
-	if (!ret)
-		printf("ACK failed to find packet!\n");
-
-	return ret;
-}
-
-/* Register first ack time for all bytes.
-   Organize in ranges that have common send and ack times */
-bool RangeManager::processAckByteRange(ulong ack, timeval* tv) {
 	static ByteRange* tmpRange;
 	static bool ret;
 	int debug_print = 0;
 	static multimap<ulong, ByteRange*>::iterator it, it_end;
 	ret = false;
-	it = brMap.begin();
-	it_end = brMap.end();
+	it = ranges.begin();
+	it_end = ranges.end();
 
-	if (highestAckedByteRangeIt == brMap.end()) {
-		it = brMap.begin();
+	if (highestAckedByteRangeIt == ranges.end()) {
+		it = ranges.begin();
 	}
 	else {
 		it = highestAckedByteRangeIt;
 	}
-
-//	debug_print = GlobOpts::debugLevel == 6;
-
-	if (relative_seq(ack) >= 3921820430 && relative_seq(ack) <= 3921859425) {
-		debug_print = 1;
-	}
-
 
 	if (debug_print)
 		printf("ProcessACK: %lu\n", relative_seq(ack));
@@ -432,24 +236,15 @@ bool RangeManager::processAckByteRange(ulong ack, timeval* tv) {
 
 		/* ACK covers only part of this range: split range and return */
 		if (ack > tmpRange->getStartSeq() && ack < (tmpRange->getEndSeq() +1)) {
-			//printf("ByteRange(%lu, %lu) - ack: %lu\n", tmpRange->getStartSeq(), tmpRange->getEndSeq(), ack);
 			if (debug_print) {
 				printf("  Covers parts of  Range(%lu, %lu)\n", relative_seq(tmpRange->getStartSeq()), relative_seq(tmpRange->getEndSeq()));
 			}
 			ByteRange *new_br = tmpRange->split_end(ack, tmpRange->endSeq);
-
 			tmpRange->insertAckTime(tv);
-            /*
-			  if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
-				cerr << "--------Ack covers only parts of this range: Splitting --------" << endl;
-				cerr << " Split range dummy: " << tmpRange->isDummy() << endl;
-				cerr << " Split range nr.retrans: " << tmpRange->getNumRetrans() << endl;
-			}
-			*/
-			// Second part of range: insert after tmpRange (tmpRange)
-			highestAckedByteRangeIt = brMap.insert(pair<ulong, ByteRange*>(new_br->getStartSeq(), new_br));
-			return true;
 
+			// Second part of range: insert after tmpRange (tmpRange)
+			highestAckedByteRangeIt = ranges.insert(pair<ulong, ByteRange*>(new_br->getStartSeq(), new_br));
+			return true;
 		}
 
 		/* If we get here, something's gone wrong */
@@ -460,7 +255,7 @@ bool RangeManager::processAckByteRange(ulong ack, timeval* tv) {
 		exit_with_file_and_linenum(1, __FILE__, __LINE__);
 	}
 	if (!ret)
-		printf("ACK failed to find packet!\n");
+		printf("ByteRange - Failed to find packet for ack: %lu\n", ack);
 
 	return ret;
 }
@@ -496,9 +291,10 @@ Percentiles *percentiles(const vector<double> *v) {
 
 
 /* TODO: Check handling of invalid ranges */
+
 void RangeManager::genStats(struct byteStats *bs) {
 	int latency;
-	multimap<ulong, Range*>::iterator it, it_end;
+	multimap<ulong, ByteRange*>::iterator it, it_end;
 	it = ranges.begin();
 	it_end = ranges.end();
 
@@ -508,14 +304,13 @@ void RangeManager::genStats(struct byteStats *bs) {
 	bs->minLat = bs->minLength = (numeric_limits<int>::max)();
 
 	for (; it != it_end; it++) {
-		/* Skip if invalid (negative) latency or dummy range */
-		tmp_byte_count = it->second->getNumBytes();
+		// Skip if invalid (negative) latency
+		tmp_byte_count = it->second->getOrinalPayloadSize();
 		payload_lengths.push_back(tmp_byte_count);
 		bs->cumLength += tmp_byte_count;
-
-		if (tmp_byte_count == 1) {
-			printf("Payload is 1!\n");
-			printf("Range (%lu, %lu, %lu) \n", relative_seq(it->second->getStartSeq()), relative_seq(it->second->getRDBSeq()), relative_seq(it->second->getEndSeq()));
+		for (int i = 0; i < it->second->getNumRetrans(); i++) {
+			payload_lengths.push_back(tmp_byte_count);
+			bs->cumLength += tmp_byte_count;
 		}
 
 		if (tmp_byte_count) {
@@ -526,7 +321,7 @@ void RangeManager::genStats(struct byteStats *bs) {
 			}
 		}
 
-		if ((latency = it->second->getSendAckTimeDiff())) {
+		if ((latency = it->second->getSendAckTimeDiff(this))) {
 			 latencies.push_back(latency);
 			 bs->cumLat += latency;
 			 if (latency > bs->maxLat) {
@@ -538,7 +333,7 @@ void RangeManager::genStats(struct byteStats *bs) {
 			 bs->nrRanges++;
 		} else {
 			if (!it->second->isAcked())
-				continue; /* Skip */
+				continue;
 		}
 
 		int retrans = it->second->getNumRetrans();
@@ -577,13 +372,14 @@ void RangeManager::genStats(struct byteStats *bs) {
 	if (payload_lengths.size()) {
 		// Payload size stats
 		double sumLen = conn->totBytesSent;
-		double meanLen =  sumLen / conn->nrDataPacketsSent;
-
+		double meanLen =  sumLen / payload_lengths.size();
 		bs->avgLength = meanLen;
+
 		temp = 0;
 		for (unsigned int i = 0; i < payload_lengths.size(); i++) {
 			temp += (payload_lengths[i] - meanLen) * (payload_lengths[i] - meanLen);
 		}
+
 		std::sort(payload_lengths.begin(), payload_lengths.end());
 		stdev = sqrt(temp / (payload_lengths.size()));
 		bs->stdevLength = stdev;
@@ -601,10 +397,9 @@ void RangeManager::genStats(struct byteStats *bs) {
 void RangeManager::validateContent() {
 	int numAckTimes = 0;
 	int numSendTimes = 0;
-	int numDummy = 0;
 	ulong tmpEndSeq = 0;
 
-	multimap<ulong, Range*>::iterator first, it, it_end, prev;
+	multimap<ulong, ByteRange*>::iterator first, it, it_end, prev;
 	first = it = ranges.begin();
 	it_end = ranges.end();
 	prev = it_end;
@@ -615,7 +410,7 @@ void RangeManager::validateContent() {
 	if (it->second->getStartSeq() != 0) {
 		printf("firstSeq: %lu, StartSeq: %lu\n", firstSeq, it->second->getStartSeq());
 		printf("RangeManager::validateContent: firstSeq != StartSeq (%lu != %lu)\n", relative_seq(it->second->getStartSeq()), relative_seq(firstSeq));
-		printf("First range (%lu, %lu, %lu)\n", relative_seq(it->second->getStartSeq()), relative_seq(it->second->getRDBSeq()), relative_seq(it->second->getEndSeq()));
+		printf("First range (%lu, %lu)\n", relative_seq(it->second->getStartSeq()), relative_seq(it->second->getEndSeq()));
 		warn_with_file_and_linenum(__FILE__, __LINE__);
 	}
 
@@ -653,9 +448,9 @@ void RangeManager::validateContent() {
 				cerr << "RangeManager::validateContent: Byte-stream in ranges not continuous. Exiting." << endl;
 				printf("payload_len: %d\n", it->second->getNumBytes());
 
-				printf("Prev Range (%lu, %lu, %lu) Len: %u\n", relative_seq(prev->second->getStartSeq()), relative_seq(prev->second->getRDBSeq()),
+				printf("Prev Range (%lu, %lu) Len: %u\n", relative_seq(prev->second->getStartSeq()),
 				       relative_seq(prev->second->getEndSeq()), prev->second->getNumBytes());
-				printf("Curr Range (%lu, %lu, %lu) Len: %u\n", relative_seq(it->second->getStartSeq()), relative_seq(it->second->getRDBSeq()),
+				printf("Curr Range (%lu, %lu) Len: %u\n", relative_seq(it->second->getStartSeq()),
 				       relative_seq(it->second->getEndSeq()), it->second->getNumBytes());
 				cerr << "tmpEndSeq           : " << relative_seq(tmpEndSeq) << endl;
 				cerr << "Conn KEY           : " << conn->getConnKey() << endl;
@@ -667,8 +462,6 @@ void RangeManager::validateContent() {
 			numSendTimes++;
 		if (it->second->getAckTime())
 			numAckTimes++;
-		if (it->second->isDummy())
-			numDummy++;
 
 		prev = it;
 	}
@@ -682,13 +475,11 @@ void RangeManager::validateContent() {
 					 << " - New size: " << ranges.size() << endl;
 		}
 		nrRanges = ranges.size();
-		nrDummy = numDummy;
 
 	}
 	if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
 		cerr << "First seq: " << firstSeq << " Last seq: " <<  lastSeq << endl;
 		cerr << "Number of ranges: " << ranges.size() << endl;
-		cerr << "Number of dummy ranges: " << numDummy << endl;
 		cerr << "Number of bytes: " << lastSeq - firstSeq << endl;
 		cerr << "numSendTimes: " << numSendTimes << endl;
 		cerr << "numAckTimes: " << numAckTimes << endl;
@@ -700,52 +491,16 @@ void RangeManager::validateContent() {
 }
 
 /*
-  This is used to track the data in regards to retrans or rdb. This functionality is somewhat a duplicate of the Range tracking in ranges.
+  This inserts the the data into the ranges map.
   It's called both with sent end received data ranges.
  */
 void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, struct DataSeg *data_seg, int level) {
 	int debug_print;
 	ByteRange *last_br = NULL;
 	multimap<ulong, ByteRange*>::iterator brIt, brIt_end;
-	brIt_end = brMap.end();
+	brIt_end = ranges.end();
 	brIt = brIt_end;
 	char prefix[100];
-
-	debug_print = GlobOpts::debugLevel == 6;
-//	debug_print = 1;
-
-	//indent_print("insert seq: %lu, rel: %lu\n", start_seq, relative_seq(start_seq));
-
-	/*
-
-	  // 1363862162
-	if (relative_seq(start_seq) >= 2670586023 && relative_seq(start_seq) <= 2670587023) {
-		debug_print = 1;
-	}
-
-	if (relative_seq(start_seq) >= 1363862162) {
-		debug_print = 1;
-	}
-
-	if (relative_seq(start_seq) >= 1363862162 && relative_seq(start_seq) <= 1363868162) {
-		debug_print = 1;
-	}
-
-	if (relative_seq(start_seq) >= 961473761 && relative_seq(start_seq) <= 961474861) {
-		debug_print = 1;
-	}
-
-	*/
-
-
-//	max_seq = 2670598023;
-
-	bool this_is_rdb_data = data_seg->is_rdb && data_seg->rdb_end_seq > start_seq;
-
-	if (relative_seq(start_seq) > max_seq) {
-		printf("RETURN!\n");
-		return;
-	}
 
 	int i;
 	int indent = level * 3;
@@ -757,6 +512,10 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 #define indent_print(format, args...) printf("%s "format, prefix, args)
 #define indent_print2(format) printf("%s "format, prefix)
 
+	debug_print = GlobOpts::debugLevel == 6;
+
+	bool this_is_rdb_data = data_seg->is_rdb && data_seg->rdb_end_seq > start_seq;
+
 	if (debug_print) {
 		if (!level)
 			printf("\n");
@@ -766,12 +525,14 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 
 	// An ack
 	if (start_seq == end_seq) {
-		return;
+		//If not SYN, it's ack, so return
+		if (!(data_seg->flags & TH_SYN))
+			return;
 	}
 
 	if (brIt == brIt_end) {
 		// Check if this range exists
-		brIt = brMap.find(start_seq);
+		brIt = ranges.find(start_seq);
 	}
 
 	// Doesn't exist
@@ -794,8 +555,8 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 				last_br->retrans_count += data_seg->retrans;
 				last_br->rdb_count += data_seg->is_rdb;
 				last_br->tstamps_tcp.push_back(data_seg->tstamp_tcp);
-				//last_br->tstamp_pcap = data_seg->tstamp_pcap;
-				brMap.insert(pair<ulong, ByteRange*>(start_seq, last_br));
+				last_br->sent_tstamp_pcap.push_back(data_seg->tstamp_pcap);
+				ranges.insert(pair<ulong, ByteRange*>(start_seq, last_br));
 				return;
 			}
 			else if (start_seq +1 == firstSeq) {
@@ -804,9 +565,10 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 		}
 
 		multimap<ulong, ByteRange*>::iterator lowIt, highIt;
+		lowIt = ranges.lower_bound(start_seq +1);
+		highIt = ranges.upper_bound(end_seq);
+
 		//indent_print("start_seq: %lu,  start_seq - 10000: %lu\n", start_seq, (start_seq - 10000));
-		lowIt = brMap.lower_bound(start_seq +1);
-		highIt = brMap.upper_bound(end_seq);
 
 		ulong new_end_seq = end_seq;
 
@@ -823,33 +585,16 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 		}
 
 		if (start_seq < lastSeq) {
-//			debug_print = 1;
 
-			if (debug_print) {
-				indent_print2("New Range is not newest!\n");
-			}
 			ulong lower = std::min(0UL, start_seq - 10000);
-			//indent_print("lower: %lu\n", lower);
-			lowIt = brMap.lower_bound(lower);
+			lowIt = ranges.lower_bound(lower);
 
 			// Search for existing ranges for this data
 			for (; lowIt != highIt && lowIt != highIt;) {
-				//debug_print = 1;
-
-				//if (debug_print) {
-				//	indent_print("lowIt->second->startSeq (%lu) <= start_seq (%lu): %d\n", relative_seq(lowIt->second->startSeq), relative_seq(start_seq),
-				//	       lowIt->second->startSeq <= start_seq);
-				//	indent_print("lowIt->second->endSeq   (%lu) <= start_seq (%lu): %d\n", relative_seq(lowIt->second->endSeq), relative_seq(start_seq),
-				//	       lowIt->second->endSeq >= start_seq);
-				//}
 
 				// Found existing range
 				// The existing range is bigger than the data to be registered, so we split the existing range
 				if (lowIt->second->startSeq <= start_seq && lowIt->second->endSeq >= start_seq) {
-					// Found existing range with matching data for: 4294747345 - 4294748792!
-					//                             Existing range : 4294745897 - 4294748792
-					//                                          New 4294745897 - 4294747345, 4294747346 - 4294748792
-
 					if (lowIt->second->startSeq == start_seq) {
 						printf("New Data is at the beginning of existing range!!\n");
 						printf("Existing Range: %lu - %lu\n", relative_seq(lowIt->second->startSeq), relative_seq(lowIt->second->endSeq));
@@ -858,8 +603,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 					assert(lowIt->second->startSeq != start_seq && "New Data is at beginning of existing range!!\n");
 
 					// Splitting existing range
-					//ByteRange *new_br = new ByteRange(lowIt->second->startSeq, start_seq -1);
-					int end_matches = end_seq == lowIt->second->endSeq;
+					int end_matches = (end_seq == lowIt->second->endSeq);
 					ByteRange *cur_br = lowIt->second;
 
 					if (debug_print) {
@@ -871,54 +615,52 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 
 					// Split the current range in two. The new range will be at the beginning of the old (existing range)
 					// The new data matches the existing data
-					//assert(0 && "HMMMM");
 					ByteRange *new_br = cur_br->split_start(cur_br->startSeq, start_seq -1);
 
 					if (sent) {
 						cur_br->sent_count++;
 						cur_br->retrans_count += data_seg->retrans;
 						cur_br->rdb_count += data_seg->is_rdb;
+						cur_br->sent_tstamp_pcap.push_back(data_seg->tstamp_pcap);
+						assert(!(!this_is_rdb_data && data_seg->is_rdb) && "Should not be retrans!\n");
+
+						cur_br->lost_tstamps_tcp.push_back(data_seg->tstamp_tcp);
+						if (this_is_rdb_data) {
+							cur_br->rdb_tstamps_tcp.push_back(data_seg->tstamp_tcp);
+							assert(data_seg->retrans == 0 && "Should not be retrans!\n");
+						}
+						else {
+							// Must this be retrans
+							assert(data_seg->retrans != 0 && "Should be retransmission!\n");
+							cur_br->tstamps_tcp.push_back(data_seg->tstamp_tcp);
+						}
 					}
 					else {
-						cur_br->increase_received(data_seg->tstamp_tcp);
+						cur_br->increase_received(data_seg->tstamp_tcp, data_seg->tstamp_pcap);
 						//assert(0 && "TEST\n");
 						assert(cur_br->received_tstamp_tcp && "TEST\n");
 						//new_br->split_after_sent = true;
 					}
-
-					//assert(sent && "Not sent but still sount_count is increased!!!\n");
-
-					//printf("RETRANS: %d\n", data_seg->retrans);
-					//printf("IS  RDB: %d\n", data_seg->is_rdb);
-
-					cur_br->lost_tstamps_tcp.push_back(data_seg->tstamp_tcp);
-
-					if (this_is_rdb_data) {
-						cur_br->rdb_tstamps_tcp.push_back(data_seg->tstamp_tcp);
-						assert(data_seg->retrans == 0 && "Should not be retrans!\n");
-					}
-					else
-						cur_br->tstamps_tcp.push_back(data_seg->tstamp_tcp);
 
 					if (debug_print) {
 						indent_print("New Range      : %lu - %lu\n", relative_seq(new_br->startSeq), relative_seq(new_br->endSeq));
 						indent_print("Old Range      : %lu - %lu\n", relative_seq(cur_br->startSeq), relative_seq(cur_br->endSeq));
 					}
 					// Remove current Range
-					brMap.erase(lowIt++);
+					ranges.erase(lowIt++);
 					// Add existing and new range with correct key
-					brMap.insert(pair<ulong, ByteRange*>(new_br->startSeq, new_br));
-					brMap.insert(pair<ulong, ByteRange*>(cur_br->startSeq, cur_br));
+					ranges.insert(pair<ulong, ByteRange*>(new_br->startSeq, new_br));
+					ranges.insert(pair<ulong, ByteRange*>(cur_br->startSeq, cur_br));
 
 					if (!end_matches) {
 						//indent_print("End seqs do not match! %lu != %lu\n", relative_seq(end_seq), relative_seq(cur_br->endSeq));
 						if (cur_br->endSeq > end_seq) {
 							ByteRange *new_br = cur_br->split_end(end_seq + 1, cur_br->endSeq);
-							brMap.insert(pair<ulong, ByteRange*>(new_br->startSeq, new_br));
+							ranges.insert(pair<ulong, ByteRange*>(new_br->startSeq, new_br));
 							return;
 						}
 						else {
-							assert(0 && "FACK!\n");
+							assert(0 && "Shouldn't come here!?\n");
 						}
 					}
 					else {
@@ -932,80 +674,34 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 		}
 
 		if (sent) {
-
 			if (debug_print) {
 				indent_print("data_seg->is_rdb: %d\n", data_seg->is_rdb  );
 				indent_print("data_seg->rdb_end_seq > start_seq: %lu > %lu: %d\n", relative_seq(data_seg->rdb_end_seq), relative_seq(start_seq), data_seg->rdb_end_seq > start_seq);
 			}
 
-			// This Range has some RDB data and some new data, so make two Ranges
-			if (this_is_rdb_data) {
-				indent_print("this_is_rdb_data: %d\n", this_is_rdb_data);
+			last_br = new ByteRange(start_seq, new_end_seq);
+			last_br->sent_count = 1;
 
-				ByteRange *new_br = new ByteRange(start_seq, data_seg->rdb_end_seq);
-				last_br = new ByteRange(data_seg->rdb_end_seq +1, new_end_seq);
-				last_br->sent_count = new_br->sent_count = 1;
-				last_br->sent_tstamp_pcap = new_br->sent_tstamp_pcap = data_seg->tstamp_pcap;
-				last_br->rdb_tstamps_tcp.push_back(data_seg->tstamp_tcp);
-				last_br->lost_tstamps_tcp.push_back(data_seg->tstamp_tcp);
-				assert(data_seg->retrans && "Shouldn' be retrans?\n");
-
-				//last_br->retrans += data_seg->retrans; // Shouldn't happen?
-				brMap.insert(pair<ulong, ByteRange*>(new_br->startSeq, new_br));
-				brMap.insert(pair<ulong, ByteRange*>(last_br->startSeq, last_br));
-
-				indent_print("New RDB ByteRange (%lu) (%lu - %lu)\n", new_br->endSeq - new_br->startSeq + 1, relative_seq(new_br->startSeq), relative_seq(new_br->endSeq));
-				indent_print("New     ByteRange (%lu) (%lu - %lu)\n", last_br->endSeq - last_br->startSeq + 1, relative_seq(last_br->startSeq), relative_seq(last_br->endSeq));
-				assert(0 && "EXIT\n");
+			if (data_seg->is_rdb) {
+				//printf("Setting original RDB packet size: %lu\n", data_seg->payloadSize);
+				last_br->original_payload_size = data_seg->payloadSize;
 			}
-			else {
+			last_br->tstamps_tcp.push_back(data_seg->tstamp_tcp);
+			last_br->lost_tstamps_tcp.push_back(data_seg->tstamp_tcp);
+
+			assert(data_seg->retrans == 0 && "Shouldn't be retrans!\n");
+			assert(this_is_rdb_data == 0 && "Shouldn't be RDB?!\n");
+
+			if ((new_end_seq - start_seq) > 100) {
 				if (debug_print) {
-					indent_print2("YES!!!!!\n");
-					indent_print("New ByteRange (%lu) (%lu - %lu)\n", new_end_seq - start_seq + 1, relative_seq(start_seq), relative_seq(new_end_seq));
-					indent_print("RDB end seq: %lu\n", relative_seq(data_seg->rdb_end_seq));
+					indent_print("Inserting new big range: %lu\n", (new_end_seq - start_seq +1));
 				}
-				last_br = new ByteRange(start_seq, new_end_seq);
-				last_br->sent_count = 1;
-
-				if (debug_print) {
-					indent_print("this_is_rdb_data: %d\n", this_is_rdb_data);
-					indent_print("data_seg->is_rdb: %d\n", data_seg->is_rdb);
-				}
-
-				if (debug_print) {
-					indent_print("Adding tcp timestamp 5 to reg : %u\n", data_seg->tstamp_tcp);
-					if (data_seg->tstamp_tcp == 1968771524)
-						colored_printf(RED, "TSTAMP: %u\n", data_seg->tstamp_tcp);
-				}
-				last_br->tstamps_tcp.push_back(data_seg->tstamp_tcp);
-				last_br->lost_tstamps_tcp.push_back(data_seg->tstamp_tcp);
-
-				//last_br->retrans += data_seg->retrans;
-
-				assert(data_seg->retrans == 0 && "Shouldn't be retrans!\n");
-				//assert(data_seg->is_rdb == 0 && "Shouldn't be RDB?!\n");
-				//printf("this_is_rdb_data: %d\n", this_is_rdb_data);
-
-				assert(this_is_rdb_data == 0 && "Shouldn't be RDB?!\n");
-
-				if ((new_end_seq - start_seq) > 100) {
-					if (debug_print) {
-						indent_print("Inserting new big range: %lu\n", (new_end_seq - start_seq +1));
-					}
-					//exit(0);
-				}
-
-				//last_br->is_rdb += data_seg->is_rdb;
-				last_br->sent_tstamp_pcap = data_seg->tstamp_pcap;
-				brMap.insert(pair<ulong, ByteRange*>(start_seq, last_br));
 			}
+			last_br->sent_tstamp_pcap.push_back(data_seg->tstamp_pcap);
+			ranges.insert(pair<ulong, ByteRange*>(start_seq, last_br));
 		}
 		else {
 			assert(sent && "RECEIVED??\n");
-		}
-		if (debug_print) {
-			//indent_print("Exiting debug print!\n");
-			//exit(0);
 		}
 	}
 	// Exists in map
@@ -1017,7 +713,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 
 		// No payload, so it's an ack/syn/syn/ack-whatever
 		if ((start_seq - end_seq) == 0) {
-			brIt = brMap.find(start_seq -1);
+			brIt = ranges.find(start_seq -1);
 			if (brIt != brIt_end) {
 				indent_print("brIt->second->received_count: %d\n", brIt->second->received_count);
 				brIt->second->received_count += 1;
@@ -1032,14 +728,9 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 			if (!sent) {
 				// The ack on the syn-ack
 				if (end_seq == firstSeq +1) {
-					brIt = brMap.find(start_seq -1);
+					brIt = ranges.find(start_seq -1);
 					brIt->second->received_count++;
 					return;
-				}
-				else {
-					//indent_print("insert_byte_range (%lu): (%lu - %lu), sent: %d, retrans: %d, is_rdb: %d\n", end_seq - start_seq +1,
-					//			 relative_seq(start_seq), relative_seq(end_seq), sent, data_seg->retrans, data_seg->is_rdb);
-					//assert(0 && "Should come here??\n");
 				}
 			}
 
@@ -1056,7 +747,6 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 					brIt->second->sent_count++;
 					if (this_is_rdb_data) {
 						brIt->second->rdb_tstamps_tcp.push_back(data_seg->tstamp_tcp);
-						//printf("data_seg->retrans: %d\n", data_seg->retrans);
 						if (debug_print) {
 							indent_print("Adding tcp timestamp 1 to rdb : %u\n", data_seg->tstamp_tcp);
 							if (data_seg->tstamp_tcp == 1968771524)
@@ -1072,18 +762,12 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 								colored_printf(RED, "TSTAMP: %u\n", data_seg->tstamp_tcp);
 						}
 					}
+					brIt->second->sent_tstamp_pcap.push_back(data_seg->tstamp_pcap);
 					brIt->second->lost_tstamps_tcp.push_back(data_seg->tstamp_tcp);
 				}
 				else {
-					brIt->second->increase_received(data_seg->tstamp_tcp);
+					brIt->second->increase_received(data_seg->tstamp_tcp, data_seg->tstamp_pcap);
 					assert(brIt->second->received_tstamp_tcp && "TEST\n");
-				}
-				if (!sent) {
-					//colored_printf(data_seg->retrans ? RED : NO_COLOR, "REGISTER!!\n");
-					//indent_print2("Register received\n");
-					//indent_print("retrans %d -> %d\n", brIt->second->retrans, brIt->second->retrans + data_seg->retrans);
-					//indent_print("is_rdb  %d -> %d\n", brIt->second->is_rdb, brIt->second->is_rdb + data_seg->is_rdb);
-					//exit(0);
 				}
 				brIt->second->retrans_count += data_seg->retrans;
 				brIt->second->rdb_count += data_seg->is_rdb;
@@ -1113,23 +797,19 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 					else {
 						brIt->second->tstamps_tcp.push_back(data_seg->tstamp_tcp);
 					}
+					brIt->second->sent_tstamp_pcap.push_back(data_seg->tstamp_pcap);
 					brIt->second->lost_tstamps_tcp.push_back(data_seg->tstamp_tcp);
 				}
 				else {
-					//assert(0 && "RECEIVED! exit\n");
 					new_br->split_after_sent = true;
 					brIt->second->split_after_sent = true;
-					brIt->second->increase_received(data_seg->tstamp_tcp);
-					assert(brIt->second->received_tstamp_tcp && "TEST\n");
+					brIt->second->increase_received(data_seg->tstamp_tcp, data_seg->tstamp_pcap);
 				}
-				brMap.insert(pair<ulong, ByteRange*>(new_br->startSeq, new_br));
+				ranges.insert(pair<ulong, ByteRange*>(new_br->startSeq, new_br));
 			}
 		}
 		else {
 			// The end_seq of the new range correspond to the end-seq of the entry in the map, so it's a duplicate
-			if (debug_print) {
-				indent_print("ALREADY EXISTS: sent: %d, %lu - %lu - increasing count\n", sent, relative_seq(start_seq), relative_seq(end_seq));
-			}
 			if (sent) {
 				brIt->second->sent_count++;
 				brIt->second->retrans_count += data_seg->retrans;
@@ -1149,10 +829,11 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 						indent_print("Adding tcp timestamp 4 to reg : %u\n", data_seg->tstamp_tcp);
 					}
 				}
+				brIt->second->sent_tstamp_pcap.push_back(data_seg->tstamp_pcap);
 				brIt->second->lost_tstamps_tcp.push_back(data_seg->tstamp_tcp);
 			}
 			else {
-				brIt->second->increase_received(data_seg->tstamp_tcp);
+				brIt->second->increase_received(data_seg->tstamp_tcp, data_seg->tstamp_pcap);
 				if (debug_print) {
 					printf("Setting received timestamp: %u\n", brIt->second->received_tstamp_tcp);
 					printf("tstamps: %lu, rdb-stamps: %lu", brIt->second->tstamps_tcp.size(), brIt->second->rdb_tstamps_tcp.size());
@@ -1163,109 +844,95 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 	}
 }
 
-void RangeManager::write_loss_over_time(unsigned slice_interval, unsigned timeslice_count, FILE *out_stream) {
+void RangeManager::write_loss_over_time(unsigned slice_interval, unsigned timeslice_count, FILE *loss_retrans_out, FILE *loss_loss_out) {
 	multimap<ulong, ByteRange*>::iterator brIt, brIt_end;
-	brIt = brMap.begin();
-	brIt_end = brMap.end();
-
+	int lost_count = 0;
+	int retrans_count = 0;
 	timeval next, t_slice, next_tmp;
+
+	brIt = ranges.begin();
+	brIt_end = ranges.end();
 	t_slice.tv_sec = slice_interval;
 	t_slice.tv_usec = 0;
 
 	if (brIt != brIt_end)
-		timeradd(&(brIt->second->sent_tstamp_pcap), &t_slice, &next);
+		timeradd(&(brIt->second->sent_tstamp_pcap[0]), &t_slice, &next);
 
-	int retrans_count = 0;
+	fprintf(loss_retrans_out, "%45s", conn->getConnKey().c_str());
+	if (loss_loss_out)
+		fprintf(loss_loss_out, "%45s", conn->getConnKey().c_str());
 
 	for (; brIt != brIt_end; brIt++) {
 
-		if (timercmp(&(brIt->second->sent_tstamp_pcap), &next, <)) {
-			fprintf(out_stream, "%10d", retrans_count);
+		// Print slice value and find next slice time
+		while (!timercmp(&(brIt->second->sent_tstamp_pcap[0]), &next, <)) {
+			fprintf(loss_retrans_out, ",%10d", lost_count);
+			if (loss_loss_out)
+				fprintf(loss_loss_out, ",%10d", lost_count);
+			lost_count = 0;
 			retrans_count = 0;
 			memcpy(&next_tmp, &next, sizeof(struct timeval));
 			timeradd(&next_tmp, &t_slice, &next);
+			timeslice_count--;
 		}
 		retrans_count += brIt->second->retrans_count;
+		if (loss_loss_out)
+			lost_count += brIt->second->sent_count - brIt->second->received_count;
 	}
-	fprintf(out_stream, "\n");
+
+	// Pad remaining slices with zeroes
+	while (timeslice_count) {
+		fprintf(loss_retrans_out, ",%10d", 0);
+		if (loss_loss_out)
+			fprintf(loss_loss_out, ",%10d", 0);
+		timeslice_count--;
+	}
+
+	fprintf(loss_retrans_out, "\n");
+	if (loss_loss_out)
+		fprintf(loss_loss_out, "\n");
 }
 
-void RangeManager::write_retrans_over_time(unsigned slice_interval, unsigned timeslice_count, FILE *out_stream) {
-	multimap<ulong, ByteRange*>::iterator brIt, brIt_end;
-	brIt = brMap.begin();
-	brIt_end = brMap.end();
-/*
-	timeval next, t_slice, next_tmp;
-	t_slice.tv_sec = slice_interval;
-	t_slice.tv_usec = 0;
-
-	if (brIt != brIt_end)
-		timeradd(&(brIt->second->sent_tstamp_pcap), &t_slice, &next);
-
-	int retrans_count = 0;
-
-	for (; brIt != brIt_end; brIt++) {
-
-		if (timercmp(&(brIt->second->sent_tstamp_pcap), &next, <)) {
-			fprintf(out_stream, "%10d", retrans_count);
-			retrans_count = 0;
-			memcpy(&next_tmp, &next, sizeof(struct timeval));
-			timeradd(&next_tmp, &t_slice, &next);
-		}
-		retrans_count += brIt->second->retrans;
-	}
-	fprintf(out_stream, "\n");
-
-	multimap<ulong, Range*>::iterator it, it_end;
+void RangeManager::printPacketDetails() {
+	multimap<ulong, ByteRange*>::iterator it, it_end;
 	it = ranges.begin();
 	it_end = ranges.end();
 
-	int num_retr_tmp;
-	int diff_tmp;
+	int seq_char_len = SSTR(relative_seq(ranges.rbegin()->second->endSeq)).length();
+
+	cout << endl << "Packet details for conn: " << conn->getConnKey() << endl;
+
 	for (; it != it_end; it++) {
-		diff_tmp = it->second->getSendAckTimeDiff();
-		if (diff_tmp > 0) {
-			num_retr_tmp = it->second->getNumRetrans();
-			// all
-			GlobStats::retrans_vectors[0]->push_back(diff_tmp);
-			// Retrans vector for that number of retransmissions
-			if (num_retr_tmp <= GlobOpts::max_retrans_stats)
-				GlobStats::retrans_vectors[num_retr_tmp]->push_back(diff_tmp);
+		printf("Byte range (%4lu, %4d): %-*lu - %-*lu: sent: %d, received: %d, retrans_count: %d, rdb_count: %d, RCV: %s, rdb-miss: %-3d rdb-hit: %-3d",
+			   it->second->endSeq - it->second->startSeq +1, it->second->original_payload_size, seq_char_len,
+			   relative_seq(it->second->startSeq), seq_char_len, relative_seq(it->second->endSeq), it->second->sent_count, it->second->received_count,
+			   it->second->retrans_count, it->second->rdb_count, received_type_str[it->second->recv_type], it->second->rdb_byte_miss, it->second->rdb_byte_hits);
+		printf(" ACKtime: %d", it->second->getSendAckTimeDiff(this));
 
-			// Write to file
-			if (!(GlobOpts::aggOnly)) {
-				*streams[0] << it->second->getSendAckTimeDiff() << endl;
-				if (num_retr_tmp <= GlobOpts::max_retrans_stats)
-					*streams[num_retr_tmp] << it->second->getSendAckTimeDiff() << endl;
-			}
+		if (it->second->sent_count != it->second->received_count) {
+			printf("   LOST %d", it->second->sent_count - it->second->received_count);
 		}
+		printf("\n");
 	}
-
-	for (unsigned long int i = 0; i < streams.size(); i++) {
-		streams[i]->close();
-		delete streams[i];
-	}
-*/
 }
 
 void RangeManager::calculateRDBStats() {
 	ByteRange *prev = NULL;
-	int index = 0;
+	ulong index = 0;
 	int lost_tmp = 0;
 	multimap<ulong, ByteRange*>::iterator brIt, brIt_end;
 	rdb_stats_available = true;
 
-	if (GlobOpts::print_packets) {
-		cout << endl << "Packet details for conn: " << conn->getConnKey() << endl;
-	}
 	int match_fails = 0;
+	int match_fails_at_end = 0;
 	int lost_packets = 0;
 	bool prev_pack_lost = false;
 
-	bool has_recv_data = hasReceiveData();
 
-	brIt = brMap.begin();
-	brIt_end = brMap.end();
+	//bool has_recv_data = hasReceiveData();
+
+	brIt = ranges.begin();
+	brIt_end = ranges.end();
 	for (; brIt != brIt_end; brIt++) {
 		if (prev) {
 			if (prev->endSeq +1 != brIt->second->startSeq && prev->startSeq != prev->endSeq) {
@@ -1277,15 +944,18 @@ void RangeManager::calculateRDBStats() {
 
 		bool ret = brIt->second->match_received_type();
 		if (ret == false) {
-			match_fails++;
+			//colored_printf(RED, "Failed to match %lu - %lu\n", relative_seq(brIt->second->startSeq), relative_seq(brIt->second->endSeq));
+			if (index > (ranges.size() - 20)) {
+				match_fails_at_end++;
+			}
+			else
+				match_fails++;
 		}
 
-		int rdb_miss;
-		int rdb_hit = 0;
 		int rdb_count = brIt->second->rdb_count;
 		if (rdb_count && brIt->second->recv_type == RDB) {
 			rdb_count -= 1; // Remove the successful rdb transfer
-			rdb_hit += brIt->second->byte_count;
+			brIt->second->rdb_byte_hits = brIt->second->byte_count;
 			rdb_byte_hits += brIt->second->byte_count;
 		}
 
@@ -1293,31 +963,15 @@ void RangeManager::calculateRDBStats() {
 			rdb_packet_hits++;
 		}
 
-		rdb_miss = rdb_count * brIt->second->byte_count;
-		rdb_byte_miss += rdb_miss;
-
-		if (GlobOpts::print_packets) {
-			string type;
-			switch (brIt->second->recv_type) {
-			case DATA: type = "DTA"; break;
-			case RDB: type = "RDB"; break;
-			case RETR: type = "RTR"; break;
-			case DEF: type = "DEF"; break;
-			default: printf("INVALID TYPE!\n");
-			}
-
-			printf("Byte range (%4lu): %lu - %lu: sent: %d, received: %d, retrans_count: %d, rdb_count: %d, RCV: %s, rdb-miss: %-3d rdb-hit: %-3d",
-				   brIt->second->endSeq - brIt->second->startSeq +1,
-			       relative_seq(brIt->second->startSeq), relative_seq(brIt->second->endSeq), brIt->second->sent_count, brIt->second->received_count,
-			       brIt->second->retrans_count, brIt->second->rdb_count, type.c_str(), rdb_miss, rdb_hit);
-			printf(" ACKtime: %d", brIt->second->getSendAckTimeDiff());
-		}
+		brIt->second->rdb_byte_miss = rdb_count * brIt->second->byte_count;
+		rdb_byte_miss += brIt->second->rdb_byte_miss;
+		sent_ranges_count += brIt->second->sent_count;
 
 		if (brIt->second->sent_count != brIt->second->received_count) {
 			if (GlobOpts::print_packets) {
-				printf("   LOST %d, index: %d", brIt->second->sent_count - brIt->second->received_count, index);
+				//printf("   LOST %d, index: %lu", brIt->second->sent_count - brIt->second->received_count, index);
 			}
-			lost_range_count += (brIt->second->sent_count - brIt->second->received_count);
+			lost_ranges_count += (brIt->second->sent_count - brIt->second->received_count);
 			lost_bytes += (brIt->second->sent_count - brIt->second->received_count) * brIt->second->byte_count;
 			ulong lost = (brIt->second->sent_count - brIt->second->received_count);
 
@@ -1343,7 +997,7 @@ void RangeManager::calculateRDBStats() {
 			prev_pack_lost = false;
 
 		if (GlobOpts::print_packets) {
-			if (!brIt->second->retrans_count && !brIt->second->rdb_count && (rdb_miss || rdb_hit)) {
+			if (!brIt->second->retrans_count && !brIt->second->rdb_count && (brIt->second->rdb_byte_miss || brIt->second->rdb_byte_hits)) {
 				printf(" FAIL (RDB hit/miss calculalation has failed)!");
 			}
 		}
@@ -1356,13 +1010,19 @@ void RangeManager::calculateRDBStats() {
 			lost_tmp = 0;
 		}
 		if (GlobOpts::print_packets) {
-			printf("\n");
+			//printf("\n");
 		}
 	}
 	if (match_fails)
-		printf("Failed to find timestamp for %d out of %ld packets.\n", match_fails, brMap.size());
+		printf("Failed to find timestamp for %d out of %ld packets.\n", match_fails, ranges.size());
+	if (match_fails_at_end)
+		printf("Failed to find timestamp for %d out of %ld packets. These packets were at the end of the stream"\
+			   ", so presumable they just not caught by tcpdump.\n", match_fails_at_end, ranges.size());
 
-	printf("Lost packets: %d\n", lost_packets);
+	//printf("Lost packets: %d\n", lost_packets);
+	//printf("sent_ranges_count: %d\n", sent_ranges_count);
+	//printf("lost_ranges_count: %d\n", lost_ranges_count);
+	//printf("Ranges loss: %f\n", (double) lost_ranges_count / sent_ranges_count);
 }
 
 
@@ -1383,11 +1043,6 @@ void RangeManager::calculateRetransAndRDBStats() {
 void RangeManager::registerRecvDiffs() {
 	vector<DataSeg*>::iterator rit, rit_end;
 
-	/* Store ranges with no corresponding packet
-	   on the receiver side, and delete them after
-	   traversing all ranges */
-	vector<multimap<ulong, Range*>::iterator> delList;
-
 	/* Create map with references to the ranges */
 	rit = recvd.begin();
 	rit_end = recvd.end();
@@ -1400,17 +1055,15 @@ void RangeManager::registerRecvDiffs() {
 
 	std::pair <std::multimap<ulong, struct DataSeg*>::iterator, std::multimap<ulong, struct DataSeg*>::iterator> ret;
 
-	multimap<ulong, Range*>::iterator it, it_end;
+	multimap<ulong, ByteRange*>::iterator it, it_end;
 	it = ranges.begin();
 	it_end = ranges.end();
 
-	int packet_match_limit = 10; // How many packets after the last match after we break
 	int ranges_not_received = 0;
 	int packet_index = -1;
 	for (; it != it_end; it++) {
 		int matched = -1;
 		ulong sndStartSeq = it->second->getStartSeq();
-		ulong sndRDBSeq = it->second->getRDBSeq();
 		ulong sndEndSeq = it->second->getEndSeq();
 
 		packet_index++;
@@ -1419,7 +1072,7 @@ void RangeManager::registerRecvDiffs() {
 			   it->second->getEndSeq() - it->second->getStartSeq() +1,
 			   relative_seq(it->second->getStartSeq()), relative_seq(it->second->getEndSeq()),
 			   it->second->getNumRetrans(), it->second->getNumBundled());
-		printf(" ACKtime: %d\n", it->second->getSendAckTimeDiff());
+		printf(" ACKtime: %d\n", it->second->getSendAckTimeDiff(this));
 */
 		if (GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5) {
 			cerr << "Processing range:                    " << relative_seq(sndStartSeq) << " - " << relative_seq(sndEndSeq) << "- Sent:"
@@ -1445,12 +1098,6 @@ void RangeManager::registerRecvDiffs() {
 			absLow = 0;
 		}
 
-		if (absLow > absHigh) {
-			cerr << "Wrapped TCP sequence number detected. Tagging range for deletion" << endl;
-			delList.push_back(it);
-			continue;
-		}
-
 		lowIt = rsMap.lower_bound(absLow);
 		highIt = rsMap.upper_bound(absHigh);
 
@@ -1458,11 +1105,8 @@ void RangeManager::registerRecvDiffs() {
 		memset(&match, 9, sizeof(match));
 
 		if (GlobOpts::debugLevel == 7) {
-			printf("\n\nSent        seq: (%10lu - %10lu - %10lu) Len: %u\n", relative_seq(sndStartSeq), relative_seq(sndRDBSeq), relative_seq(sndEndSeq), it->second->getNumBytes());
+			printf("\n\nSent        seq: (%10lu - %10lu) Len: %u\n", relative_seq(sndStartSeq), relative_seq(sndEndSeq), it->second->getNumBytes());
 		}
-
-		int no_more_matches = 0;
-		int test = 0;
 
 		if (GlobOpts::debugLevel == 7) {
 			printf("Searching       : %lu - count: %ld\n", relative_seq(sndStartSeq), rsMap.count(sndStartSeq));
@@ -1494,10 +1138,6 @@ void RangeManager::registerRecvDiffs() {
 					printf("   Receieved seq: %10lu         -      %10lu\n", relative_seq(tmpRd->seq), relative_seq(tmpRd->endSeq));
 				}
 
-				if (no_more_matches) {
-					printf("Encountered matching packet after the current limit (%d)!!!\n", packet_match_limit);
-				}
-
 				if (timercmp(&(tmpRd->tstamp_pcap), &match, <))
 					match = tmpRd->tstamp_pcap;
 				matched = packet_index;
@@ -1511,20 +1151,13 @@ void RangeManager::registerRecvDiffs() {
 
 				if (tmpRd->seq == sndStartSeq && tmpRd->endSeq == sndEndSeq) {
 
-					if (test) {
-						printf("               Found exact match (%lu, %lu)\n", tmpRd->seq, tmpRd->endSeq);
-					}
-
 					if (GlobOpts::debugLevel == 7) {
 						printf("               Found exact match");
 					}
-					it->second->setExactMatchedAcked();
 					break;
 				}
 				else if (tmpRd->seq >= sndStartSeq && tmpRd->endSeq <= sndEndSeq) {
 					break;
-					if (test)
-						printf("               NONE\n");
 				}
 			}
 		}
@@ -1542,16 +1175,18 @@ void RangeManager::registerRecvDiffs() {
 			}
 
 			if (!count) {
+				assert(0 && "Some ranges were not received!");
 				ranges_not_received++;
 				if (GlobOpts::debugLevel == 8) {
-					fprintf(stderr, "Packet not found on receiver (%lu - %lu - %lu) Len: %u\n",
-						relative_seq(it->second->getStartSeq()), relative_seq(it->second->getRDBSeq()),
+					fprintf(stderr, "Packet not found on receiver (%lu - %lu) Len: %u\n",
+						relative_seq(it->second->getStartSeq()),
 						relative_seq(it->second->getEndSeq()),  it->second->getNumBytes());
 				}
-				delList.push_back(it);
 				continue;
 			}
 		}
+
+		//it->second->setRecvTime(&match);
 
 		if (GlobOpts::transport) {
 			it->second->setRecvTime(&match);
@@ -1588,23 +1223,22 @@ void RangeManager::registerRecvDiffs() {
 	}
 }
 
-
 ulong RangeManager::relative_seq(ulong seq) {
-	ulong wrap_index;
-	wrap_index = (conn->firstSeq + seq) / 4294967296L;
 	if (GlobOpts::relative_seq)
 		return seq;
+	ulong wrap_index;
+	wrap_index = (conn->firstSeq + seq) / 4294967296L;
+	printf("relative_seq: seq: %lu, first + seq: %lu, wrap_index: %lu\n", seq, conn->firstSeq + seq, wrap_index);
 	ulong res = seq + firstSeq;
 	res -= ((ulong) wrap_index * 4294967296L);
+	//printf("relative_seq  ret: %lu\n", res);
 	return res;
 }
 
-Range* RangeManager::getHighestAcked() {
-	multimap<ulong, Range*>::iterator it, it_end;
-	it_end = ranges.end();
-	if (highestAckedIt == it_end)
+ByteRange* RangeManager::getHighestAcked() {
+	if (highestAckedByteRangeIt == ranges.end())
 		return NULL;
-	return highestAckedIt->second;
+	return highestAckedByteRangeIt->second;
 }
 
 /* Returns duration of connection (in seconds)*/
@@ -1625,8 +1259,8 @@ int RangeManager::calcDrift() {
 	   calculate clock drift */
 
 	if (ranges.size() > 500 && getDuration() > 120) {
-		multimap<ulong, Range*>::iterator startIt;
-		multimap<ulong, Range*>::reverse_iterator endIt;
+		multimap<ulong, ByteRange*>::iterator startIt;
+		multimap<ulong, ByteRange*>::reverse_iterator endIt;
 		long minDiffStart = LONG_MAX;
 		long minDiffEnd = LONG_MAX;
 		struct timeval minTimeStart, minTimeEnd, tv;
@@ -1683,21 +1317,9 @@ int RangeManager::calcDrift() {
 	return 0;
 }
 
-/* Returns the difference between the start
-   of the dump and r in seconds */
-int RangeManager::getTimeInterval(Range *r){
-	struct timeval start, current, tv;
-	int time;
-	start = *(ranges.begin()->second->getSendTime());
-	current = *(r->getSendTime());
-	timersub(&current, &start, &tv);
-	time = tv.tv_sec + (tv.tv_usec / 1000000);
-	return time;
-}
-
 void RangeManager::makeCdf() {
 	long diff;
-	multimap<ulong, Range*>::iterator it, it_end;
+	multimap<ulong, ByteRange*>::iterator it, it_end;
 	it = ranges.begin();
 	it_end = ranges.end();
 
@@ -1707,16 +1329,16 @@ void RangeManager::makeCdf() {
 
 		if (cdf.count(diff) > 0) {
 			/*  Add bytes to bucket */
-			map<const int, int>::iterator element = cdf.find(diff);
+			map<const long, int>::iterator element = cdf.find(diff);
 			element->second = element->second + it->second->getNumBytes();
 		} else {
 			/* Initiate new bucket */
-			cdf.insert(pair<int, int>(diff, it->second->getNumBytes()));
+			cdf.insert(pair<long, int>(diff, it->second->getNumBytes()));
 		}
 		if (GlobOpts::aggregate) {
 			if ( GlobStats::cdf.count(diff) > 0 ){
 				/*  Add bytes to bucket */
-				map<const int, int>::iterator element = GlobStats::cdf.find(diff);
+				map<const long, int>::iterator element = GlobStats::cdf.find(diff);
 				element->second = element->second + it->second->getNumBytes();
 			} else {
 				/* Initiate new bucket */
@@ -1726,8 +1348,21 @@ void RangeManager::makeCdf() {
 	}
 }
 
+/* Returns the difference between the start
+   of the dump and r in seconds */
+inline int RangeManager::getTimeInterval(ByteRange *r) {
+	struct timeval start, current, tv;
+	int time;
+	start = *(ranges.begin()->second->getSendTime());
+	current = *(r->getSendTime());
+	timersub(&current, &start, &tv);
+	time = tv.tv_sec + (tv.tv_usec / 1000000);
+	return time;
+}
+
+
 void RangeManager::registerDcDiffs() {
-	multimap<ulong, Range*>::iterator it, it_end;
+	multimap<ulong, ByteRange*>::iterator it, it_end;
 	it = ranges.begin();
 	it_end = ranges.end();
 
@@ -1738,7 +1373,7 @@ void RangeManager::registerDcDiffs() {
 
 		it->second->setDcDiff(diff);
 
-		if( diff < lowestDcDiff )
+		if (diff < lowestDcDiff)
 			lowestDcDiff = diff;
 
 		if(GlobOpts::debugLevel==4 || GlobOpts::debugLevel==5){
@@ -1747,39 +1382,42 @@ void RangeManager::registerDcDiffs() {
 	}
 }
 
-void RangeManager::makeDcCdf(){
-	multimap<ulong, Range*>::iterator it, it_end;
+void RangeManager::makeDcCdf() {
+
+	multimap<ulong, ByteRange*>::iterator it, it_end;
 	it = ranges.begin();
 	it_end = ranges.end();
 
-	for(; it != it_end; it++){
+	for (; it != it_end; it++) {
 		long diff = it->second->getDcDiff() - lowestDcDiff;
-		if ( dcCdf.count(diff) > 0 ){
+		if (dcCdf.count(diff) > 0) {
 			/*  Add bytes to bucket */
 			map<const int, int>::iterator element = dcCdf.find(diff);
+			//printf("setting getNumBytes: %d\n", it->second->getNumBytes());
+			//element->second = element->second + it->second->getOrinalPayloadSize();
 			element->second = element->second + it->second->getNumBytes();
-		}else{
+		} else {
 			/* Initiate new bucket */
 			dcCdf.insert(pair<int, int>(diff, it->second->getNumBytes()));
 		}
-		if(GlobOpts::aggregate){
-			if ( GlobStats::dcCdf.count(diff) > 0 ){
+		if (GlobOpts::aggregate) {
+			if (GlobStats::dcCdf.count(diff) > 0) {
 				/*  Add bytes to bucket */
 				map<const int, int>::iterator element = GlobStats::dcCdf.find(diff);
 				element->second = element->second + it->second->getNumBytes();
-			}else{
+			} else {
 				/* Initiate new bucket */
 				GlobStats::dcCdf.insert(pair<int, int>(diff, it->second->getNumBytes()));
 			}
 		}
 
-		if(GlobOpts::debugLevel== 4 || GlobOpts::debugLevel== 5){
+		if (GlobOpts::debugLevel== 4 || GlobOpts::debugLevel== 5) {
 			it->second->printValues();
 		}
 	}
-	GlobStats::totNumBytes += getTotNumBytes();
+	GlobStats::totNumBytes += getNumBytes();
 
-	if ( drift != -1) {
+	if (drift != -1) {
 		if (GlobStats::avgDrift == 0)
 			GlobStats::avgDrift = drift;
 		else
@@ -1787,8 +1425,8 @@ void RangeManager::makeDcCdf(){
 	}
 }
 
-void RangeManager::printCDF(ofstream *stream) {
-	map<const int, int>::iterator nit, nit_end;
+void RangeManager::writeCDF(ofstream *stream) {
+	map<const long, int>::iterator nit, nit_end;
 	double cdfSum = 0;
 	char print_buf[300];
 	nit = cdf.begin();
@@ -1800,13 +1438,17 @@ void RangeManager::printCDF(ofstream *stream) {
 
 	*stream << "#Relative delay      Percentage" << endl;
 	for (; nit != nit_end; nit++) {
-		cdfSum += (double) (*nit).second / getTotNumBytes();
-		sprintf(print_buf, "time: %10d    CDF: %.10f\n", (*nit).first, cdfSum);
+		//printf("first: %ld, second: %d, numBytes: %d, second/NumBytes: %f\n", (*nit).first, (*nit).second, getNumBytes(), (double) (*nit).second / getNumBytes());
+		//printf("second: %d, numBytes: %d\n", (*nit).second, getNumBytes());
+		//printf("first: %ld, second: %d\n", (*nit).first, (*nit).second);
+		cdfSum += (double) (*nit).second / getNumBytes();
+		sprintf(print_buf, "time: %10ld    CDF: %.10f", (*nit).first, cdfSum);
+		printf("%s\n", print_buf);
 		*stream << print_buf << endl;
 	}
 }
 
-void RangeManager::printDcCdf(ofstream *stream) {
+void RangeManager::writeDcCdf(ofstream *stream) {
 	map<const int, int>::iterator nit, nit_end;
 	double cdfSum = 0;
 	char print_buf[300];
@@ -1824,8 +1466,8 @@ void RangeManager::printDcCdf(ofstream *stream) {
 	*stream << "#------ Drift : " << drift << "ms/s ------" << endl;
 	*stream << "#Relative delay      Percentage" << endl;
 	for(; nit != nit_end; nit++){
-		cdfSum += (double)(*nit).second / getTotNumBytes();
-		sprintf(print_buf, "time: %10d    CDF: %.10f\n", (*nit).first, cdfSum);
+		cdfSum += (double)(*nit).second / getNumBytes();
+		sprintf(print_buf, "time: %10d    CDF: %.10f", (*nit).first, cdfSum);
 		*stream << print_buf << endl;
 	}
 }
@@ -1838,12 +1480,9 @@ void RangeManager::printDcCdf(ofstream *stream) {
 void RangeManager::genRFiles(string connKey) {
 	stringstream filename_tmp;
 	vector<ofstream*> streams;
-	multimap<ulong, Range*>::iterator it, it_end;
+	multimap<ulong, ByteRange*>::iterator it, it_end;
 	it = ranges.begin();
 	it_end = ranges.end();
-
-	printf("\nranges : %lu\n", ranges.size());
-	printf("branges: %lu\n", brMap.size());
 
 	if (!(GlobOpts::aggOnly)) {
 		for (unsigned long int i = 0; i < GlobStats::retrans_filenames.size(); i++) {
@@ -1856,20 +1495,20 @@ void RangeManager::genRFiles(string connKey) {
 	int num_retr_tmp;
 	int diff_tmp;
 	for (; it != it_end; it++) {
-		diff_tmp = it->second->getSendAckTimeDiff();
+		diff_tmp = it->second->getSendAckTimeDiff(this);
 		if (diff_tmp > 0) {
 			num_retr_tmp = it->second->getNumRetrans();
 			// all
-			GlobStats::retrans_vectors[0]->push_back(diff_tmp);
+			GlobStats::ack_latency_vectors[0]->push_back(diff_tmp);
 			// Retrans vector for that number of retransmissions
 			if (num_retr_tmp <= GlobOpts::max_retrans_stats)
-				GlobStats::retrans_vectors[num_retr_tmp]->push_back(diff_tmp);
+				GlobStats::ack_latency_vectors[num_retr_tmp]->push_back(diff_tmp);
 
 			// Write to file
 			if (!(GlobOpts::aggOnly)) {
-				*streams[0] << it->second->getSendAckTimeDiff() << endl;
+				*streams[0] << it->second->getSendAckTimeDiff(this) << endl;
 				if (num_retr_tmp <= GlobOpts::max_retrans_stats)
-					*streams[num_retr_tmp] << it->second->getSendAckTimeDiff() << endl;
+					*streams[num_retr_tmp] << it->second->getSendAckTimeDiff(this) << endl;
 			}
 		}
 	}

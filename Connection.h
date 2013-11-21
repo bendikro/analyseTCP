@@ -3,7 +3,6 @@
 
 /* Forward declarations */
 class RangeManager;
-class Range;
 
 #include "RangeManager.h"
 #include <math.h>
@@ -50,7 +49,7 @@ class Connection {
   ~Connection();
 
   void registerSent(struct sendData* pd);
-  Range* registerRange(struct sendData* sd);
+  void registerRange(struct sendData* sd);
   void registerRecvd(struct sendData *sd);
   bool registerAck(ulong ack, timeval* tv);
   void addPacketStats(struct connStats* cs);
@@ -58,15 +57,14 @@ class Connection {
   void validateRanges();
   timeval get_duration() ;
   void makeCDF();
-  void printCDF(ofstream *stream);
-  void printDcCdf(ofstream *stream);
+  void writeCDF(ofstream *stream);
+  void writeDcCdf(ofstream *stream);
   void makeDcCdf();
   void addRDBStats(int *rdb_sent, int *rdb_miss, int *rdb_hits, int *totBytesSent);
   void genRFiles();
   ulong getNumUniqueBytes();
   string getConnKey();
   string getSrcIp();
- string getDstIp();
- void printPacketDetails();
+  string getDstIp();
 };
 #endif /* CONNECTION_H */

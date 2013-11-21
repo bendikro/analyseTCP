@@ -67,6 +67,8 @@ class GlobOpts {
   static int  debugLevel;
   static bool incTrace;
   static bool withRecv;
+  static bool withLoss;
+  static int lossAggrSeconds;
   static bool withCDF;
   static bool relative_seq;
   static bool print_packets;
@@ -81,30 +83,41 @@ class GlobOpts {
 
 class GlobStats {
 public:
-	static map<const int, int> cdf;
+	static map<const long, int> cdf;
 	static map<const int, int> dcCdf;
 	static float avgDrift;
 	static int totNumBytes;
 	/* TODO: Create list of retransission statistics based on observed
 	   number of retransmissions */
 	static vector<string> retrans_filenames;
-	static vector<vector <int> *> retrans_vectors;
+	// Filled with latency (acked_time - sent_time) data for all the byte ranges
+	// Index 0 contains all the data,
+	// Index 1 contains latency data for all ranges retransmissted 1 time
+	// Index 2 contains latency data for all ranges retransmissted 2 times
+	// ...
+	static vector<vector <int> *> ack_latency_vectors;
 
 	GlobStats() {
 		stringstream filename_tmp;
-		retrans_filenames.push_back(GlobOpts::prefix + string("all-retr-"));
+		retrans_filenames.push_back(string("all-retr-"));
 		for (int i = 1; i < GlobOpts::max_retrans_stats +1; i++) {
 			filename_tmp.str("");
-			filename_tmp << GlobOpts::prefix << i << "retr-";
+			filename_tmp << i << "retr-";
 			retrans_filenames.push_back(filename_tmp.str());
 		}
 		for (ulong i = 0; i < retrans_filenames.size(); i++) {
-			retrans_vectors.push_back(new vector<int>());
+			ack_latency_vectors.push_back(new vector<int>());
 		}
 	}
 	 ~GlobStats() {
-		 for (ulong i = 0; i < retrans_vectors.size(); i++) {
-			 delete retrans_vectors[i];
+		 for (ulong i = 0; i < ack_latency_vectors.size(); i++) {
+			 delete ack_latency_vectors[i];
+		 }
+	 }
+
+	 void prefix_filenames(vector<string> &filenames) {
+		 for (ulong i = 0; i < filenames.size(); i++) {
+			 filenames[i] = GlobOpts::prefix + filenames[i];
 		 }
 	 }
 };
@@ -169,6 +182,7 @@ struct DataSeg {
 	struct timeval tstamp_pcap;
 	uint32_t tstamp_tcp;
 	uint32_t tstamp_tcp_echo;
+	u_char flags;
 	u_char *data;
 };
 
@@ -245,6 +259,7 @@ u_int totalSize;   /* Total packet size */
   bool isSyn;
 };
 
+bool endsWith(const string& s, const string& suffix);
 string file_and_linenum();
 void exit_with_file_and_linenum(int exit_code, string file, int linenum);
 void warn_with_file_and_linenum(string file, int linenum);

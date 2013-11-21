@@ -53,6 +53,7 @@ class Dump {
   int recvPacketCount;
   int recvBytesCount;
   int ackCount;
+  uint32_t max_payload_size;
   map<string, Connection*> conns;
 
   void processSent(const struct pcap_pkthdr* header, const u_char *data);
@@ -60,10 +61,10 @@ class Dump {
   void processAcks(const struct pcap_pkthdr* header, const u_char *data);
   void registerRecvd(const struct pcap_pkthdr* header, const u_char *data);
   void makeCDF();
-  void printCDF();
-  void printDcCdf();
-  void printAggCdf();
-  void printAggDcCdf();
+  void writeCDF();
+  void writeDcCdf();
+  void writeAggCdf();
+  void writeAggDcCdf();
   void printPacketStats(struct connStats *cs, struct byteStats *bs, bool aggregated);
   void printBytesLatencyStats(struct connStats *cs, struct byteStats* bs, bool aggregated, struct byteStats* aggregatedMin, struct byteStats* aggregatedMax);
   void makeDcCdf();
