@@ -51,7 +51,7 @@ class Connection {
   void registerSent(struct sendData* pd);
   void registerRange(struct sendData* sd);
   void registerRecvd(struct sendData *sd);
-  bool registerAck(ulong ack, timeval* tv);
+  bool registerAck(struct DataSeg *seg);
   void addPacketStats(struct connStats* cs);
   void genBytesLatencyStats(struct byteStats* bs);
   void validateRanges();

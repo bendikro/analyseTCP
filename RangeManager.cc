@@ -83,9 +83,6 @@ void RangeManager::insertSentRange(struct sendData *sd) {
 			exit_with_file_and_linenum(1, __FILE__, __LINE__);
 		}
 	}
-
-	/* If we have missing packets in the sender dump, insert a dummy range
-	   before the new range. This range will not be used to generate statistics */
 	else if (startSeq > lastSeq) {
 
 		// This is an ack
@@ -93,23 +90,12 @@ void RangeManager::insertSentRange(struct sendData *sd) {
 			lastSeq = startSeq + sd->data.payloadSize;
 		}
 		else {
-
-			/* Insert dummy range */
-			if (GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5) {
-				cerr << "-------Missing packet(s): inserting dummy range---------" << endl;
-				cerr << "Dummy range: lastSeq:  " << relative_seq(lastSeq) << " - startSeq: " << relative_seq(startSeq)
-				     << " - size: " << relative_seq(startSeq +1 - lastSeq) << endl;
-				cerr << "Valid range: startSeq: " << relative_seq(startSeq) << " - endSeq:   " << relative_seq(endSeq)
-				     << " - size: " << relative_seq(endSeq +1 - startSeq ) << endl;
-			}
-
 			lastSeq = startSeq + sd->data.payloadSize;
 			if (lastSeq != (endSeq + 1)) {
 				printf("INCORRECT: %u\n", sd->data.payloadSize);
 			}
 		}
 	}
-
 	else if (startSeq < lastSeq) { /* We have some kind of overlap */
 
 		if (endSeq <= lastSeq) {/* All bytes are already registered: Retransmission */
@@ -173,14 +159,17 @@ void RangeManager::insertRecvRange(struct sendData *sd) {
 
 /* Register first ack time for all bytes.
    Organize in ranges that have common send and ack times */
-bool RangeManager::processAck(ulong ack, timeval* tv) {
+bool RangeManager::processAck(struct DataSeg *seg /*ulong ack, timeval* tv, ulong th_win*/) {
 	static ByteRange* tmpRange;
 	static bool ret;
+	static ulong ack;
 	int debug_print = 0;
-	static multimap<ulong, ByteRange*>::iterator it, it_end;
+	static multimap<ulong, ByteRange*>::iterator it, it_end, prev;
 	ret = false;
 	it = ranges.begin();
 	it_end = ranges.end();
+	ack = seg->ack;
+	ack_count++;
 
 	if (highestAckedByteRangeIt == ranges.end()) {
 		it = ranges.begin();
@@ -189,8 +178,11 @@ bool RangeManager::processAck(ulong ack, timeval* tv) {
 		it = highestAckedByteRangeIt;
 	}
 
-	if (debug_print)
-		printf("ProcessACK: %lu\n", relative_seq(ack));
+	if (debug_print) {
+		//printf("ProcessACK: %lu, last acked start seq: %lu\n", relative_seq(ack), relative_seq(it->second->getStartSeq()));
+		//printf("ProcessACK: %8lu, win=%6lu TSVal: %u, last acked start seq: %lu\n", relative_seq(ack), seg->window*128, seg->tstamp_tcp,
+		//relative_seq(it->second->getStartSeq()));
+	}
 
 	for (; it != it_end; it++) {
 		tmpRange = it->second;
@@ -199,25 +191,28 @@ bool RangeManager::processAck(ulong ack, timeval* tv) {
 			cerr << "tmpRange - startSeq: " << relative_seq(tmpRange->getStartSeq())
 			     << " - endSeq: " << relative_seq(tmpRange->getEndSeq()) << endl;
 
-		/* All data from this ack has been acked before: return */
-		if (ack <= tmpRange->getStartSeq()) {
-			if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
-				cerr << "--------All data has been ACKed before - skipping--------" << endl;
-			if (debug_print)
-				printf("  All has been acked before\n");
-			ret = true;
-			break;
-		}
-
 		/* This ack covers this range, but not more: ack and return */
 		if (ack == (tmpRange->getEndSeq() + 1)) {
 			if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
 				cerr << "--------Ack equivalent with last range --------" << endl;
 			if (debug_print)
 				printf("  Covers just this Range(%lu, %lu)\n", relative_seq(tmpRange->getStartSeq()), relative_seq(tmpRange->getEndSeq()));
-			tmpRange->insertAckTime(tv);
+			if (!tmpRange->isAcked()) {
+				tmpRange->insertAckTime(&seg->tstamp_pcap);
+				tmpRange->tcp_window = seg->window;
+			}
+			else {
+				if (it == highestAckedByteRangeIt) {
+					if (seg->window > 0 && seg->window == it->second->tcp_window) {
+						it->second->dupack_count++;
+					}
+					else {
+						it->second->tcp_window = seg->window;
+					}
+				}
+			}
 			highestAckedByteRangeIt = it;
-			highestAckedByteRangeIt++;
+			it->second->tcp_window = seg->window;
 			return true;
 		}
 
@@ -227,9 +222,9 @@ bool RangeManager::processAck(ulong ack, timeval* tv) {
 				cerr << "--------Ack covers more than this range: Continue to next --------" << endl;
 			if (debug_print)
 				printf("  Covers more than Range(%lu, %lu)\n", relative_seq(tmpRange->getStartSeq()), relative_seq(tmpRange->getEndSeq()));
-			tmpRange->insertAckTime(tv);
+			tmpRange->insertAckTime(&seg->tstamp_pcap);
 			highestAckedByteRangeIt = it;
-			highestAckedByteRangeIt++;
+			//highestAckedByteRangeIt++;
 			ret = true;
 			continue;
 		}
@@ -240,7 +235,8 @@ bool RangeManager::processAck(ulong ack, timeval* tv) {
 				printf("  Covers parts of  Range(%lu, %lu)\n", relative_seq(tmpRange->getStartSeq()), relative_seq(tmpRange->getEndSeq()));
 			}
 			ByteRange *new_br = tmpRange->split_end(ack, tmpRange->endSeq);
-			tmpRange->insertAckTime(tv);
+			tmpRange->insertAckTime(&seg->tstamp_pcap);
+			tmpRange->tcp_window = seg->window;
 
 			// Second part of range: insert after tmpRange (tmpRange)
 			highestAckedByteRangeIt = ranges.insert(pair<ulong, ByteRange*>(new_br->getStartSeq(), new_br));
@@ -259,6 +255,7 @@ bool RangeManager::processAck(ulong ack, timeval* tv) {
 
 	return ret;
 }
+
 
 double median(vector<double>::const_iterator begin,
               vector<double>::const_iterator end) {
@@ -290,8 +287,6 @@ Percentiles *percentiles(const vector<double> *v) {
 }
 
 
-/* TODO: Check handling of invalid ranges */
-
 void RangeManager::genStats(struct byteStats *bs) {
 	int latency;
 	multimap<ulong, ByteRange*>::iterator it, it_end;
@@ -303,6 +298,9 @@ void RangeManager::genStats(struct byteStats *bs) {
 	int tmp_byte_count = 0;
 	bs->minLat = bs->minLength = (numeric_limits<int>::max)();
 
+	map<const int, int> dupacks;
+	int dupack_count;
+
 	for (; it != it_end; it++) {
 		// Skip if invalid (negative) latency
 		tmp_byte_count = it->second->getOrinalPayloadSize();
@@ -311,6 +309,16 @@ void RangeManager::genStats(struct byteStats *bs) {
 		for (int i = 0; i < it->second->getNumRetrans(); i++) {
 			payload_lengths.push_back(tmp_byte_count);
 			bs->cumLength += tmp_byte_count;
+		}
+
+		dupack_count = it->second->dupack_count;
+		if (dupack_count > 0) {
+			if (dupacks.count(dupack_count) > 0) {
+				map<const int, int>::iterator element = dupacks.find(dupack_count);
+				element->second++;
+			} else {
+				dupacks.insert(pair<int, int>(dupack_count, 1));
+			}
 		}
 
 		if (tmp_byte_count) {
@@ -348,6 +356,9 @@ void RangeManager::genStats(struct byteStats *bs) {
 			}
 		}
 	}
+
+	bs->dupacks = dupacks;
+	printf("Dupacks size: %lu\n", dupacks.size());
 
 	double temp;
 	double stdev;
@@ -683,7 +694,6 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 			last_br->sent_count = 1;
 
 			if (data_seg->is_rdb) {
-				//printf("Setting original RDB packet size: %lu\n", data_seg->payloadSize);
 				last_br->original_payload_size = data_seg->payloadSize;
 			}
 			last_br->tstamps_tcp.push_back(data_seg->tstamp_tcp);
@@ -909,8 +919,10 @@ void RangeManager::printPacketDetails() {
 			   it->second->retrans_count, it->second->rdb_count, received_type_str[it->second->recv_type], it->second->rdb_byte_miss, it->second->rdb_byte_hits);
 		printf(" ACKtime: %d", it->second->getSendAckTimeDiff(this));
 
-		if (it->second->sent_count != it->second->received_count) {
-			printf("   LOST %d", it->second->sent_count - it->second->received_count);
+		if (GlobOpts::withRecv) {
+			if (it->second->sent_count != it->second->received_count) {
+				printf("   LOST %d", it->second->sent_count - it->second->received_count);
+			}
 		}
 		printf("\n");
 	}
@@ -1228,7 +1240,7 @@ ulong RangeManager::relative_seq(ulong seq) {
 		return seq;
 	ulong wrap_index;
 	wrap_index = (conn->firstSeq + seq) / 4294967296L;
-	printf("relative_seq: seq: %lu, first + seq: %lu, wrap_index: %lu\n", seq, conn->firstSeq + seq, wrap_index);
+//	printf("relative_seq: seq: %lu, first + seq: %lu, wrap_index: %lu\n", seq, conn->firstSeq + seq, wrap_index);
 	ulong res = seq + firstSeq;
 	res -= ((ulong) wrap_index * 4294967296L);
 	//printf("relative_seq  ret: %lu\n", res);

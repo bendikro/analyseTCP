@@ -1,6 +1,8 @@
 #include "ByteRange.h"
 #include "color_print.h"
 
+const char *received_type_str[] = {"DEF", "DTA", "RDB", "RTR"};
+
 bool ByteRange::match_received_type() {
 	return match_received_type(false);
 }
@@ -59,8 +61,6 @@ void ByteRange::print_tstamps_tcp() {
 }
 
 void ByteRange::print_tstamps_pcap() {
-	//printf("recv timestamp: %u ", received_tstamp_tcp);
-	//printf("sent_tstamp_pcap: %lu, rdb-stamps: %lu\n\n", sent_tstamp_pcap.size(), rdb_tstamps_tcp.size());
 	ulong acktime_3 = ackTime.tv_sec * 1000000 + ackTime.tv_usec;
 	printf("acked timestamp: %lu ", acktime_3);
 
@@ -87,28 +87,30 @@ int ByteRange::getSendAckTimeDiff(RangeManager *rm) {
 
   if (sent_tstamp_pcap[0].tv_sec == 0 && sent_tstamp_pcap[0].tv_usec == 0) {
 	  cerr << "Range without a send time. Skipping: " << endl;
-	  //printf("%lu - %lu - %lu\n", rdbSeq, startSeq, endSeq);
-    return 0;
+	  return 0;
   }
 
   if (ackTime.tv_sec == 0 && ackTime.tv_usec == 0) {
 	  // If equals, they're syn or acks
 	  if (startSeq != endSeq) {
-		  // Check if this is of the last 10 packets
 		  multimap<ulong, ByteRange*>::reverse_iterator it, it_end = rm->ranges.rend();
 		  int count = 0;
-		  for (it = rm->ranges.rbegin(); it != it_end && count < 10; it++) {
+		  // Goes through all the packets from the end
+		  // If all the packets after this packet has no ack time, then we presume it's caused by the
+		  // ack not being received before tcpdump was killed
+		  for (it = rm->ranges.rbegin(); it != it_end; it++) {
+			  if (!(it->second->ackTime.tv_sec == 0 && it->second->ackTime.tv_usec == 0))
+				  break;
 		  	  if (it->second->getStartSeq() == startSeq && it->second->getEndSeq() == endSeq) {
 		  		  if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
-		  			  fprintf(stderr, "Range with no ACK time. This packet is at the end of the stream (%dth last), so we presume" \
+					  fprintf(stderr, "Range with no ACK time. This packet is at the end of the stream (%dth last), so we presume" \
 		  					  " this is caused by tcpdump being killed before the packets were acked.\n", count);
-		  			  //printf("(%lu - %lu - %lu)\n", rm->relative_seq(startSeq), rm->relative_seq(rdbSeq), rm->relative_seq(endSeq));
-		  		  }
+				  }
 		  		  return 0;
 		  	  }
 		  	  count++;
 		  }
-		  colored_printf(RED, "Range(%lu, %lu) has no ACK time. This shouldn't really happen... \n", startSeq, endSeq);
+		  colored_printf(RED, "Range(%lu, %lu) has no ACK time. This shouldn't really happen... Packet is %d before last packet\n", startSeq, endSeq, count);
 	  }
 	  return 0;
   }
@@ -157,7 +159,6 @@ void ByteRange::setDiff() {
 	else
 		ms -= (tv.tv_usec / 1000);
 	diff = ms;
-	//printf("diff: %ld\n", diff);
 }
 
 void ByteRange::printValues(){
@@ -174,8 +175,6 @@ void ByteRange::printValues(){
   cerr << "diff       : " << diff << endl;
   cerr << "dcDiff     : " << dcDiff << endl << endl;;
 */
-
-
 }
 
 timeval* ByteRange::getSendTime(){

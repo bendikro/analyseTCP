@@ -20,7 +20,7 @@ using namespace std;
 #include "time_util.h"
 
 enum received_type {DEF, DATA, RDB, RETR};
-static const char *received_type_str[] = {"DEF", "DTA", "RDB", "RTR"};
+extern const char *received_type_str[4];
 
 /* Modified timersub macro that has defined behaviour
    also for negative differences */
@@ -74,6 +74,8 @@ public:
 
 	struct timeval ackTime;
 	unsigned int acked : 1;
+	u_short tcp_window;
+	int dupack_count;
 
 	long diff, dcDiff;
 
@@ -83,7 +85,8 @@ public:
 		sent_count = 0;
 		received_count = 0;
 		split_after_sent = 0;
-
+		dupack_count = 0;
+		acked = 0;
 		update_byte_count();
 		retrans_count = 0;
 		rdb_count = 0;
@@ -94,6 +97,7 @@ public:
 		rdb_byte_hits = 0;
 		diff = 0;
 		dcDiff = 0;
+		tcp_window = 0;
 	}
 
 	void increase_received(uint32_t tstamp_tcp, timeval tstamp_pcap) {

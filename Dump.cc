@@ -351,6 +351,10 @@ void Dump::printPacketStats(struct connStats *cs, struct byteStats *bs, bool agg
 		       ((double) (cs->totBytesSent - cs->totUniqueBytes) / cs->totBytesSent) * 100);
 	}
 
+
+	printf("  Number of received acks                      : %10d\n", cs->ackCount);
+
+
 	printf("\nPayload size stats:\n");
 
 	if (aggregated) {
@@ -445,6 +449,19 @@ void Dump::printBytesLatencyStats(struct connStats *cs, struct byteStats* bs, bo
 			break;
 		printf("  Occurrences of %2d. retransmission            : %d\n", i +1, bs->retrans[i]);
 	}
+	cout << "--------------------------------------------------" << endl;
+	cout << "  Max dupacks                                  : " << bs->dupacks.rbegin()->first << endl;
+	map<const int, int>::iterator it = bs->dupacks.begin(), end = bs->dupacks.end();
+	int dupacks_total = 0;
+	while (it != end) {
+		printf("  Occurrences of %2d. dupacks                   : %d\n", it->first, it->second);
+		if (it->first > 0) {
+			if (it->first > 0)
+				dupacks_total += ((it->first) * it->second);
+		}
+		it++;
+	}
+	printf("  Total number of dupacks                      : %d\n", dupacks_total);
 	cout << "==================================================" << endl;
 }
 
@@ -474,7 +491,6 @@ void Dump::findTCPTimeStamp(struct DataSeg* data, uint8_t* opts, int option_leng
 		offset += _opt->size;
 	}
 }
-
 
 /* Process outgoing packets */
 void Dump::processSent(const struct pcap_pkthdr* header, const u_char *data) {
@@ -602,6 +618,8 @@ uint64_t Dump::get_relative_sequence_number(uint32_t seq, uint32_t firstSeq, ulo
 	// When seq has wrapped, wrap_index will make sure the relative sequence number continues to grow
 	seq_relative = seq + (wrap_index * 4294967296L) - firstSeq;
 	if (seq_relative > 9999999999) {
+		printf("\nget_relative_sequence_number: seq: %u, firstSeq: %u, largestSeq: %lu, largestSeqAbsolute: %u\n", seq, firstSeq, largestSeq, largestSeqAbsolute);
+		printf("seq_relative: %lu\n", seq_relative);
 		assert(0 && "Incorrect sequence number calculation!\n");
 	}
 	return seq_relative;
@@ -611,16 +629,20 @@ uint64_t Dump::get_relative_sequence_number(uint32_t seq, uint32_t firstSeq, ulo
 void Dump::processAcks(const struct pcap_pkthdr* header, const u_char *data) {
 	static const struct sniff_ip *ip; /* The IP header */
 	static const struct sniff_tcp *tcp; /* The TCP header */
-	static timeval hdrTv;
 	static u_int ipHdrLen;
 	static map<string, Connection*>::iterator it;
 	static uint32_t ack;
-	static ulong ack_relative;
+	static ulong th_win;         /* window */
+	//static u_long eff_win;        /* window after scaling */
 	static bool ret;
-	hdrTv = header->ts;
 	ip = (struct sniff_ip*) (data + SIZE_ETHERNET);
 	ipHdrLen = IP_HL(ip) * 4;
 	tcp = (struct sniff_tcp*) (data + SIZE_ETHERNET + ipHdrLen);
+
+	static u_int tcpHdrLen;
+	static uint tcpOptionLen;
+	tcpHdrLen = TH_OFF(tcp) * 4;
+	tcpOptionLen = tcpHdrLen - 20;
 
 	string connKey = getConnKey(&ip->ip_dst, &ip->ip_src, &tcp->th_dport, &tcp->th_sport);
 
@@ -634,15 +656,24 @@ void Dump::processAcks(const struct pcap_pkthdr* header, const u_char *data) {
 	}
 
 	ack = ntohl(tcp->th_ack);
-	ack_relative = get_relative_sequence_number(ack, it->second->firstSeq, it->second->lastLargestAckSeq, it->second->lastLargestAckSeqAbsolute);
+	th_win = ntohs(tcp->th_win);
 
-	ret = it->second->registerAck(ack_relative, &hdrTv);
+	DataSeg seg;
+	memset(&seg, 0, sizeof(struct DataSeg));
+	seg.ack         = get_relative_sequence_number(ack, it->second->firstSeq, it->second->lastLargestAckSeq, it->second->lastLargestAckSeqAbsolute);
+	seg.tstamp_pcap = header->ts;
+	seg.window = th_win;
+
+	uint8_t* opt = (uint8_t*) tcp + 20;
+	findTCPTimeStamp(&seg, opt, tcpOptionLen);
+
+	ret = it->second->registerAck(&seg);
 	if (!ret) {
 		printf("DUMP - failed to register ACK!\n");
 	}
 	else {
 		it->second->lastLargestAckSeqAbsolute = ack;
-		it->second->lastLargestAckSeq = ack_relative;
+		it->second->lastLargestAckSeq = seg.ack;
 	}
 	ackCount++;
 }

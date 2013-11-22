@@ -58,6 +58,7 @@ public:
 	int lost_ranges_count;
 	int sent_ranges_count;
 	int lost_bytes;
+	int ack_count;
 
 	Connection *conn;
 	ulong max_seq;
@@ -83,13 +84,14 @@ public:
 		sent_ranges_count = 0;
 		lost_bytes = 0;
 		max_seq = ULONG_MAX;
+		ack_count = 0;
 	};
 
 	~RangeManager();
 
 	void insertSentRange(struct sendData *sd);
 	void insertRecvRange(struct sendData *sd);
-	bool processAck(ulong ack, timeval* tv);
+	bool processAck(struct DataSeg *seg);
 	void genStats(struct byteStats* bs);
 	ByteRange* getLastRange() {
 		multimap<ulong, ByteRange*>::reverse_iterator last = ranges.rbegin();

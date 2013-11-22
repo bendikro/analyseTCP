@@ -146,16 +146,16 @@ void Connection::registerRange(struct sendData* sd) {
 }
 
 /* Register times for first ACK of each byte */
-bool Connection::registerAck(ulong ack, timeval* tv){
+bool Connection::registerAck(struct DataSeg *seg) {
 	static bool ret;
 	if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
 		timeval offset;
-		timersub(tv, &firstSendTime, &offset);
-		cerr << endl << "Registering new ACK. Conn: " << getConnKey() << " Ack: " << rm->relative_seq(ack) << endl;
+		timersub(&seg->tstamp_pcap, &firstSendTime, &offset);
+		cerr << endl << "Registering new ACK. Conn: " << getConnKey() << " Ack: " << rm->relative_seq(seg->ack) << endl;
 		cerr << "Time offset: Secs: " << offset.tv_sec << " uSecs: " << offset.tv_usec << endl;
 	}
 
-	ret = rm->processAck(ack, tv);
+	ret = rm->processAck(seg);
 
 	if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
 		if(rm->getHighestAcked() != NULL){
@@ -182,6 +182,7 @@ void Connection::addPacketStats(struct connStats* cs) {
 	cs->redundantBytes += rm->getRedundantBytes();
 	// RDB stats
 	cs->rdb_bytes_sent += totRDBBytesSent;
+	cs->ackCount += rm->ack_count;
 
 	if (rm->rdb_stats_available) {
 		cs->rdb_stats_available = true;

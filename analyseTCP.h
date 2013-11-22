@@ -132,6 +132,7 @@ struct connStats {
 	int nrPacketsSent;
 	int nrRetrans;
 	int bundleCount;
+	int ackCount;
 	uint64_t totUniqueBytes;
 	uint64_t redundantBytes;
 	int rdb_stats_available;
@@ -163,6 +164,7 @@ struct byteStats {
 	int nrRanges;   /* Number of ranges in conn */
 	long long int avgLat;   /* Average latency */
 	int retrans[MAX_STAT_RETRANS]; /* Count 1., 2. and 3. retrans */
+	map<const int, int> dupacks;
 	int maxRetrans; /* MAximum number of retransmissions for a range */
 	long long int maxLength;
 	long long int minLength;
@@ -175,6 +177,8 @@ struct byteStats {
 struct DataSeg {
 	ulong seq;
 	ulong endSeq;
+	ulong ack;
+	ulong window;
 	uint payloadSize;    /* Payload size */
 	bool retrans;        /* is a retransmission */
 	bool is_rdb;         /* is a rdb packet */
