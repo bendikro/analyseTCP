@@ -62,15 +62,14 @@ public:
 	int recv_type_num; // Which packet of the specific type was first received
 
 	int split_after_sent;
-	//timeval sent_tstamp_pcap;
 	timeval received_tstamp_pcap;
 	uint32_t received_tstamp_tcp;
 
-	vector<timeval> sent_tstamp_pcap; // For regular packet and retrans
+	vector<timeval> sent_tstamp_pcap;  // pcap tstamp for regular packet and retrans
 
-	vector<uint32_t> tstamps_tcp; // For regular packet and retrans
-	vector<uint32_t> rdb_tstamps_tcp; // For data in RDB packets
-	vector<uint32_t> lost_tstamps_tcp; // Used to find which packets were lost
+	vector<uint32_t> tstamps_tcp;      // tcp tstamp for regular packet and retrans
+	vector<uint32_t> rdb_tstamps_tcp;  // tcp tstamp for data in RDB packets
+	vector<uint32_t> lost_tstamps_tcp; // tcp tstamp matched to recevied used to find which packets were lost
 
 	struct timeval ackTime;
 	unsigned int acked : 1;
@@ -98,15 +97,39 @@ public:
 		diff = 0;
 		dcDiff = 0;
 		tcp_window = 0;
+		ackTime.tv_sec = 0;
+		ackTime.tv_usec = 0;
 	}
 
-	void increase_received(uint32_t tstamp_tcp, timeval tstamp_pcap) {
+	inline void increase_received(uint32_t tstamp_tcp, timeval tstamp_pcap) {
 		if (!received_count) {
 			received_tstamp_tcp = tstamp_tcp;
 			received_tstamp_pcap = tstamp_pcap;
 		}
 		received_count++;
-		lost_tstamps_tcp.erase(std::remove(lost_tstamps_tcp.begin(), lost_tstamps_tcp.end(), tstamp_tcp), lost_tstamps_tcp.end());
+		//lost_tstamps_tcp.erase(std::remove(lost_tstamps_tcp.begin(), lost_tstamps_tcp.end(), tstamp_tcp), lost_tstamps_tcp.end());
+
+		vector<uint32_t>::iterator it, it_end;
+		it = lost_tstamps_tcp.begin(), it_end = lost_tstamps_tcp.end();
+		while (it != it_end) {
+			if (*it == tstamp_tcp) {
+				lost_tstamps_tcp.erase(it);
+				break;
+			}
+			it++;
+		}
+	}
+
+	inline void increase_sent(uint32_t tstamp_tcp, timeval tstamp_pcap, bool rdb) {
+		if (rdb) {
+			rdb_tstamps_tcp.push_back(tstamp_tcp);
+		}
+		else {
+			tstamps_tcp.push_back(tstamp_tcp);
+		}
+		sent_count++;
+		sent_tstamp_pcap.push_back(tstamp_pcap);
+		lost_tstamps_tcp.push_back(tstamp_tcp);
 	}
 
 	void update_byte_count() {
@@ -118,21 +141,12 @@ public:
 
 	// Split and make a new range at the end
 	ByteRange* split_end(uint64_t start, uint64_t end) {
-		//printf("Split2 (%d) %lu - %lu -> (%lu) %lu - %lu , (%lu) %lu - %lu\n",
-		//       byte_count, startSeq, endSeq,
-		//       (start - 1) - startSeq, startSeq, start - 1,
-		//       (end - start +1),  start, end);
 		endSeq = start - 1;
-		//original_payload_size = byte_count;
 		return split(start, end);
 	}
 
 	// Split and make a new range at the beginning
 	ByteRange* split_start(uint64_t start, uint64_t end) {
-		//printf("Split1 (%d) %lu - %lu -> (%lu) %lu - %lu , (%lu) %lu - %lu\n",
-		//       byte_count, startSeq, endSeq,
-		//       end - (start +1), start, end,
-		//       endSeq - (end + 1), end + 1, endSeq);
 		startSeq = end + 1;
 		return split(start, end);
 	}

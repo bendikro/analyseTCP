@@ -39,7 +39,7 @@ bool isNumeric(const char* pszInput, int nNumberBase) {
 }
 
 
-string getConnKey(const struct in_addr *srcIp, const struct in_addr *dstIp, const uint16_t *srcPort, const uint16_t *dstPort) {
+inline string getConnKey(const struct in_addr *srcIp, const struct in_addr *dstIp, const uint16_t *srcPort, const uint16_t *dstPort) {
 	static struct ConnectionMapKey connKey;
 	static map<ConnectionMapKey*, string>::iterator it;
 	static char src_ip_buf[INET_ADDRSTRLEN];
@@ -170,9 +170,13 @@ void Dump::analyseSender() {
 	if (!srcPort.empty())
 		filterExp << " && dst " << (src_port_range ? "portrange " : "port ") << srcPort;
 
+/*
 	filterExp << " && ((tcp[tcpflags] & tcp-syn) != tcp-syn)"
 			  << " && ((tcp[tcpflags] & tcp-fin) != tcp-fin)"
 			  << " && ((tcp[tcpflags] & tcp-ack) == tcp-ack)";
+*/
+
+	filterExp << " && ((tcp[tcpflags] & tcp-ack) == tcp-ack)";
 
 	if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
 		cerr << "pcap filter expression: " << (char*)((filterExp.str()).c_str()) << endl;
@@ -450,18 +454,23 @@ void Dump::printBytesLatencyStats(struct connStats *cs, struct byteStats* bs, bo
 		printf("  Occurrences of %2d. retransmission            : %d\n", i +1, bs->retrans[i]);
 	}
 	cout << "--------------------------------------------------" << endl;
-	cout << "  Max dupacks                                  : " << bs->dupacks.rbegin()->first << endl;
-	map<const int, int>::iterator it = bs->dupacks.begin(), end = bs->dupacks.end();
-	int dupacks_total = 0;
-	while (it != end) {
-		printf("  Occurrences of %2d. dupacks                   : %d\n", it->first, it->second);
-		if (it->first > 0) {
-			if (it->first > 0)
-				dupacks_total += ((it->first) * it->second);
-		}
-		it++;
+	if (bs->dupacks.size() == 0) {
+		cout << "  Max dupacks                                  : " << 0 << endl;
 	}
-	printf("  Total number of dupacks                      : %d\n", dupacks_total);
+	else {
+		cout << "  Max dupacks                                  : " << bs->dupacks.rbegin()->first << endl;
+		map<const int, int>::iterator it = bs->dupacks.begin(), end = bs->dupacks.end();
+		int dupacks_total = 0;
+		while (it != end) {
+			printf("  Occurrences of %2d. dupacks                   : %d\n", it->first, it->second);
+			if (it->first > 0) {
+				if (it->first > 0)
+					dupacks_total += ((it->first) * it->second);
+			}
+			it++;
+		}
+		printf("  Total number of dupacks                      : %d\n", dupacks_total);
+	}
 	cout << "==================================================" << endl;
 }
 
@@ -632,7 +641,6 @@ void Dump::processAcks(const struct pcap_pkthdr* header, const u_char *data) {
 	static u_int ipHdrLen;
 	static map<string, Connection*>::iterator it;
 	static uint32_t ack;
-	static ulong th_win;         /* window */
 	//static u_long eff_win;        /* window after scaling */
 	static bool ret;
 	ip = (struct sniff_ip*) (data + SIZE_ETHERNET);
@@ -656,13 +664,12 @@ void Dump::processAcks(const struct pcap_pkthdr* header, const u_char *data) {
 	}
 
 	ack = ntohl(tcp->th_ack);
-	th_win = ntohs(tcp->th_win);
 
 	DataSeg seg;
 	memset(&seg, 0, sizeof(struct DataSeg));
 	seg.ack         = get_relative_sequence_number(ack, it->second->firstSeq, it->second->lastLargestAckSeq, it->second->lastLargestAckSeqAbsolute);
 	seg.tstamp_pcap = header->ts;
-	seg.window = th_win;
+	seg.window = ntohs(tcp->th_win);
 
 	uint8_t* opt = (uint8_t*) tcp + 20;
 	findTCPTimeStamp(&seg, opt, tcpOptionLen);
@@ -829,9 +836,11 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data) {
   sd.data.seq         = get_relative_sequence_number(sd.seq_absolute, tmpConn->firstSeq, tmpConn->lastLargestRecvEndSeq, tmpConn->lastLargestRecvSeqAbsolute);
   sd.data.endSeq      = sd.data.seq + sd.data.payloadSize;
   sd.data.tstamp_pcap = header->ts;
-  sd.data.is_rdb = false;
+  sd.data.is_rdb      = false;
   sd.data.rdb_end_seq = 0;
-  sd.data.retrans = 0;
+  sd.data.retrans     = 0;
+  sd.data.flags       = tcp->th_flags;
+  sd.data.window      = ntohs(tcp->th_win);
 
   if (sd.data.seq == ULONG_MAX) {
 	  if (tmpConn->lastLargestRecvEndSeq == 0) {
