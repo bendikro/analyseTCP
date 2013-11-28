@@ -54,7 +54,7 @@ class Dump {
   int recvBytesCount;
   int ackCount;
   uint32_t max_payload_size;
-  map<string, Connection*> conns;
+  map<ConnectionMapKey*, Connection*, ConnectionKeyComparator> conns;
 
   void processSent(const struct pcap_pkthdr* header, const u_char *data);
   void processRecvd(const struct pcap_pkthdr* header, const u_char *data);
@@ -82,6 +82,7 @@ class Dump {
   void write_loss_to_file();
   void free_resources();
   void findTCPTimeStamp(struct DataSeg* data, uint8_t* opts, int option_length);
+  Connection* getConn(const struct in_addr *srcIp, const struct in_addr *dstIp, const uint16_t *srcPort, const uint16_t *dstPort, const uint32_t *seq);
 };
 
 #endif /* DUMP_H */

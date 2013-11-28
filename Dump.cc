@@ -39,7 +39,7 @@ bool isNumeric(const char* pszInput, int nNumberBase) {
 }
 
 
-inline string getConnKey(const struct in_addr *srcIp, const struct in_addr *dstIp, const uint16_t *srcPort, const uint16_t *dstPort) {
+string getConnKey(const struct in_addr *srcIp, const struct in_addr *dstIp, const uint16_t *srcPort, const uint16_t *dstPort) {
 	static struct ConnectionMapKey connKey;
 	static map<ConnectionMapKey*, string>::iterator it;
 	static char src_ip_buf[INET_ADDRSTRLEN];
@@ -69,6 +69,42 @@ inline string getConnKey(const struct in_addr *srcIp, const struct in_addr *dstI
 	return connKeyTmp.str();
 }
 
+Connection* Dump::getConn(const struct in_addr *srcIp, const struct in_addr *dstIp, const uint16_t *srcPort, const uint16_t *dstPort, const uint32_t *seq) {
+	static struct ConnectionMapKey connKey;
+	//static map<ConnectionMapKey*, string>::iterator it;
+	map<ConnectionMapKey*, Connection*>::iterator it, it_end;
+	static char src_ip_buf[INET_ADDRSTRLEN];
+	static char dst_ip_buf[INET_ADDRSTRLEN];
+	memcpy(&connKey.ip_src, srcIp, sizeof(struct in_addr));
+	memcpy(&connKey.ip_dst, dstIp, sizeof(struct in_addr));
+	connKey.src_port = *srcPort;
+	connKey.dst_port = *dstPort;
+
+	it = conns.find(&connKey);
+	// Returning the existing connection key
+	if (it != conns.end()) {
+		return it->second;
+	}
+
+	if (seq == NULL) {
+		return NULL;
+	}
+
+	inet_ntop(AF_INET, srcIp, src_ip_buf, INET_ADDRSTRLEN);
+	inet_ntop(AF_INET, dstIp, dst_ip_buf, INET_ADDRSTRLEN);
+
+	Connection *tmpConn = new Connection(*srcIp, ntohs(*srcPort), *dstIp,
+					     ntohs(*dstPort), ntohl(*seq));
+
+	ConnectionMapKey *connKeyToInsert = new ConnectionMapKey();
+	memcpy(&connKeyToInsert->ip_src, srcIp, sizeof(struct in_addr));
+	memcpy(&connKeyToInsert->ip_dst, dstIp, sizeof(struct in_addr));
+	connKeyToInsert->src_port = connKey.src_port;
+	connKeyToInsert->dst_port = connKey.dst_port;
+	conns.insert(pair<ConnectionMapKey*, Connection*>(connKeyToInsert, tmpConn));
+	return tmpConn;
+}
+
 
 /* Traverse the pcap dump and call methods for processing the packets
    This generates initial one-pass statistics from sender-side dump. */
@@ -77,7 +113,8 @@ void Dump::analyseSender() {
 	char errbuf[PCAP_ERRBUF_SIZE];
 	struct pcap_pkthdr header;
 	const u_char *data;
-	map<string, Connection*>::iterator it, it_end;
+	//map<string, Connection*>::iterator it, it_end;
+	map<ConnectionMapKey*, Connection*>::iterator it, it_end;
 
 	pcap_t *fd = pcap_open_offline(filename.c_str(), errbuf);
 	if ( fd == NULL ) {
@@ -245,7 +282,7 @@ void Dump::printStatistics() {
 	csAggregated.rdb_bytes_sent = 0;
 
 	// Print stats for each connection or aggregated
-	map<string, Connection*>::iterator cIt, cItEnd;
+	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
 	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
 		memset(&cs, 0, sizeof(struct connStats));
 		cIt->second->addPacketStats(&cs);
@@ -510,7 +547,6 @@ void Dump::processSent(const struct pcap_pkthdr* header, const u_char *data) {
 	static u_int ipSize;
 	static u_int ipHdrLen;
 	static u_int tcpHdrLen;
-	static string connKey;
 	static struct sendData sd;
 
 	/* Finds the different headers+payload */
@@ -521,18 +557,7 @@ void Dump::processSent(const struct pcap_pkthdr* header, const u_char *data) {
 	tcp = (struct sniff_tcp*) (data + SIZE_ETHERNET + ipHdrLen);
 	tcpHdrLen = TH_OFF(tcp) * 4;
 
-	connKey = getConnKey(&ip->ip_src, &ip->ip_dst, &tcp->th_sport, &tcp->th_dport);
-
-	/* Check if connection exists. If not, create a new */
-	if (conns.count(connKey) == 0){
-		tmpConn = new Connection(ip->ip_src, ntohs(tcp->th_sport), ip->ip_dst,
-					 ntohs(tcp->th_dport), ntohl(tcp->th_seq) );
-		conns.insert(pair<string, Connection*>(connKey, tmpConn));
-		if (GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5)
-			cerr << "created new Connection with key: " << connKey << endl;
-	} else {
-		tmpConn = conns[connKey];
-	}
+	tmpConn = getConn(&ip->ip_src, &ip->ip_dst, &tcp->th_sport, &tcp->th_dport, &tcp->th_seq);
 
 	/* Prepare packet data struct */
 	sd.totalSize         = header->len;
@@ -639,7 +664,7 @@ void Dump::processAcks(const struct pcap_pkthdr* header, const u_char *data) {
 	static const struct sniff_ip *ip; /* The IP header */
 	static const struct sniff_tcp *tcp; /* The TCP header */
 	static u_int ipHdrLen;
-	static map<string, Connection*>::iterator it;
+	//static map<ConnectionMapKey*, Connection*>::iterator it;
 	static uint32_t ack;
 	//static u_long eff_win;        /* window after scaling */
 	static bool ret;
@@ -652,35 +677,33 @@ void Dump::processAcks(const struct pcap_pkthdr* header, const u_char *data) {
 	tcpHdrLen = TH_OFF(tcp) * 4;
 	tcpOptionLen = tcpHdrLen - 20;
 
-	string connKey = getConnKey(&ip->ip_dst, &ip->ip_src, &tcp->th_dport, &tcp->th_sport);
+	Connection *tmpConn = getConn(&ip->ip_dst, &ip->ip_src, &tcp->th_dport, &tcp->th_sport, NULL);
 
-	/* It should not be possible that the connection is not yet created */
-	/* If lingering ack arrives for a closed connection, this may happen */
-	it = conns.find(connKey);
-	if (it == conns.end()) {
-		cerr << "Ack for unregistered connection found. Conn: "
-		     << connKey << " - Ignoring." << endl;
-		return;
+	// It should not be possible that the connection is not yet created
+	// If lingering ack arrives for a closed connection, this may happen
+	if (tmpConn == NULL) {
+		cerr << "Ack for unregistered connection found. Conn: " << getConnKey(&ip->ip_dst, &ip->ip_src, &tcp->th_dport, &tcp->th_sport) << " - Ignoring." << endl;
+		//exit_with_file_and_linenum(1, __FILE__, __LINE__);
 	}
 
 	ack = ntohl(tcp->th_ack);
 
 	DataSeg seg;
 	memset(&seg, 0, sizeof(struct DataSeg));
-	seg.ack         = get_relative_sequence_number(ack, it->second->firstSeq, it->second->lastLargestAckSeq, it->second->lastLargestAckSeqAbsolute);
+	seg.ack         = get_relative_sequence_number(ack, tmpConn->firstSeq, tmpConn->lastLargestAckSeq, tmpConn->lastLargestAckSeqAbsolute);
 	seg.tstamp_pcap = header->ts;
 	seg.window = ntohs(tcp->th_win);
 
 	uint8_t* opt = (uint8_t*) tcp + 20;
 	findTCPTimeStamp(&seg, opt, tcpOptionLen);
 
-	ret = it->second->registerAck(&seg);
+	ret = tmpConn->registerAck(&seg);
 	if (!ret) {
 		printf("DUMP - failed to register ACK!\n");
 	}
 	else {
-		it->second->lastLargestAckSeqAbsolute = ack;
-		it->second->lastLargestAckSeq = seg.ack;
+		tmpConn->lastLargestAckSeqAbsolute = ack;
+		tmpConn->lastLargestAckSeq = seg.ack;
 	}
 	ackCount++;
 }
@@ -813,16 +836,15 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data) {
   tcp = (struct sniff_tcp*) (data + SIZE_ETHERNET + ipHdrLen);
   u_int tcpHdrLen = TH_OFF(tcp)*4;
 
-  string connKey = getConnKey(&ip->ip_src, &ip->ip_dst, &tcp->th_sport, &tcp->th_dport);
+  tmpConn = getConn(&ip->ip_src, &ip->ip_dst, &tcp->th_sport, &tcp->th_dport, NULL);
 
-  /* It should not be possible that the connection is not yet created */
-  /* If lingering ack arrives for a closed connection, this may happen */
-  if (conns.count(connKey) == 0) {
-	  cerr << "Connection found in recveiver dump that does not exist in sender: " << connKey << ". Maybe NAT is in effect?  Exiting." << endl;
+  // It should not be possible that the connection is not yet created
+  // If lingering ack arrives for a closed connection, this may happen
+  if (tmpConn == NULL) {
+	  cerr << "Connection found in recveiver dump that does not exist in sender: " << getConnKey(&ip->ip_src, &ip->ip_dst, &tcp->th_sport, &tcp->th_dport);
+	  cerr << ". Maybe NAT is in effect?  Exiting." << endl;
 	  exit_with_file_and_linenum(1, __FILE__, __LINE__);
   }
-
-  tmpConn = conns[connKey];
 
   /* Prepare packet data struct */
   struct sendData sd;
@@ -863,14 +885,14 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data) {
 }
 
 void Dump::calculateRetransAndRDBStats() {
-	map<string, Connection*>::iterator cIt, cItEnd;
+	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
 	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
 		cIt->second->rm->calculateRetransAndRDBStats();
 	}
 }
 
 void Dump::calculateRDBStats() {
-	map<string, Connection*>::iterator cIt, cItEnd;
+	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
 	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
 		//cIt->second->rm->calculateRDBStats();
 		cIt->second->rm->printPacketDetails();
@@ -903,7 +925,7 @@ void Dump::write_loss_to_file() {
 
 	uint32_t timeslice_count = 0;
 
-	map<string, Connection*>::iterator cIt, cItEnd;
+	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
 	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
 		timeslice_count = std::max(timeslice_count, cIt->second->rm->getDuration());
 	}
@@ -934,7 +956,7 @@ void Dump::write_loss_to_file() {
 }
 
 void Dump::makeCDF() {
-	map<string, Connection*>::iterator cIt, cItEnd;
+	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
 	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
 		cIt->second->makeCDF();
 	}
@@ -946,7 +968,7 @@ void Dump::writeCDF(){
 	cdffn << GlobOpts::prefix << "latency-cdf.dat";
 	cdf_f.open((char*)((cdffn.str()).c_str()), ios::out);
 
-	map<string, Connection*>::iterator cIt, cItEnd;
+	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
 	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
 		cIt->second->writeCDF(&cdf_f);
 	}
@@ -959,7 +981,7 @@ void Dump::writeDcCdf(){
 	dccdffn << GlobOpts::prefix << "latency-dccdf.dat";
 	dccdf_f.open((char*)((dccdffn.str()).c_str()), ios::out);
 
-	map<string, Connection*>::iterator cIt, cItEnd;
+	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
 	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
 		cIt->second->writeDcCdf(&dccdf_f);
 	}
@@ -1010,7 +1032,7 @@ void Dump::writeAggDcCdf(){
 }
 
 void Dump::makeDcCdf(){
-  map<string, Connection*>::iterator cIt, cItEnd;
+  map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
   for(cIt = conns.begin(); cIt != conns.end(); cIt++){
     cIt->second->makeDcCdf();
   }
@@ -1032,7 +1054,7 @@ void Dump::printDumpStats() {
 
   cout << endl;
   if (GlobOpts::withRecv) {
-	  map<string, Connection*>::iterator cIt, cItEnd;
+	  map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
 	  long int ranges_count = 0;
 	  long int ranges_lost = 0;
 	  long int ranges_sent = 0;
@@ -1060,7 +1082,7 @@ void Dump::printDumpStats() {
 }
 
 void Dump::genRFiles() {
-	map<string, Connection*>::iterator cIt, cItEnd;
+	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
 	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
 		cIt->second->genRFiles();
 	}
@@ -1102,7 +1124,7 @@ void Dump::genRFiles() {
 }
 
 void Dump::free_resources() {
-	map<string, Connection*>::iterator cIt, cItEnd;
+	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
 	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
 		delete cIt->second;
 	}
