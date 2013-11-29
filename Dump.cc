@@ -113,7 +113,6 @@ void Dump::analyseSender() {
 	char errbuf[PCAP_ERRBUF_SIZE];
 	struct pcap_pkthdr header;
 	const u_char *data;
-	//map<string, Connection*>::iterator it, it_end;
 	map<ConnectionMapKey*, Connection*>::iterator it, it_end;
 
 	pcap_t *fd = pcap_open_offline(filename.c_str(), errbuf);
@@ -664,7 +663,6 @@ void Dump::processAcks(const struct pcap_pkthdr* header, const u_char *data) {
 	static const struct sniff_ip *ip; /* The IP header */
 	static const struct sniff_tcp *tcp; /* The TCP header */
 	static u_int ipHdrLen;
-	//static map<ConnectionMapKey*, Connection*>::iterator it;
 	static uint32_t ack;
 	//static u_long eff_win;        /* window after scaling */
 	static bool ret;
@@ -891,10 +889,9 @@ void Dump::calculateRetransAndRDBStats() {
 	}
 }
 
-void Dump::calculateRDBStats() {
+void Dump::printPacketDetails() {
 	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
 	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
-		//cIt->second->rm->calculateRDBStats();
 		cIt->second->rm->printPacketDetails();
 	}
 }

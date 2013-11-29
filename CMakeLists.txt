@@ -49,8 +49,7 @@ SET (INCLUDE_FILES arpa/inet.h netinet/in.h sys/socket.h getopt.h)
 TARGET_LINK_LIBRARIES (analyseTCP pcap)
 
 # Set compiler flags for all configurations
-#SET (CMAKE_CXX_FLAGS "-O2 -lm -Wall -g3") # -Werror?
-SET (CMAKE_CXX_FLAGS "-lm -Wall -g3") # -Werror?
+SET (CMAKE_CXX_FLAGS "-O3 -lm -Wall") # -Werror?
 
 # Add NDEBUG only for release version
 # To activate: cmake -DCMAKE_BUILD_TYPE=Release .
@@ -62,9 +61,9 @@ IF (APPLE)
 ENDIF (APPLE)
 
 # Set debug compiler flags
-# To activate: cmake -DCMAKE_BUILD_TYPE=Debug .
+# To activate: cmake -DCMAKE_BUILD_TYPE=Debug ..
 SET (CMAKE_C_FLAGS_DEBUG "-g3 -Wall")
-SET (CMAKE_CXX_FLAGS_DEBUG "-g3 -Wall")
+SET (CMAKE_CXX_FLAGS_DEBUG "-g3 -Wall -DDEBUG")
 # Platform specific debug flags
 IF (UNIX)
    SET (CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -gdwarf-2")

@@ -39,13 +39,13 @@ class RangeManager {
 	int minimum_segment_size;
 	int maximum_segment_size;
 
-	multimap<ulong, ByteRange*>::iterator highestAckedByteRangeIt;
+	map<ulong, ByteRange*>::iterator highestAckedByteRangeIt;
 	vector<struct DataSeg*> recvd;
 	vector<struct ByteRange*> recvd_bytes;
 	map<const long, int> cdf;
 	map<const int, int> dcCdf;
 public:
-	multimap<ulong, ByteRange*> ranges;
+	map<ulong, ByteRange*> ranges;
 	ulong firstSeq; /* Global start seq */
 	ulong lastSeq;  /* Global end seq */
 
@@ -94,8 +94,7 @@ public:
 	bool processAck(struct DataSeg *seg);
 	void genStats(struct byteStats* bs);
 	ByteRange* getLastRange() {
-		multimap<ulong, ByteRange*>::reverse_iterator last = ranges.rbegin();
-		return last->second;
+		return ranges.rbegin()->second;
 	}
 	ByteRange* getHighestAcked();
 	int getTimeInterval(ByteRange *r);

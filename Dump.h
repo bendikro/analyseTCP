@@ -75,7 +75,7 @@ class Dump {
   void analyseSender();
   void processRecvd(string fn);
   void calculateRetransAndRDBStats();
-  void calculateRDBStats();
+  void printPacketDetails();
   void printDumpStats();
   void printStatistics();
   void genRFiles();

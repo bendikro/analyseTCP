@@ -64,42 +64,42 @@ void exit_with_file_and_linenum(int exit_code, string file, int linenum) {
 }
 
 bool endsWith(const string& s, const string& suffix) {
-    return s.rfind(suffix) == (s.size()-suffix.size());
+	return s.rfind(suffix) == (s.size()-suffix.size());
 }
 
 void usage (char* argv){
-  printf("Usage: %s [-s|r|p|f|g|t|u|m|n|a|A|d|l|j|y|o]\n", argv);
-  printf("Required options:\n");
-  printf(" -s <sender ip>     : Sender ip.\n");
-  printf(" -f <pcap-file>     : Sender-side dumpfile.\n");
-  printf("Other options:\n");
-  printf(" -r <receiver ip>   : Receiver ip. If not given, analyse all receiver IPs\n");
-  printf(" -q <sender port>   : Sender port. If not given, analyse all sender ports\n");
-  printf(" -p <receiver port> : Receiver port. If not given, analyse all receiver ports\n");
-  printf(" -g <pcap-file>     : Receiver-side dumpfile\n");
-  printf(" -c                 : Write CDF stats to file.\n");
-  printf(" -l<interval>       : Write loss over time to file with optional time slice interval (Default is 1 second).\n");
-  printf(" -t                 : Calculate transport-layer delays\n");
-  printf("                    : (if not set, application-layer delay is calculated)\n");
-  printf(" -u<prefix>         : Write statistics to comma-separated files (for use with R)\n");
-  printf("                      Optional argument <prefix> assigns an output filename prefix (No space between option and argument).\n");
-  printf(" -o <output-dir>    : Directory to write the statistics results (implies -u)\n");
-  printf(" -m <IP>            : Sender side external NAT address (as seen on recv dump)\n");
-  printf(" -n <IP>            : Receiver side local address (as seen on recv dump)\n");
-  printf(" -a                 : Produce aggregated statistics (off by default, optional)\n");
-  printf(" -A                 : Only print aggregated statistics (off by default, optional)\n");
-  printf(" -b                 : Give this option if you know that tcpdump has dropped packets.\n");
-  printf("                    : Statistical methods will be used to compensate where possible.\n");
-  printf(" -j                 : Print relative sequence numbers.\n");
-  printf(" -y                 : Print details for each packet (requires receiver side dump).\n");
-  printf(" -x                 : Calculate RDB miss/hits (requires receiver side dump).\n");
-  printf(" -d                 : Indicate debug level\n");
-  printf("                      1 = Only output on reading sender side dump first pass.\n");
-  printf("                      2 = Only output on reading sender side second pass.\n");
-  printf("                      3 = Only output on reading receiver side.\n");
-  printf("                      4 = Only output when comparing sender and receiver.\n");
-  printf("                      5 = Print all debug messages.\n");
-  exit(0);
+	printf("Usage: %s [-s|r|p|f|g|t|u|m|n|a|A|d|l|j|y|o]\n", argv);
+	printf("Required options:\n");
+	printf(" -s <sender ip>     : Sender ip.\n");
+	printf(" -f <pcap-file>     : Sender-side dumpfile.\n");
+	printf("Other options:\n");
+	printf(" -r <receiver ip>   : Receiver ip. If not given, analyse all receiver IPs\n");
+	printf(" -q <sender port>   : Sender port. If not given, analyse all sender ports\n");
+	printf(" -p <receiver port> : Receiver port. If not given, analyse all receiver ports\n");
+	printf(" -g <pcap-file>     : Receiver-side dumpfile\n");
+	printf(" -c                 : Write CDF stats to file.\n");
+	printf(" -l<interval>       : Write loss over time to file with optional time slice interval (Default is 1 second).\n");
+	printf(" -t                 : Calculate transport-layer delays\n");
+	printf("                    : (if not set, application-layer delay is calculated)\n");
+	printf(" -u<prefix>         : Write statistics to comma-separated files (for use with R)\n");
+	printf("                      Optional argument <prefix> assigns an output filename prefix (No space between option and argument).\n");
+	printf(" -o <output-dir>    : Directory to write the statistics results (implies -u)\n");
+	printf(" -m <IP>            : Sender side external NAT address (as seen on recv dump)\n");
+	printf(" -n <IP>            : Receiver side local address (as seen on recv dump)\n");
+	printf(" -a                 : Produce aggregated statistics (off by default, optional)\n");
+	printf(" -A                 : Only print aggregated statistics (off by default, optional)\n");
+	printf(" -b                 : Give this option if you know that tcpdump has dropped packets.\n");
+	printf("                    : Statistical methods will be used to compensate where possible.\n");
+	printf(" -j                 : Print relative sequence numbers.\n");
+	printf(" -y                 : Print details for each packet (requires receiver side dump).\n");
+	printf(" -x                 : Calculate RDB miss/hits (requires receiver side dump).\n");
+	printf(" -d                 : Indicate debug level\n");
+	printf("                      1 = Only output on reading sender side dump first pass.\n");
+	printf("                      2 = Only output on reading sender side second pass.\n");
+	printf("                      3 = Only output on reading receiver side.\n");
+	printf("                      4 = Only output when comparing sender and receiver.\n");
+	printf("                      5 = Print all debug messages.\n");
+	exit(0);
 }
 
 void test(Dump *d) {
@@ -315,7 +315,7 @@ int main(int argc, char *argv[]){
   senderDump->analyseSender();
 
   if (GlobOpts::genRFiles)
-    senderDump->genRFiles();
+	  senderDump->genRFiles();
 
   if (GlobOpts::withRecv) {
 	  senderDump->processRecvd(recvfn);
@@ -324,7 +324,7 @@ int main(int argc, char *argv[]){
   senderDump->write_loss_to_file();
 
   if ((GlobOpts::print_packets)) {
-	  senderDump->calculateRDBStats();
+	  senderDump->printPacketDetails();
   }
 
   senderDump->printStatistics();
