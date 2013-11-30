@@ -77,6 +77,7 @@ class Dump {
   void calculateRetransAndRDBStats();
   void printPacketDetails();
   void printDumpStats();
+  void printConns();
   void printStatistics();
   void genRFiles();
   void write_loss_to_file();

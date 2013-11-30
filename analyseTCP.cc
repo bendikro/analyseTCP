@@ -44,12 +44,11 @@ string GlobOpts::prefix         = "";
 string GlobOpts::RFiles_dir     = "";
 int GlobOpts::debugLevel        = 0;
 int GlobOpts::lossAggrSeconds   = 1;
-bool GlobOpts::incTrace         = false;
 bool GlobOpts::relative_seq     = false;
 bool GlobOpts::print_packets    = false;
 string GlobOpts::sendNatIP      = "";
 string GlobOpts::recvNatIP      = "";
-bool GlobOpts::rdbDetails       = false;
+bool GlobOpts::connDetails      = false;
 int GlobOpts::max_retrans_stats = 6;
 
 
@@ -68,7 +67,7 @@ bool endsWith(const string& s, const string& suffix) {
 }
 
 void usage (char* argv){
-	printf("Usage: %s [-s|r|p|f|g|t|u|m|n|a|A|d|l|j|y|o]\n", argv);
+	printf("Usage: %s [-s|r|p|f|g|t|u|m|n|a|A|e|u|d|l|j|y|o]\n", argv);
 	printf("Required options:\n");
 	printf(" -s <sender ip>     : Sender ip.\n");
 	printf(" -f <pcap-file>     : Sender-side dumpfile.\n");
@@ -88,11 +87,9 @@ void usage (char* argv){
 	printf(" -n <IP>            : Receiver side local address (as seen on recv dump)\n");
 	printf(" -a                 : Produce aggregated statistics (off by default, optional)\n");
 	printf(" -A                 : Only print aggregated statistics (off by default, optional)\n");
-	printf(" -b                 : Give this option if you know that tcpdump has dropped packets.\n");
-	printf("                    : Statistical methods will be used to compensate where possible.\n");
+	printf(" -e                 : Only print the connections found in the trace\n");
 	printf(" -j                 : Print relative sequence numbers.\n");
 	printf(" -y                 : Print details for each packet (requires receiver side dump).\n");
-	printf(" -x                 : Calculate RDB miss/hits (requires receiver side dump).\n");
 	printf(" -d                 : Indicate debug level\n");
 	printf("                      1 = Only output on reading sender side dump first pass.\n");
 	printf("                      2 = Only output on reading sender side second pass.\n");
@@ -186,7 +183,7 @@ int main(int argc, char *argv[]){
   Dump *senderDump;
 
   while (1){
-    c = getopt(argc, argv, "s:r:p:q:f:m:n:o:g:d:u::l::o:aAtbjyxch");
+    c = getopt(argc, argv, "s:r:p:q:f:m:n:o:g:d:u::l::o:aAetjyxch");
     if (c == -1)
 		break;
 
@@ -203,8 +200,8 @@ int main(int argc, char *argv[]){
     case 'q':
 	    src_port = string(optarg);
       break;
-    case 'x':
-      GlobOpts::rdbDetails = true;
+    case 'e':
+      GlobOpts::connDetails = true;
       break;
     case 'm':
       GlobOpts::sendNatIP = optarg;
@@ -254,9 +251,6 @@ int main(int argc, char *argv[]){
       GlobOpts::aggOnly = true;
       GlobOpts::aggregate = true;
       break;
-    case 'b':
-      GlobOpts::incTrace = true;
-      break;
     case 'j':
       GlobOpts::relative_seq = true;
       break;
@@ -292,13 +286,6 @@ int main(int argc, char *argv[]){
   if(GlobOpts::debugLevel < 0)
     cerr << "debugLevel = " << GlobOpts::debugLevel << endl;
 
-  if(GlobOpts::incTrace){
-    cout << "Incomplete trace option has been specified." << endl
-	 << "Beware that maximum and minimum values may be erroneous." << endl
-	 << "Statistical methods will be applied to compensate where this is possible."
-	 << endl;
-  }
-
   if (GlobOpts::RFiles_dir.length()) {
 	  if (!endsWith(GlobOpts::RFiles_dir, string("/")))
 		  GlobOpts::RFiles_dir += "/";
@@ -319,6 +306,11 @@ int main(int argc, char *argv[]){
 
   if (GlobOpts::withRecv) {
 	  senderDump->processRecvd(recvfn);
+  }
+
+  if (GlobOpts::connDetails) {
+	  senderDump->printConns();
+	  return 0;
   }
 
   senderDump->write_loss_to_file();

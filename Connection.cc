@@ -270,7 +270,7 @@ ulong Connection::getNumUniqueBytes() {
 	return unique_data_bytes;
 }
 
-string Connection::getConnKey(){
+string Connection::getConnKey() {
   char src_ip[INET_ADDRSTRLEN];
   char dst_ip[INET_ADDRSTRLEN];
   inet_ntop(AF_INET, &(srcIp), src_ip, INET_ADDRSTRLEN);
@@ -285,7 +285,7 @@ string Connection::getConnKey(){
   return connKey.str();
 }
 
-string Connection::getSrcIp(){
+string Connection::getSrcIp() {
   char src_ip[INET_ADDRSTRLEN];
   char dst_ip[INET_ADDRSTRLEN];
   inet_ntop(AF_INET, &(srcIp), src_ip, INET_ADDRSTRLEN);
@@ -297,7 +297,7 @@ string Connection::getSrcIp(){
   return sip.str();
 }
 
-string Connection::getDstIp(){
+string Connection::getDstIp() {
   char src_ip[INET_ADDRSTRLEN];
   char dst_ip[INET_ADDRSTRLEN];
   inet_ntop(AF_INET, &(srcIp), src_ip, INET_ADDRSTRLEN);

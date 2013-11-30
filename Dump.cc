@@ -382,15 +382,12 @@ void Dump::printPacketStats(struct connStats *cs, struct byteStats *bs, bool agg
 	       cs->totUniqueBytes, cs->totRetransBytesSent,
 	       (((double) cs->nrRetrans / cs->nrPacketsSent) * 100));
 
-	if (GlobOpts::incTrace) {
-		printf("  Number of redundant bytes                    : %10lu\n"	\
-		       "  Redundancy                                   : %10.2f %%\n",
-		       cs->redundantBytes, ((double) cs->redundantBytes / cs->totUniqueBytes) * 100);
-	} else {
-		printf("  Redundancy                                   : %10.2f %%\n",
-		       ((double) (cs->totBytesSent - cs->totUniqueBytes) / cs->totBytesSent) * 100);
-	}
 
+	printf("  Number of redundant bytes                    : %10lu\n" \
+	       "  Redundancy                                   : %10.2f %%\n",
+	       cs->redundantBytes, ((double) cs->redundantBytes / cs->totUniqueBytes) * 100);
+	printf("  Redundancy                                   : %10.2f %%\n",
+	       ((double) (cs->totBytesSent - cs->totUniqueBytes) / cs->totBytesSent) * 100);
 
 	printf("  Number of received acks                      : %10d\n", cs->ackCount);
 
@@ -790,13 +787,12 @@ void Dump::processRecvd(string recvFn) {
 
   pcap_close(fd);
 
+  printf("Finished processing receiver dump...\n");
+
   /* Traverse ranges in senderDump and compare to
      corresponding bytes / ranges in receiver ranges
      place timestamp diffs in buckets */
-
-  if ((GlobOpts::print_packets || GlobOpts::rdbDetails)) {
-	  calculateRetransAndRDBStats();
-  }
+  calculateRetransAndRDBStats();
 
   if (GlobOpts::withCDF) {
 
@@ -893,6 +889,16 @@ void Dump::printPacketDetails() {
 	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
 	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
 		cIt->second->rm->printPacketDetails();
+	}
+}
+
+void Dump::printConns() {
+	printf("\nConnections in sender dump: %lu\n", conns.size());
+	printf("%-38s   %-17s %-12s   %12s \n", "Conn key", "Duration (sec)", "Packets sent", "Bytes loss");
+	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
+	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
+		printf("%-40s   %-17d   %-11d   %.1f %%\n", cIt->second->getConnKey().c_str(), cIt->second->rm->getDuration(),
+		       cIt->second->nrPacketsSent,  (cIt->second->rm->lost_bytes/ (double) cIt->second->totBytesSent) * 100);
 	}
 }
 

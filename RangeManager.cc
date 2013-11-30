@@ -70,14 +70,13 @@ void RangeManager::insertSentRange(struct sendData *sd) {
 	/* Check for instances where sent packets are lost from the packet trace */
 
 	/* TODO: Add this as a warning if incomplete dump option is not given */
-	else if (!GlobOpts::incTrace && (startSeq > lastSeq) ) {
+	else if (startSeq > lastSeq) {
 		// This is most probably the ack on the FIN ack from receiver, so ignore
 		if (sd->data.payloadSize != 0) {
 			cerr << "RangeManager::insertRange: Missing byte in send range in conn '" << conn->getConnKey() << "'. " << endl;
 			printf("Absolute: lastSeq: %lu, startSeq: %lu. Relative: lastSeq: %lu, startSeq: %lu\n",
 				   lastSeq, startSeq, relative_seq(lastSeq), relative_seq(startSeq));
-			cerr << "This is an indication that tcpdump has dropped packets while collecting the trace." << endl
-			     << "Please rerun using the -b option." << endl;
+			cerr << "This is an indication that tcpdump has dropped packets while collecting the trace." << endl;
 			exit_with_file_and_linenum(1, __FILE__, __LINE__);
 		}
 	}

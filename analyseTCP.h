@@ -65,7 +65,6 @@ class GlobOpts {
   static bool aggInfo;
   static bool transport;
   static int  debugLevel;
-  static bool incTrace;
   static bool withRecv;
   static bool withLoss;
   static int lossAggrSeconds;
@@ -77,7 +76,7 @@ class GlobOpts {
   static bool genRFiles;
   static string prefix;
   static string RFiles_dir;
-  static bool rdbDetails;
+  static bool connDetails;
   static int max_retrans_stats;
 };
 
