@@ -74,76 +74,29 @@ IF (APPLE)
    SET (CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -Wno-long-double")
 ENDIF (APPLE)
 
+
 # Distclean functionality (Remove cmake generated files)
 IF (UNIX OR APPLE)
-  ADD_CUSTOM_TARGET(distclean DEPENDS clean)
-  #ADD_DEPENDENCIES (distclean clean)
+  ADD_CUSTOM_TARGET(distclean)
+  # Doesn't work to add clean as dependency, so add binaries to DISTCLEANMFILES instead.
 
   SET(DISTCLEAN_FILES
-    cmake.depends
-    cmake.check_depends
+    Makefile
+    analyseTCP
+    cmake_install.cmake
     CMakeCache.txt
-    cmake.check_cache
-    CMakeOutput.log
-    core core.*
-    gmon.out bb.out
-    *~
-    *%
-    SunWS_cache
-    ii_files
-    *.so
-    *.o
-    *.a
-    CopyOfCMakeCache.txt
-    CMakeCCompiler.cmake
-    CMakeCCXXompiler.cmake
-    CMakeSystem.cmake
-    html latex Doxyfile
     )
 
   SET(DISTCLEAN_DIRS
-    CMakeTmp
+    CMakeFiles
     )
 
-SET(DISTCLEAN_RECURSIVE_FILES
-  Makefile
-  CMakeTmp
-  cmake.depends
-  cmake.check_depends
-  CMakeCache.txt
-  cmake.check_cache
-  cmake_install.cmake
-  CMakeOutput.log
-  core core.*
-  gmon.out bb.out
-  bin
-  *~
-  *%
-  *.o
-  *.a
-  CopyOfCMakeCache.txt
-  CMakeCCompiler.cmake
-  CMakeCCompiler.cmake
-  CMakeSystem.cmake
-  html latex Doxyfile
- )
-
- # for 1.8.x:
+  # for 1.8.x:
   ADD_CUSTOM_COMMAND(
     TARGET distclean
     PRE_BUILD
     COMMAND rm
     ARGS    -Rf ${DISTCLEAN_FILES} ${DISTCLEAN_DIRS}
-   COMMENT
+    COMMENT "Removing all cmake generated files."
     )
-
-  FOREACH(RMTARGET ${DISTCLEAN_RECURSIVE_FILES})
-    ADD_CUSTOM_COMMAND(
-      TARGET distclean
-      PRE_BUILD
-      COMMAND find
-      ARGS . -name ${RMTARGET} -exec rm -rf {} '\;'
-      COMMENT
-      )
-  ENDFOREACH(RMTARGET ${DISTCLEAN_RECURSIVE_FILES})
 ENDIF (UNIX OR APPLE)

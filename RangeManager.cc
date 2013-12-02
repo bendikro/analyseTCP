@@ -314,9 +314,6 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 					}
 					else {
 						cur_br->increase_received(data_seg->tstamp_tcp, data_seg->tstamp_pcap);
-						//assert(0 && "TEST\n");
-						assert(cur_br->received_tstamp_tcp && "TEST\n");
-						//new_br->split_after_sent = true;
 					}
 
 #ifdef DEBUG
@@ -332,7 +329,6 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 					ranges.insert(pair<ulong, ByteRange*>(cur_br->startSeq, cur_br));
 
 					if (!end_matches) {
-						//indent_print("End seqs do not match! %lu != %lu\n", relative_seq(end_seq), relative_seq(cur_br->endSeq));
 						if (cur_br->endSeq > end_seq) {
 							ByteRange *new_br = cur_br->split_end(end_seq + 1, cur_br->endSeq);
 							ranges.insert(pair<ulong, ByteRange*>(new_br->startSeq, new_br));
@@ -425,7 +421,6 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 				if (end_seq == firstSeq +1) {
 					brIt = ranges.find(start_seq -1);
 					brIt->second->increase_received(data_seg->tstamp_tcp, data_seg->tstamp_pcap);
-					//brIt->second->received_count++;
 					assert(0 && "The ack on the syn-ack??\n");
 					return;
 				}
@@ -486,8 +481,6 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 #endif
 				}
 				else {
-					new_br->split_after_sent = true;
-					brIt->second->split_after_sent = true;
 					brIt->second->increase_received(data_seg->tstamp_tcp, data_seg->tstamp_pcap);
 				}
 				ranges.insert(pair<ulong, ByteRange*>(new_br->startSeq, new_br));
@@ -520,7 +513,6 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 					printf("Setting received timestamp: %u\n", brIt->second->received_tstamp_tcp);
 					printf("tstamps: %lu, rdb-stamps: %lu", brIt->second->tstamps_tcp.size(), brIt->second->rdb_tstamps_tcp.size());
 				}
-				assert(brIt->second->received_tstamp_tcp && "TEST\n");
 #endif
 			}
 		}
@@ -603,7 +595,6 @@ bool RangeManager::processAck(struct DataSeg *seg /*ulong ack, timeval* tv, ulon
 				printf("  Covers more than Range(%lu, %lu)\n", relative_seq(tmpRange->getStartSeq()), relative_seq(tmpRange->getEndSeq()));
 			tmpRange->insertAckTime(&seg->tstamp_pcap);
 			highestAckedByteRangeIt = it;
-			//highestAckedByteRangeIt++;
 			ret = true;
 			continue;
 		}
@@ -619,7 +610,6 @@ bool RangeManager::processAck(struct DataSeg *seg /*ulong ack, timeval* tv, ulon
 
 			// Second part of range: insert after tmpRange (tmpRange)
 			highestAckedByteRangeIt = ranges.insert(std::pair<ulong, ByteRange*>(new_br->getStartSeq(), new_br)).first;
-			//ranges.insert(std::pair<ulong, ByteRange*>(new_br->getStartSeq(), new_br));
 			return true;
 		}
 
@@ -648,23 +638,15 @@ double median(vector<double>::const_iterator begin,
     return m;
 }
 
-Percentiles *percentiles(const vector<double> *v) {
-    vector<double>::const_iterator it_second_half = v->begin() + v->size() / 2;
-    vector<double>::const_iterator it_first_half = it_second_half;
-    vector<double>::const_iterator it_ninetynine_p = v->begin() + ((int) v->size() * 0.99);
-    vector<double>::const_iterator it_first_p = v->begin() + ((int) v->size() * 0.99);
-    if ((v->size() % 2) == 0)
-	    --it_first_half;
-
-    double q1 = median(v->begin(), it_first_half);
-    double q2 = median(v->begin(), v->end());
-    double q3 = median(it_second_half, v->end());
-    double p1 = median(v->begin(), it_first_p);
-    double p99 = median(it_ninetynine_p, v->end());
-    Percentiles *ret = new Percentiles(q1, q2, q3, p1, p99);
-    return ret;
+void percentiles(const vector<double> *v, Percentiles *p) {
+	map<string, double>::iterator it;
+	double num;
+	for (it = p->percentiles.begin(); it != p->percentiles.end(); it++) {
+		istringstream(it->first) >> num;
+		vector<double>::const_iterator it_p = v->begin() + ((int) ceil(v->size() * (num / 100.0)));
+		it->second = *it_p;
+	}
 }
-
 
 void RangeManager::genStats(struct byteStats *bs) {
 	int latency;
@@ -672,8 +654,6 @@ void RangeManager::genStats(struct byteStats *bs) {
 	it = ranges.begin();
 	it_end = ranges.end();
 
-	vector<double> latencies;
-	vector<double> payload_lengths;
 	int tmp_byte_count = 0;
 	bs->minLat = bs->minLength = (numeric_limits<int>::max)();
 
@@ -683,10 +663,10 @@ void RangeManager::genStats(struct byteStats *bs) {
 	for (; it != it_end; it++) {
 		// Skip if invalid (negative) latency
 		tmp_byte_count = it->second->getOrinalPayloadSize();
-		payload_lengths.push_back(tmp_byte_count);
+		bs->payload_lengths.push_back(tmp_byte_count);
 		bs->cumLength += tmp_byte_count;
 		for (int i = 0; i < it->second->getNumRetrans(); i++) {
-			payload_lengths.push_back(tmp_byte_count);
+			bs->payload_lengths.push_back(tmp_byte_count);
 			bs->cumLength += tmp_byte_count;
 		}
 
@@ -709,7 +689,7 @@ void RangeManager::genStats(struct byteStats *bs) {
 		}
 
 		if ((latency = it->second->getSendAckTimeDiff(this))) {
-			 latencies.push_back(latency);
+			 bs->latencies.push_back(latency);
 			 bs->cumLat += latency;
 			 if (latency > bs->maxLat) {
 				 bs->maxLat = latency;
@@ -727,12 +707,14 @@ void RangeManager::genStats(struct byteStats *bs) {
 		if (retrans > bs->maxRetrans)
 			bs->maxRetrans = retrans;
 
-		retrans = std::min(MAX_STAT_RETRANS, retrans);
-
-		if (retrans > 0) {
-			for (int i = 0; i < retrans; i++) {
-				bs->retrans[i]++;
+		if ((ulong) retrans > bs->retrans.size()) {
+			for (int i = (int) bs->retrans.size(); i < retrans; i++) {
+				bs->retrans.push_back(0);
 			}
+		}
+
+		for (int i = 0; i < retrans; i++) {
+			bs->retrans[i]++;
 		}
 	}
 
@@ -740,39 +722,39 @@ void RangeManager::genStats(struct byteStats *bs) {
 
 	double temp;
 	double stdev;
-	if (latencies.size()) {
+	if (bs->latencies.size()) {
 		double sumLat = bs->cumLat;
-		double mean =  sumLat / latencies.size();
+		double mean =  sumLat / bs->latencies.size();
 		temp = 0;
 
-		for (unsigned int i = 0; i < latencies.size(); i++) {
-			temp += (latencies[i] - mean) * (latencies[i] - mean);
+		for (unsigned int i = 0; i < bs->latencies.size(); i++) {
+			temp += (bs->latencies[i] - mean) * (bs->latencies[i] - mean);
 		}
 
-		std::sort(latencies.begin(), latencies.end());
+		std::sort(bs->latencies.begin(), bs->latencies.end());
 
-		stdev = sqrt(temp / (latencies.size()));
+		stdev = sqrt(temp / (bs->latencies.size()));
 		bs->stdevLat = stdev;
-		bs->percentiles_latencies = percentiles(&latencies);
+		percentiles(&bs->latencies, &bs->percentiles_latencies);
 	}
 	else
 		bs->minLat = 0;
 
-	if (payload_lengths.size()) {
+	if (bs->payload_lengths.size()) {
 		// Payload size stats
 		double sumLen = conn->totBytesSent;
-		double meanLen =  sumLen / payload_lengths.size();
+		double meanLen =  sumLen / bs->payload_lengths.size();
 		bs->avgLength = meanLen;
 
 		temp = 0;
-		for (unsigned int i = 0; i < payload_lengths.size(); i++) {
-			temp += (payload_lengths[i] - meanLen) * (payload_lengths[i] - meanLen);
+		for (unsigned int i = 0; i < bs->payload_lengths.size(); i++) {
+			temp += (bs->payload_lengths[i] - meanLen) * (bs->payload_lengths[i] - meanLen);
 		}
 
-		std::sort(payload_lengths.begin(), payload_lengths.end());
-		stdev = sqrt(temp / (payload_lengths.size()));
+		std::sort(bs->payload_lengths.begin(), bs->payload_lengths.end());
+		stdev = sqrt(temp / (bs->payload_lengths.size()));
 		bs->stdevLength = stdev;
-		bs->percentiles_lengths = percentiles(&payload_lengths);
+		percentiles(&bs->payload_lengths, &bs->percentiles_lengths);
 	}
 	else
 		bs->minLength = 0;
@@ -879,54 +861,6 @@ void RangeManager::validateContent() {
 	}
 }
 
-
-void RangeManager::write_loss_over_time(unsigned slice_interval, unsigned timeslice_count, FILE *loss_retrans_out, FILE *loss_loss_out) {
-	map<ulong, ByteRange*>::iterator brIt, brIt_end;
-	int lost_count = 0;
-	int retrans_count = 0;
-	timeval next, t_slice, next_tmp;
-
-	brIt = ranges.begin();
-	brIt_end = ranges.end();
-	t_slice.tv_sec = slice_interval;
-	t_slice.tv_usec = 0;
-	timeradd(&(brIt->second->sent_tstamp_pcap[0]), &t_slice, &next);
-
-	fprintf(loss_retrans_out, "%45s", conn->getConnKey().c_str());
-	if (loss_loss_out)
-		fprintf(loss_loss_out, "%45s", conn->getConnKey().c_str());
-
-	for (; brIt != brIt_end; brIt++) {
-
-		// Print slice value and find next slice time
-		while (!timercmp(&(brIt->second->sent_tstamp_pcap[0]), &next, <)) {
-			fprintf(loss_retrans_out, ",%10d", lost_count);
-			if (loss_loss_out)
-				fprintf(loss_loss_out, ",%10d", lost_count);
-			lost_count = 0;
-			retrans_count = 0;
-			memcpy(&next_tmp, &next, sizeof(struct timeval));
-			timeradd(&next_tmp, &t_slice, &next);
-			timeslice_count--;
-		}
-		retrans_count += brIt->second->retrans_count;
-		if (loss_loss_out)
-			lost_count += brIt->second->sent_count - brIt->second->received_count;
-	}
-
-	// Pad remaining slices with zeroes
-	while (timeslice_count) {
-		fprintf(loss_retrans_out, ",%10d", 0);
-		if (loss_loss_out)
-			fprintf(loss_loss_out, ",%10d", 0);
-		timeslice_count--;
-	}
-
-	fprintf(loss_retrans_out, "\n");
-	if (loss_loss_out)
-		fprintf(loss_loss_out, "\n");
-}
-
 void RangeManager::printPacketDetails() {
 	map<ulong, ByteRange*>::iterator it, it_end;
 	it = ranges.begin();
@@ -949,44 +883,51 @@ void RangeManager::printPacketDetails() {
 				printf("   LOST %d", it->second->sent_count - it->second->received_count);
 			}
 		}
+
+		if (!it->second->retrans_count && !it->second->rdb_count && (it->second->rdb_byte_miss || it->second->rdb_byte_hits)) {
+			printf(" FAIL (RDB hit/miss calculalation has failed)!");
+		}
 		printf("\n");
 	}
 }
 
-void RangeManager::calculateRDBStats() {
+void RangeManager::calculateRealLoss() {
 	ByteRange *prev = NULL;
 	ulong index = 0;
 	int lost_tmp = 0;
 	map<ulong, ByteRange*>::iterator brIt, brIt_end;
 	rdb_stats_available = true;
 
-	int match_fails = 0;
+	int match_fails_before_end = 0;
 	int match_fails_at_end = 0;
 	int lost_packets = 0;
 	bool prev_pack_lost = false;
-
-	//bool has_recv_data = hasReceiveData();
+	double loss_and_end_limit = 0.01;
 
 	brIt = ranges.begin();
 	brIt_end = ranges.end();
 	for (; brIt != brIt_end; brIt++) {
+#ifdef DEBUG
 		if (prev) {
 			if (prev->endSeq +1 != brIt->second->startSeq && prev->startSeq != prev->endSeq) {
-				//printf("Range not continuous!\n Gap in %lu:%lu - %lu:%lu\n", prev->startSeq, prev->endSeq, brIt->second->startSeq, brIt->second->endSeq);
+				printf("Range not continuous!\n Gap in %lu:%lu - %lu:%lu\n", prev->startSeq, prev->endSeq, brIt->second->startSeq, brIt->second->endSeq);
 			}
 		}
+#endif
 		prev = brIt->second;
 		index++;
 
 		bool ret = brIt->second->match_received_type();
 		if (ret == false) {
-			colored_printf(RED, "Failed to match %lu - %lu (index: %lu)\n", relative_seq(brIt->second->startSeq), relative_seq(brIt->second->endSeq), index);
-			brIt->second->print_tstamps_tcp();
-			if (index > (ranges.size() - 20)) {
-				match_fails_at_end++;
+			if (index < (ranges.size() * (1 - loss_and_end_limit))) {
+				match_fails_before_end++;
+				colored_printf(YELLOW, "Failed to match %lu - %lu (%lu - %lu) (index: %lu) on %s\n",
+					       relative_seq(brIt->second->startSeq), relative_seq(brIt->second->endSeq),
+					       brIt->second->startSeq, brIt->second->endSeq, index, conn->getConnKey().c_str());
+				brIt->second->print_tstamps_tcp();
 			}
 			else
-				match_fails++;
+				match_fails_at_end++;
 		}
 
 		int rdb_count = brIt->second->rdb_count;
@@ -1005,9 +946,6 @@ void RangeManager::calculateRDBStats() {
 		sent_ranges_count += brIt->second->sent_count;
 
 		if (brIt->second->sent_count != brIt->second->received_count) {
-			if (GlobOpts::print_packets) {
-				//printf("   LOST %d, index: %lu", brIt->second->sent_count - brIt->second->received_count, index);
-			}
 			lost_ranges_count += (brIt->second->sent_count - brIt->second->received_count);
 			lost_bytes += (brIt->second->sent_count - brIt->second->received_count) * brIt->second->byte_count;
 			ulong lost = (brIt->second->sent_count - brIt->second->received_count);
@@ -1018,7 +956,6 @@ void RangeManager::calculateRDBStats() {
 					for (ulong u = 0; u < prev->lost_tstamps_tcp.size(); u++) {
 						if (brIt->second->lost_tstamps_tcp[i] == prev->lost_tstamps_tcp[u]) {
 							lost -= 1;
-							//printf(" same as prev!");
 							if (!lost) {
 								i = brIt->second->lost_tstamps_tcp.size();
 								u = prev->lost_tstamps_tcp.size();
@@ -1033,36 +970,29 @@ void RangeManager::calculateRDBStats() {
 		else
 			prev_pack_lost = false;
 
-		if (GlobOpts::print_packets) {
-			if (!brIt->second->retrans_count && !brIt->second->rdb_count && (brIt->second->rdb_byte_miss || brIt->second->rdb_byte_hits)) {
-				printf(" FAIL (RDB hit/miss calculalation has failed)!");
-			}
-		}
-
 		if (brIt->second->sent_count > 1)
 			lost_tmp += brIt->second->sent_count - 1;
 		else {
-			// Necessary for correct index when multiple packets in a row are lost
-			index += lost_tmp;
 			lost_tmp = 0;
 		}
-		if (GlobOpts::print_packets) {
-			//printf("\n");
-		}
 	}
-	if (match_fails)
-		printf("Failed to find timestamp for %d out of %ld packets.\n", match_fails, ranges.size());
-	if (match_fails_at_end)
-		printf("Failed to find timestamp for %d out of %ld packets. These packets were at the end of the stream"\
-			   ", so presumable they just not caught by tcpdump.\n", match_fails_at_end, ranges.size());
 
-	//printf("Lost packets: %d\n", lost_packets);
-	//printf("sent_ranges_count: %d\n", sent_ranges_count);
-	//printf("lost_ranges_count: %d\n", lost_ranges_count);
-	//printf("Ranges loss: %f\n", (double) lost_ranges_count / sent_ranges_count);
+	if (match_fails_before_end) {
+		colored_printf(RED, "%s : Failed to find timestamp for %d out of %ld packets.\n", conn->getConnKey().c_str(), match_fails_before_end, ranges.size());
+		colored_printf(RED, "These packest were before the %f%% limit (%d) from the end (%lu), and might be caused by packets being dropped from tcpdump\n",
+		       (1 - loss_and_end_limit), (int) (ranges.size() * (1 - loss_and_end_limit)), ranges.size());
+	}
+#ifndef DEBUG
+	if (match_fails_at_end)
+		printf("%s : Failed to find timestamp for %d out of %ld packets. These packets were at the end of the stream" \
+		       ", so presumable they were just not caught by tcpdump.\n", conn->getConnKey().c_str(), match_fails_at_end, ranges.size());
+#endif
 }
 
 
+/*
+  Based on the receiver side dump, calucate the retrans, loss and RDB data statistics.
+ */
 void RangeManager::calculateRetransAndRDBStats() {
 	vector<DataSeg*>::iterator rit, rit_end;
 	/* Create map with references to the ranges */
@@ -1073,7 +1003,7 @@ void RangeManager::calculateRetransAndRDBStats() {
 		struct DataSeg *tmpRd = *rit;
 		insert_byte_range(tmpRd->seq, tmpRd->endSeq, false, tmpRd, 0);
 	}
-	calculateRDBStats();
+	calculateRealLoss();
 }
 
 /* Reads all packets from receiver dump into a vector */
@@ -1200,7 +1130,6 @@ void RangeManager::registerRecvDiffs() {
 		}
 
 		/* Check if match has been found */
-		/* Tag as dummy range? */
 		if (matched == -1) {
 			// We found the next after the expected, this is the ack on the fin (if payload is 0)
 			int count = rsMap.count(it->second->getStartSeq() +1);
@@ -1291,9 +1220,9 @@ uint32_t RangeManager::getDuration() {
 
 /* Calculate clock drift on CDF */
 int RangeManager::calcDrift() {
-	/* If connection > 500 ranges &&
-	   connection.duration > 120 seconds,
-	   calculate clock drift */
+	// If connection > 500 ranges &&
+	// connection.duration > 120 seconds,
+	// calculate clock drift
 
 	if (ranges.size() > 500 && getDuration() > 120) {
 		map<ulong, ByteRange*>::iterator startIt;
@@ -1507,6 +1436,57 @@ void RangeManager::writeDcCdf(ofstream *stream) {
 		sprintf(print_buf, "time: %10d    CDF: %.10f", (*nit).first, cdfSum);
 		*stream << print_buf << endl;
 	}
+}
+
+/*
+  Writes the loss stats for the connection over time.
+  The slice_interval defines the interval for which to aggregate the loss.
+ */
+void RangeManager::write_loss_over_time(unsigned slice_interval, unsigned timeslice_count, FILE *loss_retrans_out, FILE *loss_loss_out) {
+	map<ulong, ByteRange*>::iterator brIt, brIt_end;
+	int lost_count = 0;
+	int retrans_count = 0;
+	timeval next, t_slice, next_tmp;
+
+	brIt = ranges.begin();
+	brIt_end = ranges.end();
+	t_slice.tv_sec = slice_interval;
+	t_slice.tv_usec = 0;
+	timeradd(&(brIt->second->sent_tstamp_pcap[0]), &t_slice, &next);
+
+	fprintf(loss_retrans_out, "%45s", conn->getConnKey().c_str());
+	if (loss_loss_out)
+		fprintf(loss_loss_out, "%45s", conn->getConnKey().c_str());
+
+	for (; brIt != brIt_end; brIt++) {
+
+		// Print slice value and find next slice time
+		while (!timercmp(&(brIt->second->sent_tstamp_pcap[0]), &next, <)) {
+			fprintf(loss_retrans_out, ",%10d", lost_count);
+			if (loss_loss_out)
+				fprintf(loss_loss_out, ",%10d", lost_count);
+			lost_count = 0;
+			retrans_count = 0;
+			memcpy(&next_tmp, &next, sizeof(struct timeval));
+			timeradd(&next_tmp, &t_slice, &next);
+			timeslice_count--;
+		}
+		retrans_count += brIt->second->retrans_count;
+		if (loss_loss_out)
+			lost_count += brIt->second->sent_count - brIt->second->received_count;
+	}
+
+	// Pad remaining slices with zeroes
+	while (timeslice_count) {
+		fprintf(loss_retrans_out, ",%10d", 0);
+		if (loss_loss_out)
+			fprintf(loss_loss_out, ",%10d", 0);
+		timeslice_count--;
+	}
+
+	fprintf(loss_retrans_out, "\n");
+	if (loss_loss_out)
+		fprintf(loss_loss_out, "\n");
 }
 
 /*

@@ -10,8 +10,8 @@ map<ConnectionMapKey*, string, ConnectionKeyComparator> connKeys;
 Dump::Dump(string src_ip, string dst_ip, string src_port, string dst_port, string fn ){
   srcIp = src_ip;
   dstIp = dst_ip;
-  srcPort = string(src_port);
-  dstPort = string(dst_port);
+  srcPort = src_port;
+  dstPort = dst_port;
   filename = fn;
   sentPacketCount = 0;
   sentBytesCount = 0;
@@ -133,7 +133,10 @@ void Dump::analyseSender() {
 
 	struct bpf_program compFilter;
 	stringstream filterExp;
-	filterExp << "tcp && src host " << srcIp;
+
+	filterExp << "tcp";
+	if (!srcIp.empty())
+		filterExp << " && src host " << srcIp;
 	if (!srcPort.empty()) {
 		filterExp << " && src " << (src_port_range ? "portrange " : "port ") << srcPort;
 	}
@@ -202,7 +205,9 @@ void Dump::analyseSender() {
 		filterExp << " && src host " << dstIp;
 	if (!dstPort.empty())
 		filterExp << " && src " << (dst_port_range ? "portrange " : "port ") << dstPort;
-	filterExp << " && dst host " << srcIp;
+
+	if (!srcIp.empty())
+		filterExp << " && dst host " << srcIp;
 	if (!srcPort.empty())
 		filterExp << " && dst " << (src_port_range ? "portrange " : "port ") << srcPort;
 
@@ -269,10 +274,10 @@ void Dump::printStatistics() {
 	memset(&cs, 0, sizeof(struct connStats));
 	memset(&csAggregated, 0, sizeof(struct connStats));
 
-	struct byteStats bs, bsAggregated, bsAggregatedMin, bsAggregatedMax;
-	memset(&bsAggregated, 0, sizeof(struct byteStats));
-	memset(&bsAggregatedMin, 0, sizeof(struct byteStats));
-	memset(&bsAggregatedMax, 0, sizeof(struct byteStats));
+	struct byteStats bsAggregated, bsAggregatedMin, bsAggregatedMax;
+	//memset(&bsAggregated, 0, sizeof(struct byteStats));
+	//memset(&bsAggregatedMin, 0, sizeof(struct byteStats));
+	//memset(&bsAggregatedMax, 0, sizeof(struct byteStats));
 	bsAggregatedMin.minLat = bsAggregatedMin.minLength = bsAggregatedMin.avgLat = bsAggregatedMin.maxLat = (numeric_limits<int>::max)();
 	bsAggregatedMax.maxLength = (numeric_limits<int>::max)();
 
@@ -288,7 +293,13 @@ void Dump::printStatistics() {
 		cIt->second->addPacketStats(&csAggregated);
 
 		/* Initialize bs struct */
-		memset(&bs, 0, sizeof(struct byteStats));
+		struct byteStats bs;
+
+		if (!(GlobOpts::aggOnly)) {
+			bs.percentiles_lengths.init();
+			bs.percentiles_latencies.init();
+		}
+
 		cIt->second->genBytesLatencyStats(&bs);
 
 		if (!(GlobOpts::aggOnly)) {
@@ -312,7 +323,13 @@ void Dump::printStatistics() {
 			bsAggregated.avgLength += bs.avgLength;
 			bsAggregated.cumLength += bs.cumLength;
 
-			for (int i = 0; i < MAX_STAT_RETRANS; i++) {
+			if ((ulong) bs.retrans.size() > bsAggregated.retrans.size()) {
+				for (ulong i = bsAggregated.retrans.size(); i < bs.retrans.size(); i++) {
+					bsAggregated.retrans.push_back(0);
+				}
+			}
+
+			for (ulong i = 0; i < bs.retrans.size(); i++) {
 				bsAggregated.retrans[i] += bs.retrans[i];
 			}
 
@@ -335,12 +352,11 @@ void Dump::printStatistics() {
 				bsAggregatedMax.maxLat = bs.maxLat;
 			if (bsAggregatedMax.avgLat < bs.avgLat)
 				bsAggregatedMax.avgLat = bs.avgLat;
-		}
 
-		if (bs.percentiles_lengths)
-			delete bs.percentiles_lengths;
-		if (bs.percentiles_latencies)
-			delete bs.percentiles_latencies;
+			// Add the latency and payload values
+			bsAggregated.latencies.insert(bsAggregated.latencies.end(), bs.latencies.begin(), bs.latencies.end());
+			bsAggregated.payload_lengths.insert(bsAggregated.payload_lengths.end(), bs.payload_lengths.begin(), bs.payload_lengths.end());
+		}
 	}
 
 	if (GlobOpts::aggregate) {
@@ -348,11 +364,17 @@ void Dump::printStatistics() {
 			bsAggregated.avgLat /= conns.size();
 			bsAggregated.avgLength /= conns.size();
 			csAggregated.duration /= conns.size();
-			//bsAggregated.maxRetrans /= conns.size();
 			bsAggregated.minLength /= conns.size();
 			bsAggregated.maxLength /= conns.size();
 			bsAggregated.minLat /= conns.size();
 			bsAggregated.maxLat /= conns.size();
+			bsAggregated.percentiles_lengths.init();
+			bsAggregated.percentiles_latencies.init();
+
+			std::sort(bsAggregated.latencies.begin(), bsAggregated.latencies.end());
+			percentiles(&bsAggregated.latencies, &bsAggregated.percentiles_latencies);
+			std::sort(bsAggregated.payload_lengths.begin(), bsAggregated.payload_lengths.end());
+			percentiles(&bsAggregated.payload_lengths, &bsAggregated.percentiles_lengths);
 
 			cout << "\n\nAggregate Statistics for " << conns.size() << " connections:" << endl;
 			printPacketStats(&csAggregated, &bsAggregated, true);
@@ -382,15 +404,10 @@ void Dump::printPacketStats(struct connStats *cs, struct byteStats *bs, bool agg
 	       cs->totUniqueBytes, cs->totRetransBytesSent,
 	       (((double) cs->nrRetrans / cs->nrPacketsSent) * 100));
 
-
-	printf("  Number of redundant bytes                    : %10lu\n" \
-	       "  Redundancy                                   : %10.2f %%\n",
-	       cs->redundantBytes, ((double) cs->redundantBytes / cs->totUniqueBytes) * 100);
 	printf("  Redundancy                                   : %10.2f %%\n",
 	       ((double) (cs->totBytesSent - cs->totUniqueBytes) / cs->totBytesSent) * 100);
 
 	printf("  Number of received acks                      : %10d\n", cs->ackCount);
-
 
 	printf("\nPayload size stats:\n");
 
@@ -415,19 +432,11 @@ void Dump::printPacketStats(struct connStats *cs, struct byteStats *bs, bool agg
 			       bs->minLength, bs->maxLength);
 		}
 
-		if (bs->percentiles_lengths) {
-			printf("  Standard deviation                           : %f\n" \
-			       "  First percentile                             : %f\n"\
-			       "  First  quartile (25th percentile)            : %f\n" \
-			       "  Second quartile (50th percentile) (median)   : %f\n" \
-			       "  Third  quartile (75th percentile)            : %f\n"\
-			       "  Ninety ninth percentile                      : %f\n",
-			       bs->stdevLength,
-			       bs->percentiles_lengths->first_percentile,
-			       bs->percentiles_lengths->first_quartile,
-			       bs->percentiles_lengths->second_quartile,
-			       bs->percentiles_lengths->third_quartile,
-			       bs->percentiles_lengths->ninetynine_percentile);
+		if (bs->stdevLength)
+			printf("  Standard deviation                           : %10.0f\n", bs->stdevLength);
+
+		if (bs->percentiles_lengths.percentiles.size()) {
+			bs->percentiles_lengths.print("  %*sth percentiles %-26s   : %10.0f\n", true);
 		}
 	}
 
@@ -458,33 +467,32 @@ void Dump::printBytesLatencyStats(struct connStats *cs, struct byteStats* bs, bo
 		printf(":\n");
 
 	if (aggregated) {
-		printf("  Average latencies (min/avg/max)              :    %7d, %7lld, %7d ms\n", bs->minLat, bs->avgLat, bs->maxLat);
-		printf("  Minimum latencies (min/avg/max)              :    %7d, %7lld, %7d ms\n", aggregatedMin->minLat, aggregatedMin->avgLat, aggregatedMin->maxLat);
-		printf("  Maximum latencies (min/avg/max)              :    %7d, %7lld, %7d ms\n", aggregatedMax->minLat, aggregatedMax->avgLat, aggregatedMax->maxLat);
+		printf("  Minimum latencies (min/avg/max)              :    %7d, %7d, %7d ms\n", aggregatedMin->minLat, bs->minLat, aggregatedMax->minLat);
+		printf("  Average latencies (min/avg/max)              :    %7lld, %7lld, %7lld ms\n", aggregatedMin->avgLat, bs->avgLat, aggregatedMax->avgLat);
+		printf("  Maximum latencies (min/avg/max)              :    %7d, %7d, %7d ms\n", aggregatedMin->maxLat, bs->maxLat, aggregatedMax->maxLat);
 		printf("  Average for all packets in all all conns     : %10lld ms\n", bs->cumLat / cs->nrPacketsSent);
+
 	}
 	else {
-		printf("  Minimum latency                              : %7d ms\n", bs->minLat);
-		printf("  Maximum latency                              : %7d ms\n", bs->maxLat);
-		printf("  Average of all packets                       : %7lld ms\n", bs->avgLat);
+		printf("  Minimum                                      : %7d ms\n", bs->minLat);
+		printf("  Average                                      : %7lld ms\n", bs->avgLat);
+		printf("  Maximum                                      : %7d ms\n", bs->maxLat);
 	}
 
 	if (bs->stdevLat) {
 		printf("  Standard deviation                           : %7.1f ms\n", bs->stdevLat);
 	}
-	if (bs->percentiles_latencies) {
-		cout << "  First percentile                             : " << bs->percentiles_latencies->first_percentile << endl;
-		cout << "  First  quartile  (25th percentile)           : " << bs->percentiles_latencies->first_quartile << endl;
-		cout << "  Second quartile  (50th percentile) (median)  : " << bs->percentiles_latencies->second_quartile << endl;
-		cout << "  Third  quartile  (75th percentile)           : " << bs->percentiles_latencies->third_quartile << endl;
-		cout << "  Ninety ninth percentile                      : " << bs->percentiles_latencies->ninetynine_percentile << endl;
+	if (bs->percentiles_latencies.percentiles.size()) {
+		bs->percentiles_latencies.print("  %*sth percentile %-26s   : %10.0f\n", true);
 	}
 	cout << "--------------------------------------------------" << endl;
 	cout << "  Max retransmissions                          : " << bs->maxRetrans << endl;
-	for (int i = 0; i < MAX_STAT_RETRANS; i++) {
+	for (ulong i = 0; i < bs->retrans.size(); i++) {
+		if (!GlobOpts::verbose && i > 2)
+			break;
 		if (bs->retrans[i] == 0)
 			break;
-		printf("  Occurrences of %2d. retransmission            : %d\n", i +1, bs->retrans[i]);
+		printf("  Occurrences of %2lu. retransmission            : %d\n", i +1, bs->retrans[i]);
 	}
 	cout << "--------------------------------------------------" << endl;
 	if (bs->dupacks.size() == 0) {
@@ -494,7 +502,10 @@ void Dump::printBytesLatencyStats(struct connStats *cs, struct byteStats* bs, bo
 		cout << "  Max dupacks                                  : " << bs->dupacks.rbegin()->first << endl;
 		map<const int, int>::iterator it = bs->dupacks.begin(), end = bs->dupacks.end();
 		int dupacks_total = 0;
-		while (it != end) {
+
+		for (int i = 0; it != end; i++) {
+			if (!GlobOpts::verbose && i > 2)
+				break;
 			printf("  Occurrences of %2d. dupacks                   : %d\n", it->first, it->second);
 			if (it->first > 0) {
 				if (it->first > 0)

@@ -61,7 +61,6 @@ public:
 	received_type recv_type; // 0 == first transfer, 1 == RDB, 2 == retrans
 	int recv_type_num; // Which packet of the specific type was first received
 
-	int split_after_sent;
 	timeval received_tstamp_pcap;
 	uint32_t received_tstamp_tcp;
 
@@ -83,7 +82,6 @@ public:
 		endSeq = end;
 		sent_count = 0;
 		received_count = 0;
-		split_after_sent = 0;
 		dupack_count = 0;
 		acked = 0;
 		update_byte_count();

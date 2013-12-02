@@ -50,7 +50,7 @@ bool ByteRange::match_received_type(bool print) {
 
 void ByteRange::print_tstamps_tcp() {
 	printf("recv timestamp: %u ", received_tstamp_tcp);
-	printf("tstamps_tcp: %lu, rdb-stamps: %lu\n\n", tstamps_tcp.size(), rdb_tstamps_tcp.size());
+	printf("tstamps_tcp: %lu, rdb-stamps: %lu\n", tstamps_tcp.size(), rdb_tstamps_tcp.size());
 
 	for (ulong i = 0; i < tstamps_tcp.size(); i++) {
 		printf("     timestamp: %u\n", tstamps_tcp[i]);
@@ -58,6 +58,7 @@ void ByteRange::print_tstamps_tcp() {
 	for (ulong i = 0; i < rdb_tstamps_tcp.size(); i++) {
 		printf(" rdb_timestamp: %u\n", rdb_tstamps_tcp[i]);
 	}
+	printf("\n");
 }
 
 void ByteRange::print_tstamps_pcap() {

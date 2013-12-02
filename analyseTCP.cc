@@ -49,8 +49,9 @@ bool GlobOpts::print_packets    = false;
 string GlobOpts::sendNatIP      = "";
 string GlobOpts::recvNatIP      = "";
 bool GlobOpts::connDetails      = false;
+int GlobOpts::verbose           = 0;
 int GlobOpts::max_retrans_stats = 6;
-
+string GlobOpts::percentiles    = "1,25,50,75,99";
 
 void warn_with_file_and_linenum(string file, int linenum) {
 	cout << "Error at ";
@@ -89,7 +90,9 @@ void usage (char* argv){
 	printf(" -A                 : Only print aggregated statistics (off by default, optional)\n");
 	printf(" -e                 : Only print the connections found in the trace\n");
 	printf(" -j                 : Print relative sequence numbers.\n");
+	printf(" -i <percentiles>   : Calculate the specified percentiles (Comma separated list of percentiles).\n");
 	printf(" -y                 : Print details for each packet (requires receiver side dump).\n");
+	printf(" -v                 : Be verbose, print more statistics details\n");
 	printf(" -d                 : Indicate debug level\n");
 	printf("                      1 = Only output on reading sender side dump first pass.\n");
 	printf("                      2 = Only output on reading sender side second pass.\n");
@@ -172,18 +175,18 @@ void test(Dump *d) {
 }
 
 int main(int argc, char *argv[]){
-  char *src_ip = (char*)"";
-  char *dst_ip = (char*)"";
-  string src_port = "";
-  string dst_port = "";
-  char *sendfn = (char*)""; /* Sender dump file name */
-  char *recvfn = (char*)""; /* Receiver dump filename */
+	string src_ip = "";
+	string dst_ip = "";
+	string src_port = "";
+	string dst_port = "";
+	string sendfn = ""; /* Sender dump file name */
+	string recvfn = ""; /* Receiver dump filename */
 
-  int c;
-  Dump *senderDump;
+	int c;
+	Dump *senderDump;
 
   while (1){
-    c = getopt(argc, argv, "s:r:p:q:f:m:n:o:g:d:u::l::o:aAetjyxch");
+    c = getopt(argc, argv, "s:r:p:q:f:m:n:o:g:d:i:u::l::o:aAetjychv");
     if (c == -1)
 		break;
 
@@ -228,6 +231,9 @@ int main(int argc, char *argv[]){
 		  GlobOpts::lossAggrSeconds = ret;
 		}
       break;
+    case 'i':
+	    GlobOpts::percentiles = string(optarg);
+      break;
     case 'c':
       GlobOpts::withCDF = true;
       break;
@@ -260,6 +266,9 @@ int main(int argc, char *argv[]){
     case 'd':
 		GlobOpts::debugLevel = atoi(optarg);
 		break;
+    case 'v':
+		GlobOpts::verbose = 1;
+		break;
     case 'h':
 	    usage(argv[0]);
     case '?':
@@ -279,9 +288,6 @@ int main(int argc, char *argv[]){
   if(argc < 4){
     usage(argv[0]);
   }
-
-  //GlobStats::_init GlobStats::_initializer;
-  //GlobStats::_initializer;
 
   if(GlobOpts::debugLevel < 0)
     cerr << "debugLevel = " << GlobOpts::debugLevel << endl;

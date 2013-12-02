@@ -53,7 +53,7 @@ using namespace std;
 #include <limits.h>
 #include <deque>
 
-#define MAX_STAT_RETRANS 15
+#include "color_print.h"
 
 /* Class to keep global options */
 class GlobOpts {
@@ -77,7 +77,9 @@ class GlobOpts {
   static string prefix;
   static string RFiles_dir;
   static bool connDetails;
+  static int verbose;
   static int max_retrans_stats;
+  static string percentiles;
 };
 
 class GlobStats {
@@ -143,13 +145,40 @@ struct connStats {
 };
 
 struct Percentiles {
-	double first_quartile, second_quartile, third_quartile, first_percentile, ninetynine_percentile;
-	Percentiles(double first_q, double second_q, double third_q, double first_p, double ninetynine_p) {
-		first_quartile = first_q;
-		second_quartile = second_q;
-		third_quartile = third_q;
-		first_percentile = first_p;
-		ninetynine_percentile = ninetynine_p;
+	map<string, double> percentiles;
+	int max_char_length;
+	void init() {
+		max_char_length = 0;
+		std::istringstream ss(GlobOpts::percentiles);
+		std::string token;
+		double num;
+		while (std::getline(ss, token, ',')) {
+			istringstream(token) >> num;
+			if (num >= 100) {
+				colored_printf(YELLOW, "Invalid percentile '%s'\n", token.c_str());
+				continue;
+			}
+			max_char_length = token.length();
+			percentiles.insert(pair<string, double>(token, 0));
+		}
+	}
+
+	void print(string fmt, bool show_quartiles) {
+		map<string, double>::iterator it;
+		for (it = percentiles.begin(); it != percentiles.end(); it++) {
+			if (show_quartiles) {
+				string q = "";
+				if (it->first == "25")
+					q = "(First quartile)";
+				else if (it->first == "50")
+					q = "(Second quartile, median) ";
+				else if (it->first == "75")
+					q = "(Third quartile)";
+				printf(fmt.c_str(), max_char_length, it->first.c_str(), q.c_str(), it->second);
+			}
+			else
+				printf(fmt.c_str(), max_char_length, it->first.c_str(), it->second);
+		}
 	}
 };
 
@@ -158,11 +187,11 @@ struct byteStats {
 	int maxLat;     /* Maximum Latency */
 	int minLat;     /* Minimum Latency */
 	long long int cumLat;     /* Cumulative latency */
-	Percentiles *percentiles_latencies;
+	Percentiles percentiles_latencies;
 	double stdevLat;
 	int nrRanges;   /* Number of ranges in conn */
 	long long int avgLat;   /* Average latency */
-	int retrans[MAX_STAT_RETRANS]; /* Count 1., 2. and 3. retrans */
+	vector<int> retrans;
 	map<const int, int> dupacks;
 	int maxRetrans; /* MAximum number of retransmissions for a range */
 	long long int maxLength;
@@ -170,7 +199,13 @@ struct byteStats {
 	long long int cumLength;
 	long long int avgLength;
 	double stdevLength;
-	Percentiles *percentiles_lengths;
+	Percentiles percentiles_lengths;
+	vector<double> latencies;
+	vector<double> payload_lengths;
+	byteStats() : maxLat(0), minLat(0), cumLat(0), stdevLat(0), nrRanges(0), avgLat(0),
+				  maxRetrans(0), maxLength(0), minLength(0), cumLength(0), avgLength(0),
+				  stdevLength(0) {
+	}
 };
 
 struct DataSeg {

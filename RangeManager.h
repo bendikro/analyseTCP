@@ -119,11 +119,12 @@ public:
 	int getRedundantBytes(){ return redundantBytes; }
 	ulong relative_seq(ulong seq);
 	bool hasReceiveData();
-	void calculateRDBStats();
+	void calculateRealLoss();
 	void calculateRetransAndRDBStats();
 	void write_loss_over_time(unsigned slice_interval, unsigned timeslice_count, FILE *loss_retrans_out, FILE *loss_loss_out);
 	void printPacketDetails();
 };
 
+void percentiles(const vector<double> *v, Percentiles *p);
 
 #endif /* RANGEMANAGER_H */
