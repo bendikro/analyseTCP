@@ -176,7 +176,6 @@ public:
 	int getTotalBytesTransfered() { return byte_count + byte_count * retrans_count + byte_count * rdb_count; }
 	bool isAcked() { return acked; }
 	void insertAckTime(timeval *tv) { ackTime = *tv; acked = true; }
-
 	void setDiff();
 	void setDcDiff(long diff) { dcDiff = diff;}
 	long getDcDiff() { return dcDiff;}

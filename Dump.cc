@@ -71,8 +71,7 @@ string getConnKey(const struct in_addr *srcIp, const struct in_addr *dstIp, cons
 
 Connection* Dump::getConn(const struct in_addr *srcIp, const struct in_addr *dstIp, const uint16_t *srcPort, const uint16_t *dstPort, const uint32_t *seq) {
 	static struct ConnectionMapKey connKey;
-	//static map<ConnectionMapKey*, string>::iterator it;
-	map<ConnectionMapKey*, Connection*>::iterator it, it_end;
+	map<ConnectionMapKey*, Connection*>::iterator it;
 	static char src_ip_buf[INET_ADDRSTRLEN];
 	static char dst_ip_buf[INET_ADDRSTRLEN];
 	memcpy(&connKey.ip_src, srcIp, sizeof(struct in_addr));
@@ -1140,6 +1139,7 @@ void Dump::genRFiles() {
 void Dump::free_resources() {
 	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
 	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
+		delete cIt->first;
 		delete cIt->second;
 	}
 }

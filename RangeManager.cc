@@ -29,7 +29,6 @@ bool RangeManager::hasReceiveData() {
 	return !recvd.empty();
 }
 
-
 /* Register all bytes with a common send time as a range */
 void RangeManager::insertSentRange(struct sendData *sd) {
 	static ulong startSeq;
@@ -181,7 +180,6 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 #endif
 
 	bool this_is_rdb_data = data_seg->is_rdb && data_seg->rdb_end_seq > start_seq;
-
 
 #ifdef DEBUG
 	if (debug_print) {
@@ -361,7 +359,6 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 				last_br->original_payload_size = data_seg->payloadSize;
 			}
 			last_br->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_pcap, this_is_rdb_data);
-
 #ifdef DEBUG
 			assert(data_seg->retrans == 0 && "Shouldn't be retrans!\n");
 			assert(this_is_rdb_data == 0 && "Shouldn't be RDB?!\n");
@@ -542,10 +539,8 @@ bool RangeManager::processAck(struct DataSeg *seg /*ulong ack, timeval* tv, ulon
 	}
 
 	if (debug_print) {
-		printf("ProcessACK: %8lu  (%8lu), win=%6lu TSVal: %u, last acked start seq: %lu\n", relative_seq(ack), ack, seg->window*128, seg->tstamp_tcp,
+		printf("ProcessACK: %8lu  (%8lu), TSVal: %u, last acked start seq: %lu\n", relative_seq(ack), ack, seg->tstamp_tcp,
 		       relative_seq(it->second->getStartSeq()));
-		printf("ProcessACK: %lu (%lu), last acked start seq: %lu\n", relative_seq(ack), ack, relative_seq(it->second->getStartSeq()));
-
 	}
 
 	/* All data from this ack has been acked before: return */
@@ -593,9 +588,11 @@ bool RangeManager::processAck(struct DataSeg *seg /*ulong ack, timeval* tv, ulon
 				cerr << "--------Ack covers more than this range: Continue to next --------" << endl;
 			if (debug_print)
 				printf("  Covers more than Range(%lu, %lu)\n", relative_seq(tmpRange->getStartSeq()), relative_seq(tmpRange->getEndSeq()));
-			tmpRange->insertAckTime(&seg->tstamp_pcap);
+			if (!tmpRange->isAcked()) {
+				tmpRange->insertAckTime(&seg->tstamp_pcap);
+				ret = true;
+			}
 			highestAckedByteRangeIt = it;
-			ret = true;
 			continue;
 		}
 
@@ -846,7 +843,6 @@ void RangeManager::validateContent() {
 					 << " - New size: " << ranges.size() << endl;
 		}
 		nrRanges = ranges.size();
-
 	}
 	if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
 		cerr << "First seq: " << firstSeq << " Last seq: " <<  lastSeq << endl;
