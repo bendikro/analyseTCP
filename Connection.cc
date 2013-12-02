@@ -5,30 +5,30 @@
 Connection::Connection(struct in_addr src_ip, uint16_t src_port,
 					   struct in_addr dst_ip, uint16_t dst_port,
 					   uint32_t seq){
-  nrPacketsSent              = 0;
-  nrDataPacketsSent          = 0;
-  totPacketSize              = 0;
-  totBytesSent               = 0;
-  totRDBBytesSent            = 0;
-  totNewDataSent             = 0;
-  nrRetrans                  = 0;
-  totRetransBytesSent        = 0;
-  srcIp                      = src_ip;
-  srcPort                    = src_port;
-  dstIp                      = dst_ip;
-  dstPort                    = dst_port;
-  lastLargestEndSeq          = 0;
-  lastLargestSeqAbsolute     = seq;
-  lastLargestRecvEndSeq      = 0;
-  lastLargestRecvSeqAbsolute = seq;
-  lastLargestAckSeq          = 0;
-  lastLargestAckSeqAbsolute  = seq;
-  firstSeq                   = seq;
-  curSeq                     = 0;
-  bundleCount                = 0;
-  memset(&firstSendTime, 0, sizeof(firstSendTime));
-  memset(&endTime, 0, sizeof(endTime));
-  rm = new RangeManager(this, seq);
+	nrPacketsSent              = 0;
+	nrDataPacketsSent          = 0;
+	totPacketSize              = 0;
+	totBytesSent               = 0;
+	totRDBBytesSent            = 0;
+	totNewDataSent             = 0;
+	nrRetrans                  = 0;
+	totRetransBytesSent        = 0;
+	srcIp                      = src_ip;
+	srcPort                    = src_port;
+	dstIp                      = dst_ip;
+	dstPort                    = dst_port;
+	lastLargestEndSeq          = 0;
+	lastLargestSeqAbsolute     = seq;
+	lastLargestRecvEndSeq      = 0;
+	lastLargestRecvSeqAbsolute = seq;
+	lastLargestAckSeq          = 0;
+	lastLargestAckSeqAbsolute  = seq;
+	firstSeq                   = seq;
+	curSeq                     = 0;
+	bundleCount                = 0;
+	memset(&firstSendTime, 0, sizeof(firstSendTime));
+	memset(&endTime, 0, sizeof(endTime));
+	rm = new RangeManager(this, seq);
 }
 
 Connection::~Connection() {
@@ -204,25 +204,25 @@ void Connection::genBytesLatencyStats(struct byteStats* bs){
 
 /* Check validity of connection range and time data */
 void Connection::validateRanges(){
-  if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5){
-    cerr << "###### Validation of range data ######" << endl;
-    cerr << "Connection: " << getConnKey() << endl;
-  }
-  rm->validateContent();
-  if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5){
-    cerr << "Validation successful." << endl;
-    cerr << "###### End of validation ######" << endl;
-  }
+	if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5){
+		cerr << "###### Validation of range data ######" << endl;
+		cerr << "Connection: " << getConnKey() << endl;
+	}
+	rm->validateContent();
+	if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5){
+		cerr << "Validation successful." << endl;
+		cerr << "###### End of validation ######" << endl;
+	}
 }
 
 void Connection::registerRecvd(struct sendData *sd){
-  /* Insert range into datastructure */
-  rm->insertRecvRange(sd);
+	/* Insert range into datastructure */
+	rm->insertRecvRange(sd);
 }
 
 void Connection::makeCDF(){
-  rm->registerRecvDiffs();
-  rm->makeCdf();
+	rm->registerRecvDiffs();
+	rm->makeCdf();
 }
 
 void Connection::writeCDF(ofstream *stream) {
@@ -271,40 +271,40 @@ ulong Connection::getNumUniqueBytes() {
 }
 
 string Connection::getConnKey() {
-  char src_ip[INET_ADDRSTRLEN];
-  char dst_ip[INET_ADDRSTRLEN];
-  inet_ntop(AF_INET, &(srcIp), src_ip, INET_ADDRSTRLEN);
-  inet_ntop(AF_INET, &(dstIp), dst_ip, INET_ADDRSTRLEN);
+	char src_ip[INET_ADDRSTRLEN];
+	char dst_ip[INET_ADDRSTRLEN];
+	inet_ntop(AF_INET, &(srcIp), src_ip, INET_ADDRSTRLEN);
+	inet_ntop(AF_INET, &(dstIp), dst_ip, INET_ADDRSTRLEN);
 
-  /* Generate snd IP/port + rcv IP/port string to use as key */
-  stringstream connKey;
-  connKey << src_ip
-	  << "-" << srcPort
-	  << "-" << dst_ip
-	  << "-" << dstPort;
-  return connKey.str();
+	/* Generate snd IP/port + rcv IP/port string to use as key */
+	stringstream connKey;
+	connKey << src_ip
+			<< "-" << srcPort
+			<< "-" << dst_ip
+			<< "-" << dstPort;
+	return connKey.str();
 }
 
 string Connection::getSrcIp() {
-  char src_ip[INET_ADDRSTRLEN];
-  char dst_ip[INET_ADDRSTRLEN];
-  inet_ntop(AF_INET, &(srcIp), src_ip, INET_ADDRSTRLEN);
-  inet_ntop(AF_INET, &(dstIp), dst_ip, INET_ADDRSTRLEN);
+	char src_ip[INET_ADDRSTRLEN];
+	char dst_ip[INET_ADDRSTRLEN];
+	inet_ntop(AF_INET, &(srcIp), src_ip, INET_ADDRSTRLEN);
+	inet_ntop(AF_INET, &(dstIp), dst_ip, INET_ADDRSTRLEN);
 
-  /* Generate snd IP/port + rcv IP/port string to use as key */
-  stringstream sip;
-  sip << src_ip;
-  return sip.str();
+	/* Generate snd IP/port + rcv IP/port string to use as key */
+	stringstream sip;
+	sip << src_ip;
+	return sip.str();
 }
 
 string Connection::getDstIp() {
-  char src_ip[INET_ADDRSTRLEN];
-  char dst_ip[INET_ADDRSTRLEN];
-  inet_ntop(AF_INET, &(srcIp), src_ip, INET_ADDRSTRLEN);
-  inet_ntop(AF_INET, &(dstIp), dst_ip, INET_ADDRSTRLEN);
+	char src_ip[INET_ADDRSTRLEN];
+	char dst_ip[INET_ADDRSTRLEN];
+	inet_ntop(AF_INET, &(srcIp), src_ip, INET_ADDRSTRLEN);
+	inet_ntop(AF_INET, &(dstIp), dst_ip, INET_ADDRSTRLEN);
 
-  /* Generate snd IP/port + rcv IP/port string to use as key */
-  stringstream dip;
-  dip << dst_ip;
-  return dip.str();
+	/* Generate snd IP/port + rcv IP/port string to use as key */
+	stringstream dip;
+	dip << dst_ip;
+	return dip.str();
 }

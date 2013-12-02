@@ -24,26 +24,26 @@ extern const char *received_type_str[4];
 
 /* Modified timersub macro that has defined behaviour
    also for negative differences */
-# define negtimersub(a, b, result)					\
-  do {									\
-    (result)->tv_sec = (a)->tv_sec - (b)->tv_sec;			\
-    (result)->tv_usec = (a)->tv_usec - (b)->tv_usec;			\
-    if ( (result)->tv_sec > 0) {					\
-      if ((result)->tv_usec < 0) {					\
-	--(result)->tv_sec;						\
-	(result)->tv_usec += 1000000;					\
-      }									\
-    } else if ( (result)->tv_sec < 0 ) {				\
-      if ((result)->tv_usec > 0) {					\
-	++(result)->tv_sec;						\
-	(result)->tv_usec = 1000000 - (result)->tv_usec;		\
-      } else { /* if (tv_usec < 0) */					\
-	(result)->tv_usec *= -1;					\
-      }									\
-      if((result)->tv_sec == 0 )					\
-	(result)->tv_usec *= -1;					\
-    }									\
-  } while (0)
+# define negtimersub(a, b, result)									\
+	do {															\
+		(result)->tv_sec = (a)->tv_sec - (b)->tv_sec;				\
+		(result)->tv_usec = (a)->tv_usec - (b)->tv_usec;			\
+		if ( (result)->tv_sec > 0) {								\
+			if ((result)->tv_usec < 0) {							\
+				--(result)->tv_sec;									\
+				(result)->tv_usec += 1000000;						\
+			}														\
+		} else if ( (result)->tv_sec < 0 ) {						\
+			if ((result)->tv_usec > 0) {							\
+				++(result)->tv_sec;									\
+				(result)->tv_usec = 1000000 - (result)->tv_usec;	\
+			} else { /* if (tv_usec < 0) */							\
+				(result)->tv_usec *= -1;							\
+			}														\
+			if((result)->tv_sec == 0 )								\
+				(result)->tv_usec *= -1;							\
+		}															\
+	} while (0)
 
 class ByteRange {
 public:
@@ -105,7 +105,6 @@ public:
 			received_tstamp_pcap = tstamp_pcap;
 		}
 		received_count++;
-		//lost_tstamps_tcp.erase(std::remove(lost_tstamps_tcp.begin(), lost_tstamps_tcp.end(), tstamp_tcp), lost_tstamps_tcp.end());
 
 		vector<uint32_t>::iterator it, it_end;
 		it = lost_tstamps_tcp.begin(), it_end = lost_tstamps_tcp.end();

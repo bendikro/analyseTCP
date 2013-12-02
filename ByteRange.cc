@@ -83,69 +83,69 @@ void ByteRange::print_tstamps_pcap() {
 
 /* Get the difference between send and ack time for this range */
 int ByteRange::getSendAckTimeDiff(RangeManager *rm) {
-  struct timeval tv;
-  int ms = 0;
+	struct timeval tv;
+	int ms = 0;
 
-  if (sent_tstamp_pcap[0].tv_sec == 0 && sent_tstamp_pcap[0].tv_usec == 0) {
-	  cerr << "Range without a send time. Skipping: " << endl;
-	  return 0;
-  }
+	if (sent_tstamp_pcap[0].tv_sec == 0 && sent_tstamp_pcap[0].tv_usec == 0) {
+		cerr << "Range without a send time. Skipping: " << endl;
+		return 0;
+	}
 
-  if (ackTime.tv_sec == 0 && ackTime.tv_usec == 0) {
-	  // If equals, they're syn or acks
-	  if (startSeq != endSeq) {
-		  multimap<ulong, ByteRange*>::reverse_iterator it, it_end = rm->ranges.rend();
-		  int count = 0;
-		  // Goes through all the packets from the end
-		  // If all the packets after this packet has no ack time, then we presume it's caused by the
-		  // ack not being received before tcpdump was killed
-		  for (it = rm->ranges.rbegin(); it != it_end; it++) {
-			  if (!(it->second->ackTime.tv_sec == 0 && it->second->ackTime.tv_usec == 0))
-				  break;
-		  	  if (it->second->getStartSeq() == startSeq && it->second->getEndSeq() == endSeq) {
-		  		  if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
-					  fprintf(stderr, "Range with no ACK time. This packet is at the end of the stream (%dth last), so we presume" \
-		  					  " this is caused by tcpdump being killed before the packets were acked.\n", count);
-				  }
-		  		  return 0;
-		  	  }
-		  	  count++;
-		  }
-		  colored_printf(RED, "Range(%lu, %lu) has no ACK time. This shouldn't really happen... Packet is %d before last packet\n", startSeq, endSeq, count);
-	  }
-	  return 0;
-  }
+	if (ackTime.tv_sec == 0 && ackTime.tv_usec == 0) {
+		// If equals, they're syn or acks
+		if (startSeq != endSeq) {
+			multimap<ulong, ByteRange*>::reverse_iterator it, it_end = rm->ranges.rend();
+			int count = 0;
+			// Goes through all the packets from the end
+			// If all the packets after this packet has no ack time, then we presume it's caused by the
+			// ack not being received before tcpdump was killed
+			for (it = rm->ranges.rbegin(); it != it_end; it++) {
+				if (!(it->second->ackTime.tv_sec == 0 && it->second->ackTime.tv_usec == 0))
+					break;
+				if (it->second->getStartSeq() == startSeq && it->second->getEndSeq() == endSeq) {
+					if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
+						fprintf(stderr, "Range with no ACK time. This packet is at the end of the stream (%dth last), so we presume" \
+								" this is caused by tcpdump being killed before the packets were acked.\n", count);
+					}
+					return 0;
+				}
+				count++;
+			}
+			colored_printf(RED, "Range(%lu, %lu) has no ACK time. This shouldn't really happen... Packet is %d before last packet\n", startSeq, endSeq, count);
+		}
+		return 0;
+	}
 
-  /* since ackTime will always be bigger than sent_tstamp_pcap,
-     (directly comparable timers) timerSub can be used here */
-  timersub(&ackTime, &sent_tstamp_pcap[0], &tv);
+	/* since ackTime will always be bigger than sent_tstamp_pcap,
+	   (directly comparable timers) timerSub can be used here */
+	timersub(&ackTime, &sent_tstamp_pcap[0], &tv);
 
-  if (tv.tv_sec > 0) {
-    ms += tv.tv_sec * 1000;
-  }
-  ms += (int) (tv.tv_usec / 1000);
+	if (tv.tv_sec > 0) {
+		ms += tv.tv_sec * 1000;
+	}
+	ms += (int) (tv.tv_usec / 1000);
 
-  if (ms < 0) { /* Should not be possible */
-	  cerr << "Found byte with 0ms or less latency. Exiting." << endl;
-	  printf("Is acked: %d\n", acked);
-	  exit(1);
-  }
+	if (ms < 0) { /* Should not be possible */
+		cerr << "Found byte with 0ms or less latency. Exiting." << endl;
+		printf("Is acked: %d\n", acked);
+		exit(1);
+	}
 
-  if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
-    cerr << "Latency for range: " << ms << endl;
-    if (ms > 1000 || ms < 10) {
-      cerr << "Strange latency: " << ms << "ms." << endl;
-      //cerr << "Start seq: " << rm->relative_seq(startSeq) << " End seq: " << rm->relative_seq(endSeq) << endl;
-      cerr << "Size of range: " << endSeq - startSeq << endl;
-      cerr << "sent_tstamp_pcap.tv_sec: " << sent_tstamp_pcap[0].tv_sec << " - sent_tstamp_pcap.tv_usec: "
-	   << sent_tstamp_pcap[0].tv_usec << endl;
-      cerr << "ackTime.tv_sec : " << ackTime.tv_sec << "  - ackTime.tv_usec : "
-	   << ackTime.tv_usec << endl;
-      cerr << "Number of retransmissions: " << retrans_count << endl;
-      cerr << "Number of bundles: " << rdb_count << endl;
-    }
-  }
-  return ms;
+	if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
+		cerr << "Latency for range: " << ms << endl;
+		if (ms > 1000 || ms < 10) {
+			cerr << "Strange latency: " << ms << "ms." << endl;
+			//cerr << "Start seq: " << rm->relative_seq(startSeq) << " End seq: " << rm->relative_seq(endSeq) << endl;
+			cerr << "Size of range: " << endSeq - startSeq << endl;
+			cerr << "sent_tstamp_pcap.tv_sec: " << sent_tstamp_pcap[0].tv_sec << " - sent_tstamp_pcap.tv_usec: "
+				 << sent_tstamp_pcap[0].tv_usec << endl;
+			cerr << "ackTime.tv_sec : " << ackTime.tv_sec << "  - ackTime.tv_usec : "
+				 << ackTime.tv_usec << endl;
+			cerr << "Number of retransmissions: " << retrans_count << endl;
+			cerr << "Number of bundles: " << rdb_count << endl;
+		}
+	}
+	return ms;
 }
 
 void ByteRange::setDiff() {
@@ -163,7 +163,7 @@ void ByteRange::setDiff() {
 }
 
 void ByteRange::printValues(){
-  cerr << endl << "-------RangePrint-------" << endl;
+	cerr << endl << "-------RangePrint-------" << endl;
 /*
   cerr << "startSeq   : " << rm->relative_seq(startSeq) << endl;
   cerr << "endSeq     : " << rm->relative_seq(endSeq) << endl;

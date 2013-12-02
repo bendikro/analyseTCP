@@ -158,7 +158,7 @@ void RangeManager::insertRecvRange(struct sendData *sd) {
 /*
   This inserts the the data into the ranges map.
   It's called both with sent end received data ranges.
- */
+*/
 void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, struct DataSeg *data_seg, int level) {
 	ByteRange *last_br = NULL;
 	map<ulong, ByteRange*>::iterator brIt, brIt_end;
@@ -188,7 +188,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 		if (!level)
 			printf("\n");
 		indent_print("insert_byte_range (%lu): (%lu - %lu) (%lu - %lu), sent: %d, retrans: %d, is_rdb: %d\n", end_seq == start_seq ? 0 : end_seq - start_seq +1,
-			     relative_seq(start_seq), relative_seq(end_seq), start_seq, end_seq, sent, data_seg->retrans, data_seg->is_rdb);
+					 relative_seq(start_seq), relative_seq(end_seq), start_seq, end_seq, sent, data_seg->retrans, data_seg->is_rdb);
 	}
 #endif
 	// An ack
@@ -466,7 +466,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 				if (debug_print) {
 					indent_print2("Reaches less, split existing Range\n");
 					indent_print("Existing range : %lu - %lu -> %lu - %lu\n", relative_seq(brIt->second->startSeq), relative_seq(brIt->second->endSeq),
-					       relative_seq(brIt->second->startSeq), relative_seq(end_seq));
+								 relative_seq(brIt->second->startSeq), relative_seq(end_seq));
 					indent_print("New range      : %lu - %lu\n", relative_seq(new_br->startSeq), relative_seq(new_br->endSeq));
 				}
 #endif
@@ -548,7 +548,7 @@ bool RangeManager::processAck(struct DataSeg *seg /*ulong ack, timeval* tv, ulon
 
 	}
 
-       /* All data from this ack has been acked before: return */
+	/* All data from this ack has been acked before: return */
 	if (ack <= it->second->getStartSeq()) {
 		if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
 			cerr << "--------All data has been ACKed before - skipping--------" << endl;
@@ -689,15 +689,15 @@ void RangeManager::genStats(struct byteStats *bs) {
 		}
 
 		if ((latency = it->second->getSendAckTimeDiff(this))) {
-			 bs->latencies.push_back(latency);
-			 bs->cumLat += latency;
-			 if (latency > bs->maxLat) {
-				 bs->maxLat = latency;
-			 }
-			 if (latency < bs->minLat) {
-				 bs->minLat = latency;
-			 }
-			 bs->nrRanges++;
+			bs->latencies.push_back(latency);
+			bs->cumLat += latency;
+			if (latency > bs->maxLat) {
+				bs->maxLat = latency;
+			}
+			if (latency < bs->minLat) {
+				bs->minLat = latency;
+			}
+			bs->nrRanges++;
 		} else {
 			if (!it->second->isAcked())
 				continue;
@@ -922,8 +922,8 @@ void RangeManager::calculateRealLoss() {
 			if (index < (ranges.size() * (1 - loss_and_end_limit))) {
 				match_fails_before_end++;
 				colored_printf(YELLOW, "Failed to match %lu - %lu (%lu - %lu) (index: %lu) on %s\n",
-					       relative_seq(brIt->second->startSeq), relative_seq(brIt->second->endSeq),
-					       brIt->second->startSeq, brIt->second->endSeq, index, conn->getConnKey().c_str());
+							   relative_seq(brIt->second->startSeq), relative_seq(brIt->second->endSeq),
+							   brIt->second->startSeq, brIt->second->endSeq, index, conn->getConnKey().c_str());
 				brIt->second->print_tstamps_tcp();
 			}
 			else
@@ -980,7 +980,7 @@ void RangeManager::calculateRealLoss() {
 	if (match_fails_before_end) {
 		colored_printf(RED, "%s : Failed to find timestamp for %d out of %ld packets.\n", conn->getConnKey().c_str(), match_fails_before_end, ranges.size());
 		colored_printf(RED, "These packest were before the %f%% limit (%d) from the end (%lu), and might be caused by packets being dropped from tcpdump\n",
-		       (1 - loss_and_end_limit), (int) (ranges.size() * (1 - loss_and_end_limit)), ranges.size());
+					   (1 - loss_and_end_limit), (int) (ranges.size() * (1 - loss_and_end_limit)), ranges.size());
 	}
 #ifndef DEBUG
 	if (match_fails_at_end)
@@ -992,7 +992,7 @@ void RangeManager::calculateRealLoss() {
 
 /*
   Based on the receiver side dump, calucate the retrans, loss and RDB data statistics.
- */
+*/
 void RangeManager::calculateRetransAndRDBStats() {
 	vector<DataSeg*>::iterator rit, rit_end;
 	/* Create map with references to the ranges */
@@ -1034,13 +1034,13 @@ void RangeManager::registerRecvDiffs() {
 		ulong sndEndSeq = it->second->getEndSeq();
 
 		packet_index++;
-/*
-		printf("Range (%4lu): %lu - %lu: retrans_count: %d, rdb_count: %d",
-			   it->second->getEndSeq() - it->second->getStartSeq() +1,
-			   relative_seq(it->second->getStartSeq()), relative_seq(it->second->getEndSeq()),
-			   it->second->getNumRetrans(), it->second->getNumBundled());
-		printf(" ACKtime: %d\n", it->second->getSendAckTimeDiff(this));
-*/
+		/*
+		  printf("Range (%4lu): %lu - %lu: retrans_count: %d, rdb_count: %d",
+		  it->second->getEndSeq() - it->second->getStartSeq() +1,
+		  relative_seq(it->second->getStartSeq()), relative_seq(it->second->getEndSeq()),
+		  it->second->getNumRetrans(), it->second->getNumBundled());
+		  printf(" ACKtime: %d\n", it->second->getSendAckTimeDiff(this));
+		*/
 		if (GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5) {
 			cerr << "Processing range:                    " << relative_seq(sndStartSeq) << " - " << relative_seq(sndEndSeq) << "- Sent:"
 				 << it->second->getSendTime()->tv_sec << "." << it->second->getSendTime()->tv_usec << endl;
@@ -1145,8 +1145,8 @@ void RangeManager::registerRecvDiffs() {
 				ranges_not_received++;
 				if (GlobOpts::debugLevel == 8) {
 					fprintf(stderr, "Packet not found on receiver (%lu - %lu) Len: %u\n",
-						relative_seq(it->second->getStartSeq()),
-						relative_seq(it->second->getEndSeq()),  it->second->getNumBytes());
+							relative_seq(it->second->getStartSeq()),
+							relative_seq(it->second->getEndSeq()),  it->second->getNumBytes());
 				}
 				continue;
 			}
@@ -1194,7 +1194,7 @@ ulong RangeManager::relative_seq(ulong seq) {
 		return seq;
 	ulong wrap_index;
 	wrap_index = (conn->firstSeq + seq) / 4294967296L;
-//	printf("relative_seq: seq: %lu, first + seq: %lu, wrap_index: %lu\n", seq, conn->firstSeq + seq, wrap_index);
+	//	printf("relative_seq: seq: %lu, first + seq: %lu, wrap_index: %lu\n", seq, conn->firstSeq + seq, wrap_index);
 	ulong res = seq + firstSeq;
 	res -= ((ulong) wrap_index * 4294967296L);
 	//printf("relative_seq  ret: %lu\n", res);
@@ -1274,9 +1274,9 @@ int RangeManager::calcDrift() {
 		drift = tmpDrift;
 	} else {
 		if (GlobOpts::debugLevel != 0) {
-				cerr << "\nConnection has less than 500 ranges or a duration of less than 2 minutes." << endl;
-				cerr << "Drift-compensated CDF will therefore not be calculated." << endl;
-			}
+			cerr << "\nConnection has less than 500 ranges or a duration of less than 2 minutes." << endl;
+			cerr << "Drift-compensated CDF will therefore not be calculated." << endl;
+		}
 		drift = -1;
 		return -1;
 	}
@@ -1441,7 +1441,7 @@ void RangeManager::writeDcCdf(ofstream *stream) {
 /*
   Writes the loss stats for the connection over time.
   The slice_interval defines the interval for which to aggregate the loss.
- */
+*/
 void RangeManager::write_loss_over_time(unsigned slice_interval, unsigned timeslice_count, FILE *loss_retrans_out, FILE *loss_loss_out) {
 	map<ulong, ByteRange*>::iterator brIt, brIt_end;
 	int lost_count = 0;

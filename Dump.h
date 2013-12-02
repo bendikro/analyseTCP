@@ -42,48 +42,48 @@ struct ConnectionKeyComparator {
 /* Represents one dump, and keeps globally relevant information */
 class Dump {
 
- private:
-  string srcIp;
-  string dstIp;
-  string filename;
-  string srcPort;
-  string dstPort;
-  int sentPacketCount;
-  int sentBytesCount;
-  int recvPacketCount;
-  int recvBytesCount;
-  int ackCount;
-  uint32_t max_payload_size;
-  map<ConnectionMapKey*, Connection*, ConnectionKeyComparator> conns;
+private:
+	string srcIp;
+	string dstIp;
+	string filename;
+	string srcPort;
+	string dstPort;
+	int sentPacketCount;
+	int sentBytesCount;
+	int recvPacketCount;
+	int recvBytesCount;
+	int ackCount;
+	uint32_t max_payload_size;
+	map<ConnectionMapKey*, Connection*, ConnectionKeyComparator> conns;
 
-  void processSent(const struct pcap_pkthdr* header, const u_char *data);
-  void processRecvd(const struct pcap_pkthdr* header, const u_char *data);
-  void processAcks(const struct pcap_pkthdr* header, const u_char *data);
-  void registerRecvd(const struct pcap_pkthdr* header, const u_char *data);
-  void makeCDF();
-  void writeCDF();
-  void writeDcCdf();
-  void writeAggCdf();
-  void writeAggDcCdf();
-  void printPacketStats(struct connStats *cs, struct byteStats *bs, bool aggregated);
-  void printBytesLatencyStats(struct connStats *cs, struct byteStats* bs, bool aggregated, struct byteStats* aggregatedMin, struct byteStats* aggregatedMax);
-  void makeDcCdf();
- public:
-  Dump(string src_ip, string dst_ip, string src_port, string dst_port, string fn);
-  ~Dump();
-  uint64_t get_relative_sequence_number(uint32_t ack, uint32_t firstSeq, ulong largestAckSeq, uint32_t largestAckSeqAbsolute);
-  void analyseSender();
-  void processRecvd(string fn);
-  void calculateRetransAndRDBStats();
-  void printPacketDetails();
-  void printDumpStats();
-  void printConns();
-  void printStatistics();
-  void genRFiles();
-  void write_loss_to_file();
-  void free_resources();
-  void findTCPTimeStamp(struct DataSeg* data, uint8_t* opts, int option_length);
-  Connection* getConn(const struct in_addr *srcIp, const struct in_addr *dstIp, const uint16_t *srcPort, const uint16_t *dstPort, const uint32_t *seq);
+	void processSent(const struct pcap_pkthdr* header, const u_char *data);
+	void processRecvd(const struct pcap_pkthdr* header, const u_char *data);
+	void processAcks(const struct pcap_pkthdr* header, const u_char *data);
+	void registerRecvd(const struct pcap_pkthdr* header, const u_char *data);
+	void makeCDF();
+	void writeCDF();
+	void writeDcCdf();
+	void writeAggCdf();
+	void writeAggDcCdf();
+	void printPacketStats(struct connStats *cs, struct byteStats *bs, bool aggregated);
+	void printBytesLatencyStats(struct connStats *cs, struct byteStats* bs, bool aggregated, struct byteStats* aggregatedMin, struct byteStats* aggregatedMax);
+	void makeDcCdf();
+public:
+	Dump(string src_ip, string dst_ip, string src_port, string dst_port, string fn);
+	~Dump();
+	uint64_t get_relative_sequence_number(uint32_t ack, uint32_t firstSeq, ulong largestAckSeq, uint32_t largestAckSeqAbsolute);
+	void analyseSender();
+	void processRecvd(string fn);
+	void calculateRetransAndRDBStats();
+	void printPacketDetails();
+	void printDumpStats();
+	void printConns();
+	void printStatistics();
+	void genRFiles();
+	void write_loss_to_file();
+	void free_resources();
+	void findTCPTimeStamp(struct DataSeg* data, uint8_t* opts, int option_length);
+	Connection* getConn(const struct in_addr *srcIp, const struct in_addr *dstIp, const uint16_t *srcPort, const uint16_t *dstPort, const uint32_t *seq);
 };
 
 #endif /* DUMP_H */

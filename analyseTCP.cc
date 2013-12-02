@@ -185,153 +185,153 @@ int main(int argc, char *argv[]){
 	int c;
 	Dump *senderDump;
 
-  while (1){
-    c = getopt(argc, argv, "s:r:p:q:f:m:n:o:g:d:i:u::l::o:aAetjychv");
-    if (c == -1)
-		break;
+	while (1){
+		c = getopt(argc, argv, "s:r:p:q:f:m:n:o:g:d:i:u::l::o:aAetjychv");
+		if (c == -1)
+			break;
 
-    switch(c) {
-    case 's':
-      src_ip = optarg;
-      break;
-    case 'r':
-      dst_ip = optarg;
-      break;
-    case 'p':
-	    dst_port = string(optarg);
-      break;
-    case 'q':
-	    src_port = string(optarg);
-      break;
-    case 'e':
-      GlobOpts::connDetails = true;
-      break;
-    case 'm':
-      GlobOpts::sendNatIP = optarg;
-      break;
-    case 'n':
-      GlobOpts::recvNatIP = optarg;
-      break;
-    case 'f':
-      sendfn = optarg;
-      break;
-    case 'g':
-      recvfn = optarg;
-      GlobOpts::withRecv = true;
-      break;
-    case 'l':
-      GlobOpts::withLoss = true;
-	  if (optarg) {
-		  char *sptr = NULL;
-		  long int ret = strtol(optarg, &sptr, 10);
-		  if (ret <= 0 || sptr == NULL || *sptr != '\0') {
-			  colored_printf(RED, "Option -l requires a valid integer: '%s'\n", optarg);
-			  usage(argv[0]);
-		  }
-		  GlobOpts::lossAggrSeconds = ret;
+		switch(c) {
+		case 's':
+			src_ip = optarg;
+			break;
+		case 'r':
+			dst_ip = optarg;
+			break;
+		case 'p':
+			dst_port = string(optarg);
+			break;
+		case 'q':
+			src_port = string(optarg);
+			break;
+		case 'e':
+			GlobOpts::connDetails = true;
+			break;
+		case 'm':
+			GlobOpts::sendNatIP = optarg;
+			break;
+		case 'n':
+			GlobOpts::recvNatIP = optarg;
+			break;
+		case 'f':
+			sendfn = optarg;
+			break;
+		case 'g':
+			recvfn = optarg;
+			GlobOpts::withRecv = true;
+			break;
+		case 'l':
+			GlobOpts::withLoss = true;
+			if (optarg) {
+				char *sptr = NULL;
+				long int ret = strtol(optarg, &sptr, 10);
+				if (ret <= 0 || sptr == NULL || *sptr != '\0') {
+					colored_printf(RED, "Option -l requires a valid integer: '%s'\n", optarg);
+					usage(argv[0]);
+				}
+				GlobOpts::lossAggrSeconds = ret;
+			}
+			break;
+		case 'i':
+			GlobOpts::percentiles = string(optarg);
+			break;
+		case 'c':
+			GlobOpts::withCDF = true;
+			break;
+		case 't':
+			GlobOpts::transport = true;
+			break;
+		case 'u': {
+			GlobOpts::genRFiles = true;
+			if (optarg) {
+				GlobOpts::prefix = optarg;
+			}
+		} break;
+		case 'o':
+			GlobOpts::genRFiles = true;
+			GlobOpts::RFiles_dir = optarg;
+			break;
+		case 'a':
+			GlobOpts::aggregate = true;
+			break;
+		case 'A':
+			GlobOpts::aggOnly = true;
+			GlobOpts::aggregate = true;
+			break;
+		case 'j':
+			GlobOpts::relative_seq = true;
+			break;
+		case 'y':
+			GlobOpts::print_packets = true;
+			break;
+		case 'd':
+			GlobOpts::debugLevel = atoi(optarg);
+			break;
+		case 'v':
+			GlobOpts::verbose = 1;
+			break;
+		case 'h':
+			usage(argv[0]);
+		case '?':
+			if (optopt == 'c')
+				fprintf(stderr, "Option -%c requires an argument\n", optopt);
+			else if(isprint(optopt))
+				fprintf(stderr,"Unknown option -%c\n", optopt);
+			else
+				fprintf(stderr, "Something is really wrong\n");
+
+			return 1;
+		default:
+			break;
 		}
-      break;
-    case 'i':
-	    GlobOpts::percentiles = string(optarg);
-      break;
-    case 'c':
-      GlobOpts::withCDF = true;
-      break;
-    case 't':
-      GlobOpts::transport = true;
-      break;
-    case 'u': {
-	    GlobOpts::genRFiles = true;
-	    if (optarg) {
-			GlobOpts::prefix = optarg;
-		}
-    } break;
-    case 'o':
-	    GlobOpts::genRFiles = true;
-	    GlobOpts::RFiles_dir = optarg;
-      break;
-    case 'a':
-      GlobOpts::aggregate = true;
-      break;
-    case 'A':
-      GlobOpts::aggOnly = true;
-      GlobOpts::aggregate = true;
-      break;
-    case 'j':
-      GlobOpts::relative_seq = true;
-      break;
-    case 'y':
-      GlobOpts::print_packets = true;
-      break;
-    case 'd':
-		GlobOpts::debugLevel = atoi(optarg);
-		break;
-    case 'v':
-		GlobOpts::verbose = 1;
-		break;
-    case 'h':
-	    usage(argv[0]);
-    case '?':
-		if (optopt == 'c')
-			fprintf(stderr, "Option -%c requires an argument\n", optopt);
-		else if(isprint(optopt))
-			fprintf(stderr,"Unknown option -%c\n", optopt);
-		else
-			fprintf(stderr, "Something is really wrong\n");
+	}
+	/* TODO Exit if required options are not given */
+	if(argc < 4){
+		usage(argv[0]);
+	}
 
-      return 1;
-    default:
-		break;
-    }
-  }
-  /* TODO Exit if required options are not given */
-  if(argc < 4){
-    usage(argv[0]);
-  }
+	if(GlobOpts::debugLevel < 0)
+		cerr << "debugLevel = " << GlobOpts::debugLevel << endl;
 
-  if(GlobOpts::debugLevel < 0)
-    cerr << "debugLevel = " << GlobOpts::debugLevel << endl;
+	if (GlobOpts::RFiles_dir.length()) {
+		if (!endsWith(GlobOpts::RFiles_dir, string("/")))
+			GlobOpts::RFiles_dir += "/";
+		GlobOpts::prefix = GlobOpts::RFiles_dir + GlobOpts::prefix;
+	}
 
-  if (GlobOpts::RFiles_dir.length()) {
-	  if (!endsWith(GlobOpts::RFiles_dir, string("/")))
-		  GlobOpts::RFiles_dir += "/";
-	  GlobOpts::prefix = GlobOpts::RFiles_dir + GlobOpts::prefix;
-  }
+	// Define once to run the constructor of GlobStats
+	GlobStats s;
+	globStats = &s;
 
-  // Define once to run the constructor of GlobStats
-  GlobStats s;
-  globStats = &s;
+	/* Create Dump - object */
+	senderDump = new Dump(src_ip, dst_ip, src_port, dst_port, sendfn);
+	//test(senderDump);
+	senderDump->analyseSender();
 
-  /* Create Dump - object */
-  senderDump = new Dump(src_ip, dst_ip, src_port, dst_port, sendfn);
-  //test(senderDump);
-  senderDump->analyseSender();
+	if (GlobOpts::genRFiles)
+		senderDump->genRFiles();
 
-  if (GlobOpts::genRFiles)
-	  senderDump->genRFiles();
+	if (GlobOpts::withRecv) {
+		senderDump->processRecvd(recvfn);
+	}
 
-  if (GlobOpts::withRecv) {
-	  senderDump->processRecvd(recvfn);
-  }
+	if (GlobOpts::connDetails) {
+		senderDump->printConns();
+		return 0;
+	}
 
-  if (GlobOpts::connDetails) {
-	  senderDump->printConns();
-	  return 0;
-  }
+	senderDump->write_loss_to_file();
 
-  senderDump->write_loss_to_file();
+	if ((GlobOpts::print_packets)) {
+		senderDump->printPacketDetails();
+	}
 
-  if ((GlobOpts::print_packets)) {
-	  senderDump->printPacketDetails();
-  }
+	senderDump->printStatistics();
 
-  senderDump->printStatistics();
+	senderDump->printDumpStats();
+	senderDump->free_resources();
 
-  senderDump->printDumpStats();
-  senderDump->free_resources();
+	delete senderDump;
 
-  delete senderDump;
-
-  return 0;
+	return 0;
 }
 

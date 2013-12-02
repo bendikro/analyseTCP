@@ -26,7 +26,7 @@ class Connection;
    inserting and resizing ranges as sent packets and ACKs
    are received */
 class RangeManager {
- private:
+private:
 	uint32_t lastContinuous; /* Last seq in sequence of ranges without gaps */
 	uint32_t largestEndSeq;
 	struct timeval highestRecvd;

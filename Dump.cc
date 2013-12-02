@@ -8,17 +8,17 @@ map<ConnectionMapKey*, string, ConnectionKeyComparator> connKeys;
 
 /* Methods for class Dump */
 Dump::Dump(string src_ip, string dst_ip, string src_port, string dst_port, string fn ){
-  srcIp = src_ip;
-  dstIp = dst_ip;
-  srcPort = src_port;
-  dstPort = dst_port;
-  filename = fn;
-  sentPacketCount = 0;
-  sentBytesCount = 0;
-  recvPacketCount = 0;
-  recvBytesCount = 0;
-  ackCount = 0;
-  max_payload_size = 0;
+	srcIp = src_ip;
+	dstIp = dst_ip;
+	srcPort = src_port;
+	dstPort = dst_port;
+	filename = fn;
+	sentPacketCount = 0;
+	sentBytesCount = 0;
+	recvPacketCount = 0;
+	recvBytesCount = 0;
+	ackCount = 0;
+	max_payload_size = 0;
 }
 
 Dump::~Dump() {
@@ -31,7 +31,7 @@ Dump::~Dump() {
 
 /*
   Checks if a char buf is a string
- */
+*/
 bool isNumeric(const char* pszInput, int nNumberBase) {
 	string base = "0123456789ABCDEF";
 	string input = pszInput;
@@ -94,7 +94,7 @@ Connection* Dump::getConn(const struct in_addr *srcIp, const struct in_addr *dst
 	inet_ntop(AF_INET, dstIp, dst_ip_buf, INET_ADDRSTRLEN);
 
 	Connection *tmpConn = new Connection(*srcIp, ntohs(*srcPort), *dstIp,
-					     ntohs(*dstPort), ntohl(*seq));
+										 ntohs(*dstPort), ntohl(*seq));
 
 	ConnectionMapKey *connKeyToInsert = new ConnectionMapKey();
 	memcpy(&connKeyToInsert->ip_src, srcIp, sizeof(struct in_addr));
@@ -212,9 +212,9 @@ void Dump::analyseSender() {
 		filterExp << " && dst " << (src_port_range ? "portrange " : "port ") << srcPort;
 
 /*
-	filterExp << " && ((tcp[tcpflags] & tcp-syn) != tcp-syn)"
-			  << " && ((tcp[tcpflags] & tcp-fin) != tcp-fin)"
-			  << " && ((tcp[tcpflags] & tcp-ack) == tcp-ack)";
+  filterExp << " && ((tcp[tcpflags] & tcp-syn) != tcp-syn)"
+  << " && ((tcp[tcpflags] & tcp-fin) != tcp-fin)"
+  << " && ((tcp[tcpflags] & tcp-ack) == tcp-ack)";
 */
 
 	filterExp << " && ((tcp[tcpflags] & tcp-ack) == tcp-ack)";
@@ -605,7 +605,7 @@ void Dump::processSent(const struct pcap_pkthdr* header, const u_char *data) {
 
 /*
   Used to test if a sequence number comes after another
- These handle when the newest sequence number has wrapped
+  These handle when the newest sequence number has wrapped
 */
 static inline bool before(uint32_t seq1, uint32_t seq2) {
 	return (signed int) (seq1 - seq2) < 0;
@@ -625,7 +625,7 @@ static inline bool after_or_equal(uint32_t seq1, uint32_t seq2) {
  * largestSeqAbsolute: The largest absolute (raw) sequence number that has been read for this stream
  *
  * Returns the relative sequence number or ULONG_MAX if it failed.
-**/
+ **/
 uint64_t Dump::get_relative_sequence_number(uint32_t seq, uint32_t firstSeq, ulong largestSeq, uint32_t largestSeqAbsolute) {
 	static ulong wrap_index;
 	static uint64_t seq_relative;
@@ -716,177 +716,177 @@ void Dump::processAcks(const struct pcap_pkthdr* header, const u_char *data) {
 
 /* Analyse receiver dump - create CDFs */
 void Dump::processRecvd(string recvFn) {
-  int packetCount = 0;
-  string tmpSrcIp = srcIp;
-  string tmpDstIp = dstIp;
-  char errbuf[PCAP_ERRBUF_SIZE];
-  struct pcap_pkthdr h;
-  const u_char *data;
-  map<uint16_t, Connection*>::iterator it, it_end;
+	int packetCount = 0;
+	string tmpSrcIp = srcIp;
+	string tmpDstIp = dstIp;
+	char errbuf[PCAP_ERRBUF_SIZE];
+	struct pcap_pkthdr h;
+	const u_char *data;
+	map<uint16_t, Connection*>::iterator it, it_end;
 
-  printf("Processing receiver dump...\n");
+	printf("Processing receiver dump...\n");
 
-  if (!GlobOpts::sendNatIP.empty()) {
-    cerr << "sender side NATing handled" << endl;
-    tmpSrcIp = GlobOpts::sendNatIP;
-    cerr << "srcIp: " << srcIp << endl;
-    cerr << "tmpSrcIp: " << tmpSrcIp << endl;
-  }
+	if (!GlobOpts::sendNatIP.empty()) {
+		cerr << "sender side NATing handled" << endl;
+		tmpSrcIp = GlobOpts::sendNatIP;
+		cerr << "srcIp: " << srcIp << endl;
+		cerr << "tmpSrcIp: " << tmpSrcIp << endl;
+	}
 
-  if (!GlobOpts::recvNatIP.empty()) {
-    cerr << "receiver side NATing handled" << endl;
-    tmpDstIp = GlobOpts::recvNatIP;
-    cerr << "dstIp: " << dstIp << endl;
-    cerr << "tmpDstIp: " << tmpDstIp << endl;
-  }
+	if (!GlobOpts::recvNatIP.empty()) {
+		cerr << "receiver side NATing handled" << endl;
+		tmpDstIp = GlobOpts::recvNatIP;
+		cerr << "dstIp: " << dstIp << endl;
+		cerr << "tmpDstIp: " << tmpDstIp << endl;
+	}
 
-  pcap_t *fd = pcap_open_offline(recvFn.c_str(), errbuf);
-  if ( fd == NULL ) {
-	  cerr << "pcap: Could not open file: " << recvFn << endl;
-	  exit_with_file_and_linenum(1, __FILE__, __LINE__);
-  }
+	pcap_t *fd = pcap_open_offline(recvFn.c_str(), errbuf);
+	if ( fd == NULL ) {
+		cerr << "pcap: Could not open file: " << recvFn << endl;
+		exit_with_file_and_linenum(1, __FILE__, __LINE__);
+	}
 
-  /* Set up pcap filter to include only incoming tcp
-     packets with correct IP and port numbers.
-     We exclude packets with no TCP payload. */
-  struct bpf_program compFilter;
-  stringstream filterExp;
+	/* Set up pcap filter to include only incoming tcp
+	   packets with correct IP and port numbers.
+	   We exclude packets with no TCP payload. */
+	struct bpf_program compFilter;
+	stringstream filterExp;
 
-  bool src_port_range = !isNumeric(srcPort.c_str(), 10);
-  bool dst_port_range = !isNumeric(dstPort.c_str(), 10);
+	bool src_port_range = !isNumeric(srcPort.c_str(), 10);
+	bool dst_port_range = !isNumeric(dstPort.c_str(), 10);
 
-  filterExp.str("");
-  filterExp << "tcp";
-  if (!tmpSrcIp.empty())
-	  filterExp << " && src host " << tmpSrcIp;
-  if (!tmpDstIp.empty())
-	  filterExp << " && dst host " << tmpDstIp;
-  if (!srcPort.empty())
-	  filterExp << " && src " << (src_port_range ? "portrange " : "port ") << srcPort;
-  if (!dstPort.empty())
-	  filterExp << " && dst " << (dst_port_range ? "portrange " : "port ") << dstPort;
+	filterExp.str("");
+	filterExp << "tcp";
+	if (!tmpSrcIp.empty())
+		filterExp << " && src host " << tmpSrcIp;
+	if (!tmpDstIp.empty())
+		filterExp << " && dst host " << tmpDstIp;
+	if (!srcPort.empty())
+		filterExp << " && src " << (src_port_range ? "portrange " : "port ") << srcPort;
+	if (!dstPort.empty())
+		filterExp << " && dst " << (dst_port_range ? "portrange " : "port ") << dstPort;
 
-  //filterExp << " && (ip[2:2] - ((ip[0]&0x0f)<<2) - (tcp[12]>>2)) >= 1";
+	//filterExp << " && (ip[2:2] - ((ip[0]&0x0f)<<2) - (tcp[12]>>2)) >= 1";
 
-  /* Filter to get outgoing packets */
-  if (pcap_compile(fd, &compFilter, (char*)((filterExp.str()).c_str()), 0, 0) == -1) {
-	  fprintf(stderr, "Couldn't parse filter '%s'. Error: %s\n", filterExp.str().c_str(), pcap_geterr(fd));
-	  exit_with_file_and_linenum(1, __FILE__, __LINE__);
-  }
+	/* Filter to get outgoing packets */
+	if (pcap_compile(fd, &compFilter, (char*)((filterExp.str()).c_str()), 0, 0) == -1) {
+		fprintf(stderr, "Couldn't parse filter '%s'. Error: %s\n", filterExp.str().c_str(), pcap_geterr(fd));
+		exit_with_file_and_linenum(1, __FILE__, __LINE__);
+	}
 
-  if (pcap_setfilter(fd, &compFilter) == -1) {
-	  fprintf(stderr, "Couldn't install filter '%s'. Error: %s\n", filterExp.str().c_str(), pcap_geterr(fd));
-	  pcap_close(fd);
-	  exit_with_file_and_linenum(1, __FILE__, __LINE__);
-  }
+	if (pcap_setfilter(fd, &compFilter) == -1) {
+		fprintf(stderr, "Couldn't install filter '%s'. Error: %s\n", filterExp.str().c_str(), pcap_geterr(fd));
+		pcap_close(fd);
+		exit_with_file_and_linenum(1, __FILE__, __LINE__);
+	}
 
-  printf("Using filter: '%s'\n", filterExp.str().c_str());
+	printf("Using filter: '%s'\n", filterExp.str().c_str());
 
-  /* Sniff each sent packet in pcap tracefile: */
-  do {
-	  data = (const u_char *) pcap_next(fd, &h);
-	  if (data == NULL) {
-		  if (packetCount == 0) {
-			  printf("No packets found!\n");
-		  }
-		  //pcap_perror(fd, errMsg);
-	  } else {
-		  processRecvd(&h, data); /* Sniff packet */
-		  packetCount++;
-	  }
-  } while(data != NULL);
+	/* Sniff each sent packet in pcap tracefile: */
+	do {
+		data = (const u_char *) pcap_next(fd, &h);
+		if (data == NULL) {
+			if (packetCount == 0) {
+				printf("No packets found!\n");
+			}
+			//pcap_perror(fd, errMsg);
+		} else {
+			processRecvd(&h, data); /* Sniff packet */
+			packetCount++;
+		}
+	} while(data != NULL);
 
-  pcap_close(fd);
+	pcap_close(fd);
 
-  printf("Finished processing receiver dump...\n");
+	printf("Finished processing receiver dump...\n");
 
-  /* Traverse ranges in senderDump and compare to
-     corresponding bytes / ranges in receiver ranges
-     place timestamp diffs in buckets */
-  calculateRetransAndRDBStats();
+	/* Traverse ranges in senderDump and compare to
+	   corresponding bytes / ranges in receiver ranges
+	   place timestamp diffs in buckets */
+	calculateRetransAndRDBStats();
 
-  if (GlobOpts::withCDF) {
+	if (GlobOpts::withCDF) {
 
-	  makeCDF();
-	  /* Calculate clock drift for all eligible connections
-		 eligible: more than 500 ranges &&
-		 more than 2 minutes duration
-		 make drift compensated CDF*/
-	  makeDcCdf();
+		makeCDF();
+		/* Calculate clock drift for all eligible connections
+		   eligible: more than 500 ranges &&
+		   more than 2 minutes duration
+		   make drift compensated CDF*/
+		makeDcCdf();
 
-	  if (!GlobOpts::aggOnly) {
-		  writeCDF();
-		  writeDcCdf();
-	  }
+		if (!GlobOpts::aggOnly) {
+			writeCDF();
+			writeDcCdf();
+		}
 
-	  if (GlobOpts::aggregate){
-		  writeAggCdf();
-		  writeAggDcCdf();
-	  }
-  }
+		if (GlobOpts::aggregate){
+			writeAggCdf();
+			writeAggDcCdf();
+		}
+	}
 }
 
 /* Process packets */
 void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data) {
 	//const struct sniff_ethernet *ethernet; /* The ethernet header */
-  const struct sniff_ip *ip; /* The IP header */
-  const struct sniff_tcp *tcp; /* The TCP header */
-  static Connection *tmpConn;
+	const struct sniff_ip *ip; /* The IP header */
+	const struct sniff_tcp *tcp; /* The TCP header */
+	static Connection *tmpConn;
 
     /* Finds the different headers+payload */
 //  ethernet = (struct sniff_ethernet*)(data);
-  ip = (struct sniff_ip*) (data + SIZE_ETHERNET);
-  u_int ipSize = ntohs(ip->ip_len);
-  u_int ipHdrLen = IP_HL(ip)*4;
-  tcp = (struct sniff_tcp*) (data + SIZE_ETHERNET + ipHdrLen);
-  u_int tcpHdrLen = TH_OFF(tcp)*4;
+	ip = (struct sniff_ip*) (data + SIZE_ETHERNET);
+	u_int ipSize = ntohs(ip->ip_len);
+	u_int ipHdrLen = IP_HL(ip)*4;
+	tcp = (struct sniff_tcp*) (data + SIZE_ETHERNET + ipHdrLen);
+	u_int tcpHdrLen = TH_OFF(tcp)*4;
 
-  tmpConn = getConn(&ip->ip_src, &ip->ip_dst, &tcp->th_sport, &tcp->th_dport, NULL);
+	tmpConn = getConn(&ip->ip_src, &ip->ip_dst, &tcp->th_sport, &tcp->th_dport, NULL);
 
-  // It should not be possible that the connection is not yet created
-  // If lingering ack arrives for a closed connection, this may happen
-  if (tmpConn == NULL) {
-	  cerr << "Connection found in recveiver dump that does not exist in sender: " << getConnKey(&ip->ip_src, &ip->ip_dst, &tcp->th_sport, &tcp->th_dport);
-	  cerr << ". Maybe NAT is in effect?  Exiting." << endl;
-	  exit_with_file_and_linenum(1, __FILE__, __LINE__);
-  }
+	// It should not be possible that the connection is not yet created
+	// If lingering ack arrives for a closed connection, this may happen
+	if (tmpConn == NULL) {
+		cerr << "Connection found in recveiver dump that does not exist in sender: " << getConnKey(&ip->ip_src, &ip->ip_dst, &tcp->th_sport, &tcp->th_dport);
+		cerr << ". Maybe NAT is in effect?  Exiting." << endl;
+		exit_with_file_and_linenum(1, __FILE__, __LINE__);
+	}
 
-  /* Prepare packet data struct */
-  struct sendData sd;
-  sd.totalSize        = header->len;
-  sd.ipSize           = ipSize;
-  sd.ipHdrLen         = ipHdrLen;
-  sd.tcpHdrLen        = tcpHdrLen;
-  sd.tcpOptionLen     = tcpHdrLen - 20;
-  sd.data.payloadSize = ipSize - (ipHdrLen + tcpHdrLen);
-  sd.seq_absolute     = ntohl(tcp->th_seq);
-  sd.data.seq         = get_relative_sequence_number(sd.seq_absolute, tmpConn->firstSeq, tmpConn->lastLargestRecvEndSeq, tmpConn->lastLargestRecvSeqAbsolute);
-  sd.data.endSeq      = sd.data.seq + sd.data.payloadSize;
-  sd.data.tstamp_pcap = header->ts;
-  sd.data.is_rdb      = false;
-  sd.data.rdb_end_seq = 0;
-  sd.data.retrans     = 0;
-  sd.data.flags       = tcp->th_flags;
-  sd.data.window      = ntohs(tcp->th_win);
+	/* Prepare packet data struct */
+	struct sendData sd;
+	sd.totalSize        = header->len;
+	sd.ipSize           = ipSize;
+	sd.ipHdrLen         = ipHdrLen;
+	sd.tcpHdrLen        = tcpHdrLen;
+	sd.tcpOptionLen     = tcpHdrLen - 20;
+	sd.data.payloadSize = ipSize - (ipHdrLen + tcpHdrLen);
+	sd.seq_absolute     = ntohl(tcp->th_seq);
+	sd.data.seq         = get_relative_sequence_number(sd.seq_absolute, tmpConn->firstSeq, tmpConn->lastLargestRecvEndSeq, tmpConn->lastLargestRecvSeqAbsolute);
+	sd.data.endSeq      = sd.data.seq + sd.data.payloadSize;
+	sd.data.tstamp_pcap = header->ts;
+	sd.data.is_rdb      = false;
+	sd.data.rdb_end_seq = 0;
+	sd.data.retrans     = 0;
+	sd.data.flags       = tcp->th_flags;
+	sd.data.window      = ntohs(tcp->th_win);
 
-  if (sd.data.seq == ULONG_MAX) {
-	  if (tmpConn->lastLargestRecvEndSeq == 0) {
-		  printf("Found invalid sequence numbers in beginning of receive dump. Probably the sender tcpdump didn't start in time to save this packets\n");
-	  }
-	  else {
-		  printf("Found invalid sequence number in received data!: %u -> %lu\n", sd.seq_absolute, sd.data.seq);
-	  }
-	  return;
-  }
+	if (sd.data.seq == ULONG_MAX) {
+		if (tmpConn->lastLargestRecvEndSeq == 0) {
+			printf("Found invalid sequence numbers in beginning of receive dump. Probably the sender tcpdump didn't start in time to save this packets\n");
+		}
+		else {
+			printf("Found invalid sequence number in received data!: %u -> %lu\n", sd.seq_absolute, sd.data.seq);
+		}
+		return;
+	}
 
-  uint8_t* opt = (uint8_t*) tcp + 20;
-  findTCPTimeStamp(&sd.data, opt, sd.tcpOptionLen);
+	uint8_t* opt = (uint8_t*) tcp + 20;
+	findTCPTimeStamp(&sd.data, opt, sd.tcpOptionLen);
 
-  /* define/compute tcp payload (segment) offset */
-  sd.data.data = (u_char *) (data + SIZE_ETHERNET + ipHdrLen + tcpHdrLen);
-  recvPacketCount++;
-  recvBytesCount += sd.data.payloadSize;
-  tmpConn->registerRecvd(&sd);
+	/* define/compute tcp payload (segment) offset */
+	sd.data.data = (u_char *) (data + SIZE_ETHERNET + ipHdrLen + tcpHdrLen);
+	recvPacketCount++;
+	recvBytesCount += sd.data.payloadSize;
+	tmpConn->registerRecvd(&sd);
 }
 
 void Dump::calculateRetransAndRDBStats() {
@@ -917,7 +917,7 @@ void Dump::printConns() {
   Writes packet loss to file aggregated of GlobOpts::lossAggrSeconds in CSV format.
   loss-retr uses loss based on retransmissions.
   With receiver side dump, the actual loss is used in loss-lost.
- */
+*/
 void Dump::write_loss_to_file() {
 	FILE *loss_retr_file, *loss_lost_file = NULL;
 	stringstream loss_retr_fn, loss_lost_fn;
@@ -1046,53 +1046,53 @@ void Dump::writeAggDcCdf(){
 }
 
 void Dump::makeDcCdf(){
-  map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
-  for(cIt = conns.begin(); cIt != conns.end(); cIt++){
-    cIt->second->makeDcCdf();
-  }
+	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
+	for(cIt = conns.begin(); cIt != conns.end(); cIt++){
+		cIt->second->makeDcCdf();
+	}
 }
 
 void Dump::printDumpStats() {
-  cout << endl;
-  cout << "General info for entire dump:" << endl;
-  printf("  %s:%s -> %s:%s\n", srcIp.c_str(), srcPort.c_str(), dstIp.c_str(), dstPort.c_str());
-  cout << "  Filename: " << filename << endl;
-  cout << "  Sent Packet Count     : " << sentPacketCount << endl;
-  cout << "  Received Packet Count : " << recvPacketCount << endl;
-  cout << "  ACK Count             : " << ackCount << endl;
-  cout << "  Sent Bytes Count      : " << sentBytesCount << endl;
-  cout << "  Max payload size      : " << max_payload_size;
-  if (max_payload_size > 1460) {
-	  colored_printf(YELLOW, "   (Max payload for a packet is bigger than 1460. This may be caused by GSO/TSO (see readme))");
-  }
-
-  cout << endl;
-  if (GlobOpts::withRecv) {
-	  map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
-	  long int ranges_count = 0;
-	  long int ranges_lost = 0;
-	  long int ranges_sent = 0;
-	  uint64_t lost_bytes = 0;
-	  for (cIt = conns.begin(); cIt != conns.end(); cIt++){
-		  ranges_count += cIt->second->rm->getByteRangesCount();
-		  ranges_sent += cIt->second->rm->getByteRangesSent();
-		  ranges_lost += cIt->second->rm->getByteRangesLost();
-		  lost_bytes += cIt->second->rm->lost_bytes;
-	  }
-
-    cout << "  Received Bytes        : " << recvBytesCount << endl;
-    cout << "  Bytes Lost            : " << (lost_bytes) << endl;
-    cout << "  Bytes Loss            : " << ((double) (lost_bytes) / sentBytesCount) * 100 <<  " \%" << endl;
-	if ((sentPacketCount - recvPacketCount) < 0) {
-		colored_printf(YELLOW, "Negative loss values is probably caused by GSO/TSO on sender side (see readme)\n");
+	cout << endl;
+	cout << "General info for entire dump:" << endl;
+	printf("  %s:%s -> %s:%s\n", srcIp.c_str(), srcPort.c_str(), dstIp.c_str(), dstPort.c_str());
+	cout << "  Filename: " << filename << endl;
+	cout << "  Sent Packet Count     : " << sentPacketCount << endl;
+	cout << "  Received Packet Count : " << recvPacketCount << endl;
+	cout << "  ACK Count             : " << ackCount << endl;
+	cout << "  Sent Bytes Count      : " << sentBytesCount << endl;
+	cout << "  Max payload size      : " << max_payload_size;
+	if (max_payload_size > 1460) {
+		colored_printf(YELLOW, "   (Max payload for a packet is bigger than 1460. This may be caused by GSO/TSO (see readme))");
 	}
-    cout << "  Packets Lost          : " << (sentPacketCount - recvPacketCount) << endl;
-    cout << "  Packet  Loss          : " << ((double) (sentPacketCount - recvPacketCount) / sentPacketCount) * 100 <<  " \%" << endl;
-    cout << "  Ranges Count          : " << (ranges_count) << endl;
-	cout << "  Ranges Sent           : " << (ranges_sent) << endl;
-    cout << "  Ranges Lost           : " << (ranges_lost) << endl;
-    cout << "  Ranges Loss           : " << ((double) (ranges_lost) / ranges_sent) * 100 <<  " \%" << endl;
-  }
+
+	cout << endl;
+	if (GlobOpts::withRecv) {
+		map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
+		long int ranges_count = 0;
+		long int ranges_lost = 0;
+		long int ranges_sent = 0;
+		uint64_t lost_bytes = 0;
+		for (cIt = conns.begin(); cIt != conns.end(); cIt++){
+			ranges_count += cIt->second->rm->getByteRangesCount();
+			ranges_sent += cIt->second->rm->getByteRangesSent();
+			ranges_lost += cIt->second->rm->getByteRangesLost();
+			lost_bytes += cIt->second->rm->lost_bytes;
+		}
+
+		cout << "  Received Bytes        : " << recvBytesCount << endl;
+		cout << "  Bytes Lost            : " << (lost_bytes) << endl;
+		cout << "  Bytes Loss            : " << ((double) (lost_bytes) / sentBytesCount) * 100 <<  " \%" << endl;
+		if ((sentPacketCount - recvPacketCount) < 0) {
+			colored_printf(YELLOW, "Negative loss values is probably caused by GSO/TSO on sender side (see readme)\n");
+		}
+		cout << "  Packets Lost          : " << (sentPacketCount - recvPacketCount) << endl;
+		cout << "  Packet  Loss          : " << ((double) (sentPacketCount - recvPacketCount) / sentPacketCount) * 100 <<  " \%" << endl;
+		cout << "  Ranges Count          : " << (ranges_count) << endl;
+		cout << "  Ranges Sent           : " << (ranges_sent) << endl;
+		cout << "  Ranges Lost           : " << (ranges_lost) << endl;
+		cout << "  Ranges Loss           : " << ((double) (ranges_lost) / ranges_sent) * 100 <<  " \%" << endl;
+	}
 }
 
 void Dump::genRFiles() {
