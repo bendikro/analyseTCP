@@ -117,6 +117,7 @@ public:
 	long int getByteRangesLost() { return lost_ranges_count; }
 	long int getByteRangesSent() { return sent_ranges_count; }
 	int getRedundantBytes(){ return redundantBytes; }
+	int getLostBytes() { return lost_bytes; }
 	ulong relative_seq(ulong seq);
 	bool hasReceiveData();
 	void calculateRealLoss();

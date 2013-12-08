@@ -68,7 +68,7 @@ bool endsWith(const string& s, const string& suffix) {
 }
 
 void usage (char* argv){
-	printf("Usage: %s [-s|r|p|f|g|t|u|m|n|a|A|e|u|d|l|j|y|o]\n", argv);
+	printf("Usage: %s [-s|r|p|f|g|t|u|m|n|a|A|e|u|d|l|j|y|o|k]\n", argv);
 	printf("Required options:\n");
 	printf(" -s <sender ip>     : Sender ip.\n");
 	printf(" -f <pcap-file>     : Sender-side dumpfile.\n");
@@ -93,6 +93,7 @@ void usage (char* argv){
 	printf(" -i <percentiles>   : Calculate the specified percentiles (Comma separated list of percentiles).\n");
 	printf(" -y                 : Print details for each packet (requires receiver side dump).\n");
 	printf(" -v                 : Be verbose, print more statistics details\n");
+	printf(" -k                 : Use colors when printing\n");
 	printf(" -d                 : Indicate debug level\n");
 	printf("                      1 = Only output on reading sender side dump first pass.\n");
 	printf("                      2 = Only output on reading sender side second pass.\n");
@@ -184,9 +185,11 @@ int main(int argc, char *argv[]){
 
 	int c;
 	Dump *senderDump;
+	// Default to disable color prints
+	disable_colors = true;
 
 	while (1){
-		c = getopt(argc, argv, "s:r:p:q:f:m:n:o:g:d:i:u::l::o:aAetjychv");
+		c = getopt(argc, argv, "s:r:p:q:f:m:n:o:g:d:i:u::l::o:aAetjychvk");
 		if (c == -1)
 			break;
 
@@ -268,6 +271,9 @@ int main(int argc, char *argv[]){
 			break;
 		case 'v':
 			GlobOpts::verbose = 1;
+			break;
+		case 'k':
+			disable_colors = false;
 			break;
 		case 'h':
 			usage(argv[0]);

@@ -184,6 +184,10 @@ void Connection::addPacketStats(struct connStats* cs) {
 	cs->rdb_bytes_sent += totRDBBytesSent;
 	cs->ackCount += rm->ack_count;
 
+	cs->ranges_sent = rm->getByteRangesSent();
+	cs->ranges_lost = rm->getByteRangesLost();
+	cs->bytes_lost = rm->getLostBytes();
+
 	if (rm->rdb_stats_available) {
 		cs->rdb_stats_available = true;
 		cs->rdb_packet_misses += (bundleCount - rm->rdb_packet_hits);

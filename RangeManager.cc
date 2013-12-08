@@ -654,7 +654,7 @@ void RangeManager::genStats(struct byteStats *bs) {
 	int tmp_byte_count = 0;
 	bs->minLat = bs->minLength = (numeric_limits<int>::max)();
 
-	map<const int, int> dupacks;
+	//map<const int, int> dupacks;
 	int dupack_count;
 
 	for (; it != it_end; it++) {
@@ -668,14 +668,17 @@ void RangeManager::genStats(struct byteStats *bs) {
 		}
 
 		dupack_count = it->second->dupack_count;
-		if (dupack_count > 0) {
-			if (dupacks.count(dupack_count) > 0) {
-				map<const int, int>::iterator element = dupacks.find(dupack_count);
-				element->second++;
-			} else {
-				dupacks.insert(pair<int, int>(dupack_count, 1));
+
+		if ((ulong) dupack_count > bs->dupacks.size()) {
+			for (int i = (int) bs->dupacks.size(); i < dupack_count; i++) {
+				bs->dupacks.push_back(0);
 			}
 		}
+
+		for (int i = 0; i < dupack_count; i++) {
+			bs->dupacks[i]++;
+		}
+
 
 		if (tmp_byte_count) {
 			if (tmp_byte_count > bs->maxLength)
@@ -701,9 +704,6 @@ void RangeManager::genStats(struct byteStats *bs) {
 		}
 
 		int retrans = it->second->getNumRetrans();
-		if (retrans > bs->maxRetrans)
-			bs->maxRetrans = retrans;
-
 		if ((ulong) retrans > bs->retrans.size()) {
 			for (int i = (int) bs->retrans.size(); i < retrans; i++) {
 				bs->retrans.push_back(0);
@@ -714,8 +714,6 @@ void RangeManager::genStats(struct byteStats *bs) {
 			bs->retrans[i]++;
 		}
 	}
-
-	bs->dupacks = dupacks;
 
 	double temp;
 	double stdev;
@@ -876,7 +874,7 @@ void RangeManager::printPacketDetails() {
 
 		if (GlobOpts::withRecv) {
 			if (it->second->sent_count != it->second->received_count) {
-				printf("   LOST %d", it->second->sent_count - it->second->received_count);
+				printf("   LOST %d times", it->second->sent_count - it->second->received_count);
 			}
 		}
 

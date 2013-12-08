@@ -127,6 +127,7 @@ public:
 struct connStats {
 	int duration;
 	uint64_t totBytesSent;
+	uint64_t bytes_lost;
 	int totRetransBytesSent;
 	int totPacketSize;
 	int nrDataPacketsSent;
@@ -142,6 +143,8 @@ struct connStats {
 	uint64_t rdb_bytes_sent;
 	uint64_t rdb_byte_misses;
 	uint64_t rdb_byte_hits;
+	uint64_t ranges_sent;
+	uint64_t ranges_lost;
 };
 
 struct Percentiles {
@@ -192,8 +195,7 @@ struct byteStats {
 	int nrRanges;   /* Number of ranges in conn */
 	long long int avgLat;   /* Average latency */
 	vector<int> retrans;
-	map<const int, int> dupacks;
-	int maxRetrans; /* MAximum number of retransmissions for a range */
+	vector<int> dupacks;
 	long long int maxLength;
 	long long int minLength;
 	long long int cumLength;
@@ -203,8 +205,7 @@ struct byteStats {
 	vector<double> latencies;
 	vector<double> payload_lengths;
 	byteStats() : maxLat(0), minLat(0), cumLat(0), stdevLat(0), nrRanges(0), avgLat(0),
-				  maxRetrans(0), maxLength(0), minLength(0), cumLength(0), avgLength(0),
-				  stdevLength(0) {
+				  maxLength(0), minLength(0), cumLength(0), avgLength(0), stdevLength(0) {
 	}
 };
 

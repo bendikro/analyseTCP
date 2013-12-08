@@ -263,7 +263,6 @@ void Dump::analyseSender() {
 		cerr << "---------------End of second validation--------------" << endl;
 }
 
-
 /* Traverse the pcap dump and call methods for processing the packets
    This generates initial one-pass statistics from sender-side dump. */
 void Dump::printStatistics() {
@@ -302,13 +301,12 @@ void Dump::printStatistics() {
 		cIt->second->genBytesLatencyStats(&bs);
 
 		if (!(GlobOpts::aggOnly)) {
-			printf("\nSTATS FOR CONN: %s:%u -> %s:%u\n", cIt->second->getSrcIp().c_str(), cIt->second->srcPort,
+			colored_printf(YELLOW, "STATS FOR CONN: %s:%u -> %s:%u\n\n", cIt->second->getSrcIp().c_str(), cIt->second->srcPort,
 			       cIt->second->getDstIp().c_str(), cIt->second->dstPort);
 			printPacketStats(&cs, &bs, false);
 		}
 
 		if (!(GlobOpts::aggOnly)) {
-			cout << "\nBytewise latency - Conn: " <<  cIt->second->getConnKey() << endl;
 			printBytesLatencyStats(&cs, &bs, false, NULL, NULL);
 		}
 
@@ -322,6 +320,7 @@ void Dump::printStatistics() {
 			bsAggregated.avgLength += bs.avgLength;
 			bsAggregated.cumLength += bs.cumLength;
 
+			// Add retrans stats
 			if ((ulong) bs.retrans.size() > bsAggregated.retrans.size()) {
 				for (ulong i = bsAggregated.retrans.size(); i < bs.retrans.size(); i++) {
 					bsAggregated.retrans.push_back(0);
@@ -332,8 +331,16 @@ void Dump::printStatistics() {
 				bsAggregated.retrans[i] += bs.retrans[i];
 			}
 
-			if (bsAggregated.maxRetrans < bs.maxRetrans)
-				bsAggregated.maxRetrans = bs.maxRetrans;
+			// Add dupack stats
+			if ((ulong) bs.dupacks.size() > bsAggregated.dupacks.size()) {
+				for (ulong i = bsAggregated.dupacks.size(); i < bs.dupacks.size(); i++) {
+					bsAggregated.dupacks.push_back(0);
+				}
+			}
+
+			for (ulong i = 0; i < bs.dupacks.size(); i++) {
+				bsAggregated.dupacks[i] += bs.dupacks[i];
+			}
 
 			// Get minimum values
 			if (bsAggregatedMin.minLat > bs.minLat && bs.minLat > 0)
@@ -375,14 +382,20 @@ void Dump::printStatistics() {
 			std::sort(bsAggregated.payload_lengths.begin(), bsAggregated.payload_lengths.end());
 			percentiles(&bsAggregated.payload_lengths, &bsAggregated.percentiles_lengths);
 
-			cout << "\n\nAggregate Statistics for " << conns.size() << " connections:" << endl;
+			cout << "\nAggregated Statistics for " << conns.size() << " connections:" << endl;
 			printPacketStats(&csAggregated, &bsAggregated, true);
 
 			/* Print Aggregate bytewise latency */
-			cout << "Bytewise (application layer) latency" << endl;
 			printBytesLatencyStats(&csAggregated, &bsAggregated, true, &bsAggregatedMin, &bsAggregatedMax);
 		}
 	}
+}
+
+void print_stats_separator(bool final) {
+	if (final)
+		cout << "===============================================================" << endl << endl;
+	else
+		cout << "---------------------------------------------------------------" << endl;
 }
 
 /* Generate statistics for each connection.
@@ -394,21 +407,27 @@ void Dump::printPacketStats(struct connStats *cs, struct byteStats *bs, bool agg
 	       "  Total pure acks (no payload) (Incl. SYN/FIN) : %10d\n"	\
 	       "  Number of retransmissions                    : %10d\n"	\
 	       "  Number of packets with bundled segments      : %10d\n"	\
+		   "  Number of received acks                      : %10d\n"    \
 	       "  Total bytes sent (payload)                   : %10lu\n"	\
 	       "  Number of unique bytes                       : %10lu\n"	\
 	       "  Number of retransmitted bytes                : %10d\n"	\
 	       "  Estimated loss rate based on retransmissions : %10.2f %%\n",
 	       cs->duration, ((double) cs->duration / 60 / 60),
-	       cs->nrPacketsSent, cs->nrDataPacketsSent, cs->nrPacketsSent - cs->nrDataPacketsSent, cs->nrRetrans, cs->bundleCount, cs->totBytesSent,
+	       cs->nrPacketsSent, cs->nrDataPacketsSent, cs->nrPacketsSent - cs->nrDataPacketsSent,
+		   cs->nrRetrans, cs->bundleCount, cs->ackCount, cs->totBytesSent,
 	       cs->totUniqueBytes, cs->totRetransBytesSent,
 	       (((double) cs->nrRetrans / cs->nrPacketsSent) * 100));
 
-	printf("  Redundancy                                   : %10.2f %%\n",
+	if (GlobOpts::withRecv && cs->ranges_sent) {
+		printf("  Bytes Lost (actual loss on receiver side)    : %10lu (%.2f %%)\n", cs->bytes_lost, ((double) (cs->bytes_lost) / cs->totBytesSent) * 100);
+		printf("  Ranges Loss (actual loss on receiver side)   : %10.2f %%\n", ((double) (cs->ranges_lost) / cs->ranges_sent) * 100);
+	}
+
+	printf("  Redundancy (bytes already sent)              : %10.2f %%\n",
 	       ((double) (cs->totBytesSent - cs->totUniqueBytes) / cs->totBytesSent) * 100);
 
-	printf("  Number of received acks                      : %10d\n", cs->ackCount);
-
-	printf("\nPayload size stats:\n");
+	print_stats_separator(false);
+	printf("Payload size stats:\n");
 
 	if (aggregated) {
 		printf("  Average of all packets in all connections    : %10d\n",
@@ -435,29 +454,32 @@ void Dump::printPacketStats(struct connStats *cs, struct byteStats *bs, bool agg
 			printf("  Standard deviation                           : %10.0f\n", bs->stdevLength);
 
 		if (bs->percentiles_lengths.percentiles.size()) {
-			bs->percentiles_lengths.print("  %*sth percentiles %-26s   : %10.0f\n", true);
+			bs->percentiles_lengths.print("  %*sth percentile %-26s   : %10.0f\n", true);
 		}
 	}
 
 	if (cs->rdb_bytes_sent) {
-		printf("\nRDB stats:\n");
-		printf("  RDB packets                                 : %10d (%.2f%% of data packets sent)\n", cs->bundleCount, ((double) cs->bundleCount) / cs->nrDataPacketsSent * 100);
-		printf("  RDB bytes bundled                           : %10lu (%.2f%% of total bytes sent)\n", cs->rdb_bytes_sent, ((double) cs->rdb_bytes_sent) / cs->totBytesSent * 100);
+		print_stats_separator(false);
+		printf("RDB stats:\n");
+		printf("  RDB packets                                  : %10d (%.2f%% of data packets sent)\n", cs->bundleCount, ((double) cs->bundleCount) / cs->nrDataPacketsSent * 100);
+		printf("  RDB bytes bundled                            : %10lu (%.2f%% of total bytes sent)\n", cs->rdb_bytes_sent, ((double) cs->rdb_bytes_sent) / cs->totBytesSent * 100);
 
 		if (cs->rdb_stats_available) {
-			printf("  RDB packet hits                             : %10d (%.2f%% of RDB packets sent)\n", cs->rdb_packet_hits, ((double) cs->rdb_packet_hits) / cs->bundleCount * 100);
-			printf("  RDB packet misses                           : %10d (%.2f%% of RDB packets sent)\n", cs->rdb_packet_misses, ((double) cs->rdb_packet_misses) / cs->bundleCount * 100);
-			printf("  RDB byte   hits                             : %10lu (%.2f%% of RDB bytes)\n", cs->rdb_byte_hits, ((double) cs->rdb_byte_hits / cs->rdb_bytes_sent) * 100);
-			printf("  RDB byte   misses                           : %10lu (%.2f%% of RDB bytes)\n", cs->rdb_byte_misses, ((double) cs->rdb_byte_misses / cs->rdb_bytes_sent) * 100);
+			printf("  RDB packet hits                              : %10d (%.2f%% of RDB packets sent)\n", cs->rdb_packet_hits, ((double) cs->rdb_packet_hits) / cs->bundleCount * 100);
+			printf("  RDB packet misses                            : %10d (%.2f%% of RDB packets sent)\n", cs->rdb_packet_misses, ((double) cs->rdb_packet_misses) / cs->bundleCount * 100);
+			printf("  RDB byte   hits                              : %10lu (%.2f%% of RDB bytes, %.2f%% of total bytes)\n",
+				   cs->rdb_byte_hits, ((double) cs->rdb_byte_hits / cs->rdb_bytes_sent) * 100, ((double) cs->rdb_byte_hits / cs->totBytesSent) * 100);
+			printf("  RDB byte   misses                            : %10lu (%.2f%% of RDB bytes, %.2f%% of total bytes)\n",
+				   cs->rdb_byte_misses, ((double) cs->rdb_byte_misses / cs->rdb_bytes_sent) * 100, ((double) cs->rdb_byte_misses / cs->totBytesSent) * 100);
 		}
 	}
-	cout << "--------------------------------------------------" << endl;
+	print_stats_separator(false);
 }
 
 
 /* Generate statistics for bytewise latency */
 void Dump::printBytesLatencyStats(struct connStats *cs, struct byteStats* bs, bool aggregated, struct byteStats* aggregatedMin, struct byteStats* aggregatedMax) {
-	printf("\nLatency stats");
+	printf("Latency stats");
 
 	if (aggregated) {
 		printf(" (Average for all the connections)\n");
@@ -478,14 +500,11 @@ void Dump::printBytesLatencyStats(struct connStats *cs, struct byteStats* bs, bo
 		printf("  Maximum                                      : %7d ms\n", bs->maxLat);
 	}
 
-	if (bs->stdevLat) {
-		printf("  Standard deviation                           : %7.1f ms\n", bs->stdevLat);
-	}
 	if (bs->percentiles_latencies.percentiles.size()) {
 		bs->percentiles_latencies.print("  %*sth percentile %-26s   : %10.0f\n", true);
 	}
-	cout << "--------------------------------------------------" << endl;
-	cout << "  Max retransmissions                          : " << bs->maxRetrans << endl;
+	print_stats_separator(false);
+	cout << "  Max retransmissions                          : " << bs->retrans.size() << endl;
 	for (ulong i = 0; i < bs->retrans.size(); i++) {
 		if (!GlobOpts::verbose && i > 2)
 			break;
@@ -493,28 +512,18 @@ void Dump::printBytesLatencyStats(struct connStats *cs, struct byteStats* bs, bo
 			break;
 		printf("  Occurrences of %2lu. retransmission            : %d\n", i +1, bs->retrans[i]);
 	}
-	cout << "--------------------------------------------------" << endl;
-	if (bs->dupacks.size() == 0) {
-		cout << "  Max dupacks                                  : " << 0 << endl;
+	print_stats_separator(false);
+	cout << "  Max dupacks                                  : " << bs->dupacks.size() << endl;
+	int dupacks_total = 0;
+	for (ulong i = 0; i < bs->dupacks.size(); i++) {
+		dupacks_total += bs->dupacks[i];
+		if (GlobOpts::verbose || i < 3)
+			printf("  Occurrences of %2lu. dupacks                   : %d\n", i +1, bs->dupacks[i]);
 	}
-	else {
-		cout << "  Max dupacks                                  : " << bs->dupacks.rbegin()->first << endl;
-		map<const int, int>::iterator it = bs->dupacks.begin(), end = bs->dupacks.end();
-		int dupacks_total = 0;
-
-		for (int i = 0; it != end; i++) {
-			if (!GlobOpts::verbose && i > 2)
-				break;
-			printf("  Occurrences of %2d. dupacks                   : %d\n", it->first, it->second);
-			if (it->first > 0) {
-				if (it->first > 0)
-					dupacks_total += ((it->first) * it->second);
-			}
-			it++;
-		}
+	if (dupacks_total)
 		printf("  Total number of dupacks                      : %d\n", dupacks_total);
-	}
-	cout << "==================================================" << endl;
+
+	print_stats_separator(true);
 }
 
 void Dump::findTCPTimeStamp(struct DataSeg* data, uint8_t* opts, int option_length) {
@@ -1053,7 +1062,7 @@ void Dump::makeDcCdf(){
 
 void Dump::printDumpStats() {
 	cout << endl;
-	cout << "General info for entire dump:" << endl;
+	colored_printf(YELLOW, "General info for entire dump:\n");
 	printf("  %s:%s -> %s:%s\n", srcIp.c_str(), srcPort.c_str(), dstIp.c_str(), dstPort.c_str());
 	cout << "  Filename: " << filename << endl;
 	cout << "  Sent Packet Count     : " << sentPacketCount << endl;
@@ -1076,7 +1085,7 @@ void Dump::printDumpStats() {
 			ranges_count += cIt->second->rm->getByteRangesCount();
 			ranges_sent += cIt->second->rm->getByteRangesSent();
 			ranges_lost += cIt->second->rm->getByteRangesLost();
-			lost_bytes += cIt->second->rm->lost_bytes;
+			lost_bytes += cIt->second->rm->getLostBytes();
 		}
 
 		cout << "  Received Bytes        : " << recvBytesCount << endl;
