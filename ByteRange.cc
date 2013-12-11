@@ -141,7 +141,7 @@ int ByteRange::getSendAckTimeDiff(RangeManager *rm) {
 				 << sent_tstamp_pcap[0].tv_usec << endl;
 			cerr << "ackTime.tv_sec : " << ackTime.tv_sec << "  - ackTime.tv_usec : "
 				 << ackTime.tv_usec << endl;
-			cerr << "Number of retransmissions: " << retrans_count << endl;
+			cerr << "Number of retransmissions: " << packet_retrans_count << endl;
 			cerr << "Number of bundles: " << rdb_count << endl;
 		}
 	}

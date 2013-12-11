@@ -52,8 +52,11 @@ using namespace std;
 #include <fstream>
 #include <limits.h>
 #include <deque>
+#include <tr1/memory>
 
 #include "color_print.h"
+
+typedef unsigned char uint8;
 
 /* Class to keep global options */
 class GlobOpts {
@@ -80,6 +83,9 @@ public:
 	static int verbose;
 	static int max_retrans_stats;
 	static string percentiles;
+	static int analyse_start;
+	static int analyse_end;
+	static int analyse_duration;
 };
 
 class GlobStats {
@@ -88,31 +94,31 @@ public:
 	static map<const int, int> dcCdf;
 	static float avgDrift;
 	static int totNumBytes;
-	/* TODO: Create list of retransission statistics based on observed
-	   number of retransmissions */
 	static vector<string> retrans_filenames;
 	// Filled with latency (acked_time - sent_time) data for all the byte ranges
 	// Index 0 contains all the data,
-	// Index 1 contains latency data for all ranges retransmissted 1 time
-	// Index 2 contains latency data for all ranges retransmissted 2 times
+	// Index 1 contains latency data for all ranges retransmitted 1 time
+	// Index 2 contains latency data for all ranges retransmitted 2 times
 	// ...
-	static vector<vector <int> *> ack_latency_vectors;
+	//static vector<vector <int> *> ack_latency_vectors;
+	static vector<std::tr1::shared_ptr<vector <int> > > ack_latency_vectors;
 
 	GlobStats() {
-		stringstream filename_tmp;
 		retrans_filenames.push_back(string("all-retr-"));
-		for (int i = 1; i < GlobOpts::max_retrans_stats +1; i++) {
+	}
+	void update_vectors_size(vector<std::tr1::shared_ptr<vector <int> > > &vectors, ulong count) {
+		for (ulong i = vectors.size(); i < count; i++) {
+			//vectors.push_back(new vector<int>());
+			vectors.push_back(std::tr1::shared_ptr<vector <int> > (new vector<int>()));
+		}
+	}
+	void update_retrans_filenames(ulong count) {
+		update_vectors_size(ack_latency_vectors, count);
+		stringstream filename_tmp;
+		for (ulong i = retrans_filenames.size(); i < count; i++) {
 			filename_tmp.str("");
 			filename_tmp << i << "retr-";
 			retrans_filenames.push_back(filename_tmp.str());
-		}
-		for (ulong i = 0; i < retrans_filenames.size(); i++) {
-			ack_latency_vectors.push_back(new vector<int>());
-		}
-	}
-	~GlobStats() {
-		for (ulong i = 0; i < ack_latency_vectors.size(); i++) {
-			delete ack_latency_vectors[i];
 		}
 	}
 
@@ -123,21 +129,31 @@ public:
 	}
 };
 
+extern GlobStats *globStats;
+
 /* Struct used to pass aggregated data between connections */
 struct connStats {
 	int duration;
+	int analysed_duration_sec; // The duration of the part that was analysed
+	int analysed_start_sec; // The duration of the part that was analysed
+	int analysed_end_sec; // The duration of the part that was analysed
 	uint64_t totBytesSent;
 	uint64_t bytes_lost;
 	int totRetransBytesSent;
 	int totPacketSize;
 	int nrDataPacketsSent;
 	int nrPacketsSent;
+	int nrPacketsSentFoundInDump; // This is the number of packets saved in the trace dump.
+	                              // This might differ from actual packets on the wire because TCP segmentation offloading
 	int nrRetrans;
 	int bundleCount;
 	int ackCount;
+	int synCount;
+	int finCount;
+	int rstCount;
+	int pureAcksCount;
 	uint64_t totUniqueBytes;
 	uint64_t redundantBytes;
-	int rdb_stats_available;
 	int rdb_packet_hits;
 	int rdb_packet_misses;
 	uint64_t rdb_bytes_sent;
@@ -210,14 +226,15 @@ struct byteStats {
 };
 
 struct DataSeg {
-	ulong seq;
-	ulong endSeq;
-	ulong ack;
+	uint64_t seq;
+	uint64_t endSeq;
+	uint64_t rdb_end_seq;   /* end seq of rdb data */
+	uint32_t seq_absolute;  /* Absolute value of the sequence number */
+	uint64_t ack;
 	ulong window;
-	uint payloadSize;    /* Payload size */
-	bool retrans;        /* is a retransmission */
-	bool is_rdb;         /* is a rdb packet */
-	ulong rdb_end_seq;   /* end seq of rdb data */
+	uint payloadSize;       /* Payload size */
+	bool retrans;           /* is a retransmission */
+	bool is_rdb;            /* is a rdb packet */
 	struct timeval tstamp_pcap;
 	uint32_t tstamp_tcp;
 	uint32_t tstamp_tcp_echo;
@@ -232,7 +249,6 @@ struct sendData {
 	uint ipHdrLen;      /* Ip header length */
 	uint tcpHdrLen;     /* TCP header length */
 	uint tcpOptionLen;  /* TCP header option length */
-	uint32_t seq_absolute; /* Absolute value of the sequence number */
 	struct DataSeg data;
 };
 

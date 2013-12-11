@@ -49,17 +49,19 @@ class ByteRange {
 public:
 	uint64_t startSeq;
 	uint64_t endSeq;
-	int received_count;
-	int sent_count;
+	int received_count;       // Count number of times this byte range has been received
+	int sent_count;           // Count number of times this byte range has been sent
 	int byte_count;
 	int original_payload_size;
-	int retrans_count;
+	int packet_sent_count;    // Count number of packet transmissions. This value is not copied when splitting a byte range!
+	int packet_retrans_count; // Count number of packet retransmissions. This value is not copied when splitting a byte range!
+	int data_retrans_count;   // Count number of times this byte range has been retransmitted
+	int rdb_count;            // Count number of times this byte range has been transmitted as redundant (rdb) data
 
-	int rdb_count;
 	int rdb_byte_miss;
 	int rdb_byte_hits;
-	received_type recv_type; // 0 == first transfer, 1 == RDB, 2 == retrans
-	int recv_type_num; // Which packet of the specific type was first received
+	received_type recv_type;  // 0 == first transfer, 1 == RDB, 2 == retrans
+	int recv_type_num;        // Which packet of the specific type was first received
 
 	timeval received_tstamp_pcap;
 	uint32_t received_tstamp_tcp;
@@ -71,7 +73,13 @@ public:
 	vector<uint32_t> lost_tstamps_tcp; // tcp tstamp matched to recevied used to find which packets were lost
 
 	struct timeval ackTime;
-	unsigned int acked : 1;
+	bool acked : 1,
+		original_packet_is_rdb : 1;
+	uint8 fin;
+	uint8 syn;
+	uint8 rst;
+	uint8 acked_sent; // Count if an ack was sent for this sequence number
+	int ack_count;
 	u_short tcp_window;
 	int dupack_count;
 
@@ -81,11 +89,16 @@ public:
 		startSeq = start;
 		endSeq = end;
 		sent_count = 0;
+		byte_count = 0;
 		received_count = 0;
 		dupack_count = 0;
 		acked = 0;
+		ack_count = 0;
 		update_byte_count();
-		retrans_count = 0;
+		original_payload_size = byte_count;
+		packet_sent_count = 1;
+		packet_retrans_count = 0;
+		data_retrans_count = 0;
 		rdb_count = 0;
 		recv_type = DEF;
 		recv_type_num = 1;
@@ -97,6 +110,11 @@ public:
 		tcp_window = 0;
 		ackTime.tv_sec = 0;
 		ackTime.tv_usec = 0;
+		fin = 0;
+		syn = 0;
+		rst = 0;
+		original_packet_is_rdb = false;
+		acked_sent = 0;
 	}
 
 	inline void increase_received(uint32_t tstamp_tcp, timeval tstamp_pcap) {
@@ -133,7 +151,6 @@ public:
 		byte_count = endSeq - startSeq;
 		if (endSeq != startSeq)
 			byte_count += 1;
-		original_payload_size = byte_count;
 	}
 
 	// Split and make a new range at the end
@@ -142,14 +159,17 @@ public:
 		return split(start, end);
 	}
 
+/*
 	// Split and make a new range at the beginning
 	ByteRange* split_start(uint64_t start, uint64_t end) {
 		startSeq = end + 1;
 		return split(start, end);
 	}
+*/
 	ByteRange* split(uint64_t start, uint64_t end) {
 		ByteRange *new_br = new ByteRange(start, end);
-		new_br->retrans_count = retrans_count;
+		new_br->packet_sent_count = 0;
+		new_br->data_retrans_count = data_retrans_count;
 		new_br->sent_count = sent_count;
 		new_br->received_count = received_count;
 		new_br->sent_tstamp_pcap = sent_tstamp_pcap;
@@ -169,11 +189,11 @@ public:
 	uint64_t getStartSeq() { return startSeq; }
 	uint64_t getEndSeq() { return endSeq; }
 	int getSendAckTimeDiff(RangeManager *rm);
-	int getNumRetrans() { return retrans_count; }
+	int getNumRetrans() { return packet_retrans_count; }
 	int getNumBundled() { return rdb_count; }
 	int getNumBytes() { return byte_count; }
 	int getOrinalPayloadSize() { return original_payload_size; }
-	int getTotalBytesTransfered() { return byte_count + byte_count * retrans_count + byte_count * rdb_count; }
+	int getTotalBytesTransfered() { return byte_count + byte_count * data_retrans_count + byte_count * rdb_count; }
 	bool isAcked() { return acked; }
 	void insertAckTime(timeval *tv) { ackTime = *tv; acked = true; }
 	void setDiff();

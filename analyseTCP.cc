@@ -27,9 +27,10 @@
 #include "analyseTCP.h"
 #include "Dump.h"
 #include "color_print.h"
+#include <getopt.h>
 
 vector<string> GlobStats::retrans_filenames;
-vector<vector <int> *> GlobStats::ack_latency_vectors;
+vector<std::tr1::shared_ptr<vector <int> > > GlobStats::ack_latency_vectors;
 GlobStats *globStats;
 
 /* Initialize global options */
@@ -51,7 +52,10 @@ string GlobOpts::recvNatIP      = "";
 bool GlobOpts::connDetails      = false;
 int GlobOpts::verbose           = 0;
 int GlobOpts::max_retrans_stats = 6;
-string GlobOpts::percentiles    = "1,25,50,75,99";
+string GlobOpts::percentiles    = "";
+int GlobOpts::analyse_start     = 0;
+int GlobOpts::analyse_end       = 0;
+int GlobOpts::analyse_duration  = 0;
 
 void warn_with_file_and_linenum(string file, int linenum) {
 	cout << "Error at ";
@@ -65,42 +69,6 @@ void exit_with_file_and_linenum(int exit_code, string file, int linenum) {
 
 bool endsWith(const string& s, const string& suffix) {
 	return s.rfind(suffix) == (s.size()-suffix.size());
-}
-
-void usage (char* argv){
-	printf("Usage: %s [-s|r|p|f|g|t|u|m|n|a|A|e|u|d|l|j|y|o|k]\n", argv);
-	printf("Required options:\n");
-	printf(" -s <sender ip>     : Sender ip.\n");
-	printf(" -f <pcap-file>     : Sender-side dumpfile.\n");
-	printf("Other options:\n");
-	printf(" -r <receiver ip>   : Receiver ip. If not given, analyse all receiver IPs\n");
-	printf(" -q <sender port>   : Sender port. If not given, analyse all sender ports\n");
-	printf(" -p <receiver port> : Receiver port. If not given, analyse all receiver ports\n");
-	printf(" -g <pcap-file>     : Receiver-side dumpfile\n");
-	printf(" -c                 : Write CDF stats to file.\n");
-	printf(" -l<interval>       : Write loss over time to file with optional time slice interval (Default is 1 second).\n");
-	printf(" -t                 : Calculate transport-layer delays\n");
-	printf("                    : (if not set, application-layer delay is calculated)\n");
-	printf(" -u<prefix>         : Write statistics to comma-separated files (for use with R)\n");
-	printf("                      Optional argument <prefix> assigns an output filename prefix (No space between option and argument).\n");
-	printf(" -o <output-dir>    : Directory to write the statistics results (implies -u)\n");
-	printf(" -m <IP>            : Sender side external NAT address (as seen on recv dump)\n");
-	printf(" -n <IP>            : Receiver side local address (as seen on recv dump)\n");
-	printf(" -a                 : Produce aggregated statistics (off by default, optional)\n");
-	printf(" -A                 : Only print aggregated statistics (off by default, optional)\n");
-	printf(" -e                 : Only print the connections found in the trace\n");
-	printf(" -j                 : Print relative sequence numbers.\n");
-	printf(" -i <percentiles>   : Calculate the specified percentiles (Comma separated list of percentiles).\n");
-	printf(" -y                 : Print details for each packet (requires receiver side dump).\n");
-	printf(" -v                 : Be verbose, print more statistics details\n");
-	printf(" -k                 : Use colors when printing\n");
-	printf(" -d                 : Indicate debug level\n");
-	printf("                      1 = Only output on reading sender side dump first pass.\n");
-	printf("                      2 = Only output on reading sender side second pass.\n");
-	printf("                      3 = Only output on reading receiver side.\n");
-	printf("                      4 = Only output when comparing sender and receiver.\n");
-	printf("                      5 = Print all debug messages.\n");
-	exit(0);
 }
 
 void test(Dump *d) {
@@ -175,25 +143,106 @@ void test(Dump *d) {
 	exit(1);
 }
 
-int main(int argc, char *argv[]){
-	string src_ip = "";
-	string dst_ip = "";
-	string src_port = "";
-	string dst_port = "";
-	string sendfn = ""; /* Sender dump file name */
-	string recvfn = ""; /* Receiver dump filename */
+void usage (char* argv){
+	printf("Usage: %s [-s|r|p|f|g|t|u|m|n|a|A|e|u|d|l|j|y|o|k]\n", argv);
+	printf("Required options:\n");
+	printf(" -f <pcap-file>      : Sender-side dumpfile.\n");
+	printf("Other options:\n");
+	printf(" -s <sender ip>      : Sender ip.\n");
+	printf(" -r <receiver ip>    : Receiver ip. If not given, analyse all receiver IPs\n");
+	printf(" -q <sender port>    : Sender port. If not given, analyse all sender ports\n");
+	printf(" -p <receiver port>  : Receiver port. If not given, analyse all receiver ports\n");
+	printf(" -g <pcap-file>      : Receiver-side dumpfile\n");
+	printf(" -c                  : Write CDF stats to file.\n");
+	printf(" -l<interval>        : Write loss over time to file with optional time slice interval (Default is 1 second).\n");
+	printf(" -t                  : Calculate transport-layer delays\n");
+	printf("                     : (if not set, application-layer delay is calculated)\n");
+	printf(" -u<prefix>          : Write statistics to comma-separated files (for use with R)\n");
+	printf("                       Optional argument <prefix> assigns an output filename prefix (No space between option and argument).\n");
+	printf(" -o <output-dir>     : Directory to write the statistics results (implies -u)\n");
+	printf(" -m <IP>             : Sender side external NAT address (as seen on recv dump)\n");
+	printf(" -n <IP>             : Receiver side local address (as seen on recv dump)\n");
+	printf(" -a                  : Produce aggregated statistics (off by default, optional)\n");
+	printf(" -A                  : Only print aggregated statistics (off by default, optional)\n");
+	printf(" -e                  : Only print the connections found in the trace\n");
+	printf(" -j                  : Print relative sequence numbers.\n");
+	printf(" -i<percentiles>     : Calculate the specified percentiles (Optional comma separated list of percentiles).\n");
+	printf(" -y                  : Print details for each packet (requires receiver side dump).\n");
+	printf(" -v                  : Be verbose, print more statistics details\n");
+	printf(" -k                  : Use colors when printing\n");
+	printf(" -d                  : Indicate debug level\n");
+	printf("                       1 = Only output on reading sender side dump first pass.\n");
+	printf("                       2 = Only output on reading sender side second pass.\n");
+	printf("                       3 = Only output on reading receiver side.\n");
+	printf("                       4 = Only output when comparing sender and receiver.\n");
+	printf("                       5 = Print all debug messages.\n");
+	printf("\n");
+	printf(" --analyse-start=<start sec>       : Start analyzing <start sec> into the stream(s)\n");
+	printf(" --analyse-end=<end sec>           : Stop analyzing <end sec> before the end of the stream(s)\n");
+	printf(" --analyse-duration=<duration sec> : Stop analyzing after <duration sec> after the start\n");
+	exit(0);
+}
 
+#define OPTSTRING "s:r:p:q:f:m:n:o:g:d:i::u::l::o:aAetjychvk"
+
+static struct option long_options[] = {
+	{"src-ip",                   required_argument, 0, 's'},
+	{"dst-ip",                   required_argument, 0, 'r'},
+	{"src-port",                 required_argument, 0, 'q'},
+	{"dst-port",                 required_argument, 0, 'p'},
+	{"src-nat-ip",               required_argument, 0, 'm'},
+	{"dst-nat-ip",               required_argument, 0, 'n'},
+	{"sender-dump",              required_argument, 0, 'f'},
+	{"receiver-dump",            required_argument, 0, 'g'},
+	{"output-dir",               required_argument, 0, 'o'},
+	{"cdf",                      no_argument,       0, 'c'},
+	{"csv",                      optional_argument, 0, 'u'},
+	{"loss-interval",            optional_argument, 0, 'l'},
+	{"percentiles",              optional_argument, 0, 'i'},
+	{"transport",                no_argument,       0, 't'},
+	{"conn-details",             no_argument,       0, 'e'},
+	{"aggregated",               no_argument,       0, 'a'},
+	{"aggregated-only",          no_argument,       0, 'A'},
+	{"relative-seqs",            no_argument,       0, 'j'},
+	{"range-details",            no_argument,       0, 'y'},
+	{"color-print",              no_argument,       0, 'k'},
+	{"help",                     no_argument,       0, 'h'},
+	{"verbose",                  optional_argument, 0, 'v'},
+	{"debug",                    required_argument, 0, 'd'},
+	{"analyse-start",            required_argument, 0, 'S'},
+	{"analyse-end",              required_argument, 0, 'E'},
+	{"analyse-duration",         required_argument, 0, 'D'},
+	{0, 0, 0, 0}
+};
+
+string src_ip = "";
+string dst_ip = "";
+string src_port = "";
+string dst_port = "";
+string sendfn = ""; /* Sender dump file name */
+string recvfn = ""; /* Receiver dump filename */
+
+void parse_cmd_args(int argc, char *argv[]) {
+	int option_index = 0;
 	int c;
-	Dump *senderDump;
+
 	// Default to disable color prints
 	disable_colors = true;
 
-	while (1){
-		c = getopt(argc, argv, "s:r:p:q:f:m:n:o:g:d:i:u::l::o:aAetjychvk");
+	while (1) {
+		c = getopt_long(argc, argv, OPTSTRING, long_options, &option_index);
+
 		if (c == -1)
 			break;
 
-		switch(c) {
+		switch (c) {
+		case 0 :
+			printf("LONG OPTION! flag: %s\n", long_options[option_index].name);
+			if (long_options[option_index].flag != 0) {
+				printf("Skipping argument?!?!\n");
+				break;
+			}
+			break;
 		case 's':
 			src_ip = optarg;
 			break;
@@ -235,7 +284,10 @@ int main(int argc, char *argv[]){
 			}
 			break;
 		case 'i':
-			GlobOpts::percentiles = string(optarg);
+			if (optarg)
+				GlobOpts::percentiles = string(optarg);
+			else
+				GlobOpts::percentiles = "1,25,50,75,99";
 			break;
 		case 'c':
 			GlobOpts::withCDF = true;
@@ -270,30 +322,43 @@ int main(int argc, char *argv[]){
 			GlobOpts::debugLevel = atoi(optarg);
 			break;
 		case 'v':
-			GlobOpts::verbose = 1;
+			GlobOpts::verbose++;
 			break;
 		case 'k':
 			disable_colors = false;
 			break;
+		case 'S':
+			GlobOpts::analyse_start = atoi(optarg);
+			break;
+		case 'E':
+			GlobOpts::analyse_end = atoi(optarg);
+			break;
+		case 'D':
+			GlobOpts::analyse_duration = atoi(optarg);
+			break;
 		case 'h':
 			usage(argv[0]);
-		case '?':
-			if (optopt == 'c')
-				fprintf(stderr, "Option -%c requires an argument\n", optopt);
-			else if(isprint(optopt))
-				fprintf(stderr,"Unknown option -%c\n", optopt);
-			else
-				fprintf(stderr, "Something is really wrong\n");
-
-			return 1;
+		case '?' :
+			printf("Unknown option: '%c'\n", c);
+			usage(argv[0]);
 		default:
 			break;
 		}
 	}
-	/* TODO Exit if required options are not given */
-	if(argc < 4){
+
+	if (GlobOpts::analyse_end && GlobOpts::analyse_duration) {
+		printf("You may only supply either --analyse-end or analyse-duration, not both\n");
 		usage(argv[0]);
 	}
+
+	if (sendfn == "") {
+		usage(argv[0]);
+	}
+}
+
+int main(int argc, char *argv[]){
+
+	parse_cmd_args(argc, argv);
 
 	if(GlobOpts::debugLevel < 0)
 		cerr << "debugLevel = " << GlobOpts::debugLevel << endl;
@@ -309,23 +374,50 @@ int main(int argc, char *argv[]){
 	globStats = &s;
 
 	/* Create Dump - object */
-	senderDump = new Dump(src_ip, dst_ip, src_port, dst_port, sendfn);
+	Dump *senderDump = new Dump(src_ip, dst_ip, src_port, dst_port, sendfn);
 	//test(senderDump);
 	senderDump->analyseSender();
-
-	if (GlobOpts::genRFiles)
-		senderDump->genRFiles();
 
 	if (GlobOpts::withRecv) {
 		senderDump->processRecvd(recvfn);
 	}
+
+	/* Traverse ranges in senderDump and compare to
+	   corresponding bytes / ranges in receiver ranges
+	   place timestamp diffs in buckets */
+	senderDump->calculateRetransAndRDBStats();
+
+	if (GlobOpts::withRecv) {
+		if (GlobOpts::withCDF) {
+			senderDump->makeCDF();
+			/* Calculate clock drift for all eligible connections
+			   eligible: more than 500 ranges &&
+			   more than 2 minutes duration
+			   make drift compensated CDF*/
+			senderDump->makeDcCdf();
+
+			if (!GlobOpts::aggOnly) {
+				senderDump->writeCDF();
+				senderDump->writeDcCdf();
+			}
+
+			if (GlobOpts::aggregate){
+				senderDump->writeAggCdf();
+				senderDump->writeAggDcCdf();
+			}
+		}
+	}
+
+	if (GlobOpts::genRFiles)
+		senderDump->genRFiles();
 
 	if (GlobOpts::connDetails) {
 		senderDump->printConns();
 		return 0;
 	}
 
-	senderDump->write_loss_to_file();
+	if (GlobOpts::withLoss)
+		senderDump->write_loss_to_file();
 
 	if ((GlobOpts::print_packets)) {
 		senderDump->printPacketDetails();

@@ -27,9 +27,18 @@ of packets that have to be retransmitted using
 regular TCP schemes.
 #Estimated loss rate: 0.74385%
 
-Bytewise latency is the time before a segment of data 
+Bytewise latency is the time before a segment of data
 is acknowledged.
 #Bytewise latency - Conn: 35260
 #Maximum latency  : 1245ms
 #Minimum latency  : 150ms
 #Average latency  : 160.856ms
+
+
+Known issues:
+* FIN segments with payload may be counted as two segments.
+* Sender IP is required
+
+Total bytes sent (payload) and Number of retransmitted bytes might differ slightly (2 bytes) from tcptrace, but according to tshark analysetcp is correct:
+Example of how to calculate total sum of tcp payload bytes and retransmitted bytes:
+shark -r fair-stable-1000kbit-rtt150-cubic-pfifo-900s-128vs128-streams-itt100-ps120-_front.dump -qz io,stat,0,"ip.addr==10.0.0.10 && tcp.srcport == 15103","COUNT(tcp.analysis.retransmission)ip.addr==10.0.0.10 && tcp.srcport == 15102 && tcp.analysis.retransmission","SUM(tcp.len)tcp.len && ip.addr==10.0.0.10 && tcp.srcport == 15102","SUM(tcp.len)tcp.len && ip.addr==10.0.0.10 && tcp.srcport == 15102 && tcp.analysis.retransmission"

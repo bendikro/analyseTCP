@@ -27,10 +27,7 @@ class Connection;
    are received */
 class RangeManager {
 private:
-	uint32_t lastContinuous; /* Last seq in sequence of ranges without gaps */
-	uint32_t largestEndSeq;
 	struct timeval highestRecvd;
-	int  nrRanges;
 	int redundantBytes;
 	long lowestDiff; /* Used to create CDF. */
 	long lowestDcDiff; /* Lowest diff when compensated for clock drift */
@@ -46,45 +43,48 @@ private:
 	map<const int, int> dcCdf;
 public:
 	map<ulong, ByteRange*> ranges;
-	ulong firstSeq; /* Global start seq */
-	ulong lastSeq;  /* Global end seq */
+	uint32_t firstSeq; /* The absolute start sequence number */
+	uint64_t lastSeq;  /* Global relative end sequence number (Equals the number of unique bytes) */
+
+	map<ulong, ByteRange*>::iterator first_to_analyze, last_to_analyze;
 
 	// The number of RDB bytes that were redundant and not
 	int rdb_packet_misses;
 	int rdb_packet_hits;
-	int rdb_byte_miss;
-	int rdb_byte_hits;
-	int rdb_stats_available;
-	int lost_ranges_count;
-	int sent_ranges_count;
-	int lost_bytes;
+	uint rdb_byte_miss;
+	uint rdb_byte_hits;
+	int analysed_lost_ranges_count;
+	int analysed_sent_ranges_count;
+	uint analysed_lost_bytes;
 	int ack_count;
+	uint64_t analysed_bytes_sent, analysed_bytes_retransmitted, analysed_redundant_bytes;
+	int analysed_packet_count, analysed_retr_packet_count, analysed_rdb_packet_count, analysed_ack_count,
+		analysed_packet_sent_count, analysed_ranges_count, analysed_sent_pure_ack_count;
+	int analysed_data_packet_count;
+	int analysed_syn_count, analysed_fin_count, analysed_rst_count, analysed_pure_acks_count;
+
+	map<ulong, ByteRange*>::iterator analyse_range_start, analyse_range_last, analyse_range_end;
+	uint64_t analyse_time_sec_start, analyse_time_sec_end;
 
 	Connection *conn;
-	ulong max_seq;
 public:
-	RangeManager(Connection *c, uint32_t first_seq) {
+	RangeManager(Connection *c, uint32_t first_seq) : redundantBytes(0), lastSeq(0),
+													  rdb_packet_misses(0), rdb_packet_hits(0), rdb_byte_miss(0),
+													  rdb_byte_hits(0), analysed_lost_ranges_count(0),
+													  analysed_sent_ranges_count(0), analysed_lost_bytes(0),
+													  ack_count(0), analysed_bytes_sent(0), analysed_bytes_retransmitted(0),
+													  analysed_redundant_bytes(0), analysed_packet_count(0),
+													  analysed_retr_packet_count(0), analysed_rdb_packet_count(0), analysed_ack_count(0),
+													  analysed_packet_sent_count(0),
+													  analysed_ranges_count(0), analysed_sent_pure_ack_count(0), analysed_data_packet_count(0),
+													  analysed_syn_count(0), analysed_fin_count(0), analysed_rst_count(0), analysed_pure_acks_count(0)
+	{
 		conn = c;
 		firstSeq = first_seq;
-		largestEndSeq = 0;
-		lastSeq = 0;
-		lastContinuous = 0;
 		lowestDiff = LONG_MAX;
 		lowestDcDiff = LONG_MAX;
 		highestAckedByteRangeIt = ranges.end();
 		memset(&highestRecvd, 0, sizeof(highestRecvd));
-		nrRanges = 0;
-		redundantBytes = 0;
-		rdb_byte_miss = 0;
-		rdb_byte_hits = 0;
-		rdb_packet_misses = 0;
-		rdb_packet_hits = 0;
-		rdb_stats_available = 0;
-		lost_ranges_count = 0;
-		sent_ranges_count = 0;
-		lost_bytes = 0;
-		max_seq = ULONG_MAX;
-		ack_count = 0;
 	};
 
 	~RangeManager();
@@ -99,14 +99,13 @@ public:
 	ByteRange* getHighestAcked();
 	int getTimeInterval(ByteRange *r);
 	uint32_t getDuration();
+	uint32_t getDuration(map<ulong, ByteRange*>::iterator brIt, map<ulong, ByteRange*>::iterator brIt_end);
 	void validateContent();
 	void registerRecvDiffs();
-	void registerRecvDiffs2();
 	void makeCdf();
 	void writeCDF(ofstream *stream);
 	void writeDcCdf(ofstream *stream);
 	int calcDrift();
-	int calcDrift2();
 	void registerDcDiffs();
 	void insert_byte_range(ulong start_seq, ulong end_seq, bool sent, struct DataSeg *data_seq, int level);
 	void makeDcCdf();
@@ -114,13 +113,15 @@ public:
 	void free_recv_vector();
 	int getNumBytes() { return lastSeq; } // lastSeq is the last relative seq number
 	long int getByteRangesCount() { return ranges.size(); }
-	long int getByteRangesLost() { return lost_ranges_count; }
-	long int getByteRangesSent() { return sent_ranges_count; }
-	int getRedundantBytes(){ return redundantBytes; }
-	int getLostBytes() { return lost_bytes; }
+	long int getAnalysedByteRangesCount() { return ranges.size(); }
+	long int getByteRangesLost() { return analysed_lost_ranges_count; }
+	long int getByteRangesSent() { return analysed_sent_ranges_count; }
+	int getRedundantBytes(){ return analysed_redundant_bytes; }
+	int getLostBytes() { return analysed_lost_bytes; }
 	ulong relative_seq(ulong seq);
 	bool hasReceiveData();
-	void calculateRealLoss();
+	void calculateRealLoss(map<ulong, ByteRange*>::iterator brIt, map<ulong, ByteRange*>::iterator brIt_end);
+	void analyseReceiverSideData();
 	void calculateRetransAndRDBStats();
 	void write_loss_over_time(unsigned slice_interval, unsigned timeslice_count, FILE *loss_retrans_out, FILE *loss_loss_out);
 	void printPacketDetails();
