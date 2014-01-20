@@ -4,10 +4,9 @@
 
 extern GlobStats *globStats;
 int GlobStats::totNumBytes;
-map<ConnectionMapKey*, string, ConnectionKeyComparator> connKeys;
 
 /* Methods for class Dump */
-Dump::Dump(string src_ip, string dst_ip, string src_port, string dst_port, string fn ){
+Dump::Dump(string src_ip, string dst_ip, string src_port, string dst_port, string fn) {
 	srcIp = src_ip;
 	dstIp = dst_ip;
 	srcPort = src_port;
@@ -21,14 +20,6 @@ Dump::Dump(string src_ip, string dst_ip, string src_port, string dst_port, strin
 	max_payload_size = 0;
 }
 
-Dump::~Dump() {
-	map<ConnectionMapKey*, string>::iterator it, it_end;
-	it_end = connKeys.end();
-	for (it = connKeys.begin(); it != it_end; it++) {
-		delete it->first;
-	}
-}
-
 /*
   Checks if a char buf is a string
 */
@@ -38,34 +29,13 @@ bool isNumeric(const char* pszInput, int nNumberBase) {
 	return (input.find_first_not_of(base.substr(0, nNumberBase)) == string::npos);
 }
 
-
 string getConnKey(const struct in_addr *srcIp, const struct in_addr *dstIp, const uint16_t *srcPort, const uint16_t *dstPort) {
-	static struct ConnectionMapKey connKey;
-	static map<ConnectionMapKey*, string>::iterator it;
 	static char src_ip_buf[INET_ADDRSTRLEN];
 	static char dst_ip_buf[INET_ADDRSTRLEN];
-	memcpy(&connKey.ip_src, srcIp, sizeof(struct in_addr));
-	memcpy(&connKey.ip_dst, dstIp, sizeof(struct in_addr));
-	connKey.src_port = *srcPort;
-	connKey.dst_port = *dstPort;
-
-	it = connKeys.find(&connKey);
-	// Returning the existing connection key
-	if (it != connKeys.end()) {
-		return it->second;
-	}
-
 	inet_ntop(AF_INET, srcIp, src_ip_buf, INET_ADDRSTRLEN);
 	inet_ntop(AF_INET, dstIp, dst_ip_buf, INET_ADDRSTRLEN);
-
 	stringstream connKeyTmp;
 	connKeyTmp << src_ip_buf << "-" << ntohs(*srcPort) << "-" << dst_ip_buf << "-" << ntohs(*dstPort);
-	ConnectionMapKey *connKeyToInsert = new ConnectionMapKey();
-	memcpy(&connKeyToInsert->ip_src, srcIp, sizeof(struct in_addr));
-	memcpy(&connKeyToInsert->ip_dst, dstIp, sizeof(struct in_addr));
-	connKeyToInsert->src_port = connKey.src_port;
-	connKeyToInsert->dst_port = connKey.dst_port;
-	connKeys[connKeyToInsert] = connKeyTmp.str();
 	return connKeyTmp.str();
 }
 
@@ -94,7 +64,6 @@ Connection* Dump::getConn(const struct in_addr *srcIp, const struct in_addr *dst
 
 	Connection *tmpConn = new Connection(*srcIp, ntohs(*srcPort), *dstIp,
 										 ntohs(*dstPort), ntohl(*seq));
-
 	ConnectionMapKey *connKeyToInsert = new ConnectionMapKey();
 	memcpy(&connKeyToInsert->ip_src, srcIp, sizeof(struct in_addr));
 	memcpy(&connKeyToInsert->ip_dst, dstIp, sizeof(struct in_addr));
@@ -283,8 +252,10 @@ void Dump::printStatistics() {
 	csAggregated.rdb_bytes_sent = 0;
 
 	// Print stats for each connection or aggregated
+	map<ConnectionMapKey*, Connection*, SortedConnectionKeyComparator> sortedConns;
+	fillWithSortedConns(sortedConns);
 	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
-	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
+	for (cIt = sortedConns.begin(); cIt != sortedConns.end(); cIt++) {
 		memset(&cs, 0, sizeof(struct connStats));
 		cIt->second->addPacketStats(&cs);
 		cIt->second->addPacketStats(&csAggregated);
@@ -371,13 +342,13 @@ void Dump::printStatistics() {
 
 	if (GlobOpts::aggregate) {
 		if (csAggregated.nrPacketsSent) { /* To avoid division by 0 */
-			bsAggregated.avgLat /= conns.size();
-			bsAggregated.avgLength /= conns.size();
-			csAggregated.duration /= conns.size();
-			bsAggregated.minLength /= conns.size();
-			bsAggregated.maxLength /= conns.size();
-			bsAggregated.minLat /= conns.size();
-			bsAggregated.maxLat /= conns.size();
+			bsAggregated.avgLat /= sortedConns.size();
+			bsAggregated.avgLength /= sortedConns.size();
+			csAggregated.duration /= sortedConns.size();
+			bsAggregated.minLength /= sortedConns.size();
+			bsAggregated.maxLength /= sortedConns.size();
+			bsAggregated.minLat /= sortedConns.size();
+			bsAggregated.maxLat /= sortedConns.size();
 			bsAggregated.percentiles_lengths.init();
 			bsAggregated.percentiles_latencies.init();
 
@@ -386,7 +357,7 @@ void Dump::printStatistics() {
 			std::sort(bsAggregated.payload_lengths.begin(), bsAggregated.payload_lengths.end());
 			percentiles(&bsAggregated.payload_lengths, &bsAggregated.percentiles_lengths);
 
-			cout << "\nAggregated Statistics for " << conns.size() << " connections:" << endl;
+			cout << "\nAggregated Statistics for " << sortedConns.size() << " connections:" << endl;
 			printPacketStats(&csAggregated, &bsAggregated, true);
 
 			/* Print Aggregate bytewise latency */
@@ -722,7 +693,7 @@ void Dump::processAcks(const struct pcap_pkthdr* header, const u_char *data) {
 	// It should not be possible that the connection is not yet created
 	// If lingering ack arrives for a closed connection, this may happen
 	if (tmpConn == NULL) {
-		cerr << "Ack for unregistered connection found. Conn: " << getConnKey(&ip->ip_dst, &ip->ip_src, &tcp->th_dport, &tcp->th_sport) << " - Ignoring." << endl;
+		cerr << "Ack for unregistered connection found. Ignoring. Conn: " << getConnKey(&ip->ip_src, &ip->ip_dst, &tcp->th_sport, &tcp->th_dport) << endl;
 		//exit_with_file_and_linenum(1, __FILE__, __LINE__);
 	}
 	ack = ntohl(tcp->th_ack);
@@ -913,13 +884,29 @@ void Dump::printPacketDetails() {
 	}
 }
 
+
+void Dump::fillWithSortedConns(map<ConnectionMapKey*, Connection*, SortedConnectionKeyComparator> &sortedConns) {
+	map<ConnectionMapKey*, Connection*>::iterator it, it_end;
+	it_end = conns.end();
+	for (it = conns.begin(); it != it_end; it++) {
+		sortedConns.insert(pair<ConnectionMapKey*, Connection*>(it->first, it->second));
+	}
+}
+
 void Dump::printConns() {
-	printf("\nConnections in sender dump: %lu\n", conns.size());
-	printf("%-38s   %-17s %-12s   %12s \n", "Conn key", "Duration (sec)", "Packets sent", "Bytes loss");
+	map<ConnectionMapKey*, Connection*, SortedConnectionKeyComparator> sortedConns;
+	fillWithSortedConns(sortedConns);
 	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
-	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
-		printf("%-40s   %-17d   %-11d   %.1f %%\n", cIt->second->getConnKey().c_str(), cIt->second->getDuration(false),
-		       cIt->second->nrPacketsSent,  (cIt->second->rm->analysed_lost_bytes/ (double) cIt->second->totBytesSent) * 100);
+	struct connStats cs;
+
+	printf("\nConnections in sender dump: %lu\n\n", conns.size());
+	printf("        %-30s   %-17s %-12s   %12s   %12s\n", "Conn key", "Duration (sec)", "Packets sent", "Bytes loss", "Ranges loss");
+	for (cIt = sortedConns.begin(); cIt != sortedConns.end(); cIt++) {
+		memset(&cs, 0, sizeof(struct connStats));
+		cIt->second->addPacketStats(&cs);
+		printf("   %-40s   %-17d   %-11d   %4.1f %%        %4.1f %%\n", cIt->second->getConnKey().c_str(), cs.duration,
+		       cs.nrPacketsSent, (cs.bytes_lost / (double) cs.totBytesSent) * 100,
+			   (cs.ranges_lost / (double) cs.ranges_sent) * 100);
 	}
 }
 
