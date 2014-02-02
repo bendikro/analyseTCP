@@ -167,10 +167,18 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 
 #ifdef DEBUG
 	int debug_print = GlobOpts::debugLevel == 6;
-	debug_print = 0;
+	//debug_print = 0;
+
+	//	if (start_seq >= 21647733)
+	//if (start_seq >= 21643733)
+	//	debug_print = 1;
+	//
+	//if (start_seq >= 21660765)
+	//	exit(0);
 
 	//if (start_seq >= 801 && start_seq <= 1101)
 	//	debug_print = 1;
+	//fprintf(stderr, "level: %d\n", level);
 
 	char prefix[100];
 	int i;
@@ -239,7 +247,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 #ifdef DEBUG
 			indent_print("Received non-existent byte range (%lu): (%lu - %lu) (%lu - %lu), sent: %d, retrans: %d, is_rdb: %d\n", end_seq == start_seq ? 0 : end_seq - start_seq +1,
 						 relative_seq(start_seq), relative_seq(end_seq), start_seq, end_seq, sent, data_seg->retrans, data_seg->is_rdb);
-
+			indent_print("Connection: %s\n", conn->getConnKey().c_str());
 #endif
 			warn_with_file_and_linenum(__FILE__, __LINE__);
 		}
@@ -252,8 +260,10 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 		// Ack / syn-ack /rst
 		if (end_seq == start_seq) {
 #ifdef DEBUG
-			if (!sent)
-				assert(0 && "RECEIVED!");
+			if (!sent) {
+				//assert(0 && "RECEIVED!");
+				colored_printf(RED, "Received packet with no payload\n");
+			}
 #endif
 
 #ifdef DEBUG
@@ -332,6 +342,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 					ByteRange *cur_br = lowIt->second;
 					int start_matches = (start_seq == cur_br->startSeq);
 					int end_matches = (end_seq == cur_br->endSeq);
+					int insert_more_recursively = 0;
 
 					assert(!(start_matches && end_matches) && "BOTH");
 #ifdef DEBUG
@@ -372,7 +383,8 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 #endif
 						range_received = new_br;
 					}
-					else {
+					// New data fits into current range
+					else if (end_seq < cur_br->endSeq) {
 						// Split in the middle
 						new_br = cur_br->split_end(start_seq, cur_br->endSeq);
 						new_br->packet_sent_count++;
@@ -389,6 +401,13 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 #endif
 						ranges.insert(pair<ulong, ByteRange*>(new_last->startSeq, new_last));
 						range_received = new_br;
+					}
+					// New data reaches beyond current range
+					else {
+						new_br = cur_br->split_end(start_seq, cur_br->endSeq);
+						new_br->packet_sent_count++;
+						range_received = new_br;
+						insert_more_recursively = 1;
 					}
 					ranges.insert(pair<ulong, ByteRange*>(new_br->startSeq, new_br));
 
@@ -415,6 +434,11 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 					}
 					else {
 						range_received->increase_received(data_seg->tstamp_tcp, data_seg->tstamp_pcap);
+					}
+
+					if (insert_more_recursively) {
+						//printf("Calling recursively: %lu - %lu\n", new_br->endSeq +1, end_seq);
+						insert_byte_range(new_br->endSeq +1, end_seq, sent, data_seg, level +1);
 					}
 					return;
 				}
@@ -461,7 +485,26 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 		}
 #ifdef DEBUG
 		else {
-			assert(sent && "RECEIVED??\n");
+			// This data is only in the receiver dump
+			if (start_seq > lastSeq) {
+				last_br = new ByteRange(start_seq, end_seq);
+				last_br->original_payload_size = data_seg->payloadSize;
+				last_br->increase_received(data_seg->tstamp_tcp, data_seg->tstamp_pcap);
+
+				//last_br->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_pcap, this_is_rdb_data);
+				if (data_seg->flags & TH_SYN) {
+					last_br->syn = 1;
+				}
+				else if (data_seg->flags & TH_FIN) {
+					last_br->fin = 1;
+				}
+#ifdef DEBUG
+				assert(data_seg->retrans == 0 && "Shouldn't be retrans!\n");
+				assert(this_is_rdb_data == 0 && "Shouldn't be RDB?!\n");
+#endif
+				ranges.insert(pair<ulong, ByteRange*>(start_seq, last_br));
+			}
+			//assert(sent && "RECEIVED??\n");
 		}
 #endif
 	}
@@ -471,6 +514,10 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 		if (debug_print) {
 			indent_print("FOUND START: sent:%d, %lu - %lu (%lu)\n", sent, relative_seq(start_seq), relative_seq(end_seq), end_seq - start_seq + 1);
 			indent_print("Current startseq: %lu, endseq: %lu, new endseq: %lu\n", relative_seq(brIt->second->startSeq), relative_seq(brIt->second->endSeq), relative_seq(end_seq));
+
+			if (brIt->second->endSeq < brIt->second->startSeq) {
+				colored_printf(RED, "Startseq is greater than Endseq!!\n");
+			}
 		}
 #endif
 		// No payload, so it's a syn or syn-ack (or fin, or rst)
@@ -579,7 +626,10 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 					assert(brIt->second->received_tstamp_tcp && "TEST\n");
 				}
 
+				assert(level < 15 && "Recurse level too high");
+
 				// Recursive call to insert the remaining data
+				//printf("Recursive call: brIt->endseq: %lu, endseq: %lu\n", brIt->second->endSeq, end_seq);
 				insert_byte_range(brIt->second->endSeq +1, end_seq, sent, data_seg, level +1);
 			}
 			// Reaches less than the range, split current range
@@ -1073,7 +1123,7 @@ void RangeManager::printPacketDetails() {
 		}
 
 		if (GlobOpts::withRecv) {
-			if (it->second->sent_count != it->second->received_count) {
+			if (it->second->sent_count > it->second->received_count) {
 				printf("   LOST %d times", it->second->sent_count - it->second->received_count);
 			}
 		}

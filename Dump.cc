@@ -827,9 +827,14 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data) {
 	// It should not be possible that the connection is not yet created
 	// If lingering ack arrives for a closed connection, this may happen
 	if (tmpConn == NULL) {
-		cerr << "Connection found in recveiver dump that does not exist in sender: " << getConnKey(&ip->ip_src, &ip->ip_dst, &tcp->th_sport, &tcp->th_dport);
-		cerr << ". Maybe NAT is in effect?  Exiting." << endl;
-		exit_with_file_and_linenum(1, __FILE__, __LINE__);
+		static bool warning_printed = false;
+		if (warning_printed == false) {
+			cerr << "Connection found in recveiver dump that does not exist in sender: " << getConnKey(&ip->ip_src, &ip->ip_dst, &tcp->th_sport, &tcp->th_dport);
+			cerr << ". Maybe NAT is in effect?  Exiting." << endl;
+			warn_with_file_and_linenum(__FILE__, __LINE__);
+			warning_printed = true;
+		}
+		return;
 	}
 
 	/* Prepare packet data struct */

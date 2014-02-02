@@ -298,14 +298,18 @@ void Connection::addPacketStats(struct connStats* cs) {
 
 #ifdef DEBUG
 	if ((rm->analysed_bytes_sent - getNumUniqueBytes()) != rm->analysed_redundant_bytes) {
-		printf("CONNKEY: %s\n", getConnKey().c_str());
-		printf("rm->analysed_bytes_sent - getNumUniqueBytes (%lu) != rm->analysed_redundant_bytes (%lu)\n", rm->analysed_bytes_sent - getNumUniqueBytes(), rm->analysed_redundant_bytes);
-		printf("rm->analysed_redundant_bytes: %lu\n", rm->analysed_redundant_bytes);
-		printf("cs->totBytesSent: %lu\n", cs->totBytesSent);
-		printf("cs->totUniqueBytes: %lu\n", cs->totUniqueBytes);
-		printf("cs->totBytesSent - cs->totUniqueBytes: %lu\n", cs->totBytesSent - cs->totUniqueBytes);
+		if (rm->analysed_bytes_sent >= getNumUniqueBytes()) {
+			printf("CONNKEY: %s\n", getConnKey().c_str());
+			printf("rm->analysed_bytes_sent - getNumUniqueBytes (%lu) != rm->analysed_redundant_bytes (%lu)\n", rm->analysed_bytes_sent - getNumUniqueBytes(), rm->analysed_redundant_bytes);
+			printf("rm->analysed_bytes_sent: %lu\n", rm->analysed_bytes_sent);
+			printf("getNumUniqueBytes(): %lu\n", getNumUniqueBytes());
+			printf("rm->analysed_redundant_bytes: %lu\n", rm->analysed_redundant_bytes);
+			printf("cs->totBytesSent: %lu\n", cs->totBytesSent);
+			printf("cs->totUniqueBytes: %lu\n", cs->totUniqueBytes);
+			printf("cs->totBytesSent - cs->totUniqueBytes: %lu\n", cs->totBytesSent - cs->totUniqueBytes);
+		}
 	}
-	assert("Redundant bytes mismatch" && (rm->analysed_bytes_sent - getNumUniqueBytes()) == rm->analysed_redundant_bytes);
+//	assert("Redundant bytes mismatch" && (rm->analysed_bytes_sent - getNumUniqueBytes()) == rm->analysed_redundant_bytes);
 #endif
 	cs->rdb_packet_misses += rm->rdb_packet_misses;
 	cs->rdb_packet_hits += rm->rdb_packet_hits;

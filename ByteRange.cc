@@ -86,8 +86,10 @@ int ByteRange::getSendAckTimeDiff(RangeManager *rm) {
 	struct timeval tv;
 	int ms = 0;
 
-	if (sent_tstamp_pcap[0].tv_sec == 0 && sent_tstamp_pcap[0].tv_usec == 0) {
+	if (sent_tstamp_pcap.empty() || (sent_tstamp_pcap[0].tv_sec == 0 && sent_tstamp_pcap[0].tv_usec == 0)) {
+#ifdef DEBUG
 		cerr << "Range without a send time. Skipping: " << endl;
+#endif
 		return 0;
 	}
 
