@@ -321,7 +321,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 				indent_print("FOUND RETRANS: start_seq < lastSeq: %lu < %lu\n", start_seq, lastSeq);
 			}
 #endif
-			ulong lower = std::min(0UL, start_seq - 10000);
+			ulong lower = std::min(0UL, start_seq - 30000);
 			lowIt = ranges.lower_bound(lower);
 
 			// Search for existing ranges for this data

@@ -379,85 +379,95 @@ void Dump::printPacketStats(struct connStats *cs, struct byteStats *bs, bool agg
 	printf("  Duration: %u seconds (%f hours)\n", cs->duration, ((double) cs->duration / 60 / 60));
 
 	if (cs->nrPacketsSent != cs->nrPacketsSentFoundInDump) {
-		printf("  Total packets sent (adj. for fragmentation)  : %10d\n", cs->nrPacketsSent);
-		printf("  Total packets sent (found in dump)           : %10d\n", cs->nrPacketsSentFoundInDump);
-		printf("  Total data packets sent (adj.)               : %10d\n", cs->nrDataPacketsSent);
-		printf("  Total data packets sent (found)              : %10d\n", cs->nrDataPacketsSent- (cs->nrPacketsSent - cs->nrPacketsSentFoundInDump));
+		printf("  Total packets sent (adj. for fragmentation)   : %10d\n", cs->nrPacketsSent);
+		printf("  Total packets sent (found in dump)            : %10d\n", cs->nrPacketsSentFoundInDump);
+		printf("  Total data packets sent (adj.)                : %10d\n", cs->nrDataPacketsSent);
+		printf("  Total data packets sent (found)               : %10d\n", cs->nrDataPacketsSent- (cs->nrPacketsSent - cs->nrPacketsSentFoundInDump));
 	}
 	else {
-		printf("  Total packets sent                           : %10d\n", cs->nrPacketsSent);
-		printf("  Total data packets sent                      : %10d\n", cs->nrDataPacketsSent);
+		printf("  Total packets sent                            : %10d\n", cs->nrPacketsSent);
+		printf("  Total data packets sent                       : %10d\n", cs->nrDataPacketsSent);
 	}
 	char syn_fin_rst[30];
 	sprintf(syn_fin_rst, "%d/%d/%d", cs->synCount, cs->finCount, cs->rstCount);
 
-	printf("  Total pure acks (no payload)                 : %10d\n"	\
-	       "  SYN/FIN/RST packets sent                     : %10s\n"	\
-	       "  Number of retransmissions                    : %10d\n"	\
-	       "  Number of packets with bundled segments      : %10d\n"	\
-		   "  Number of received acks                      : %10d\n"    \
-	       "  Total bytes sent (payload)                   : %10lu\n"	\
-	       "  Number of unique bytes                       : %10lu\n"	\
-	       "  Number of retransmitted bytes                : %10d\n"	\
-		   "  Redundant bytes (bytes already sent)         : %10lu (%.2f %%)\n"\
-	       "  Estimated loss rate based on retransmissions : %10.2f %%\n",
+	printf("  Total pure acks (no payload)                  : %10d\n"	\
+	       "  SYN/FIN/RST packets sent                      : %10s\n"	\
+	       "  Number of retransmissions                     : %10d\n"	\
+	       "  Number of packets with bundled segments       : %10d\n"	\
+		   "  Number of received acks                       : %10d\n"    \
+	       "  Total bytes sent (payload)                    : %10lu\n"	\
+	       "  Number of unique bytes                        : %10lu\n"	\
+	       "  Number of retransmitted bytes                 : %10d\n"	\
+		   "  Redundant bytes (bytes already sent)          : %10lu (%.2f %%)\n",
 		   cs->pureAcksCount, syn_fin_rst,
 		   cs->nrRetrans, cs->bundleCount, cs->ackCount, cs->totBytesSent,
 	       cs->totUniqueBytes, cs->totRetransBytesSent, cs->totBytesSent - cs->totUniqueBytes,
-	       ((double) (cs->totBytesSent - cs->totUniqueBytes) / cs->totBytesSent) * 100,
-	       (((double) cs->nrRetrans / cs->nrPacketsSent) * 100));
+	       ((double) (cs->totBytesSent - cs->totUniqueBytes) / cs->totBytesSent) * 100);
 
+	if (cs->nrPacketsSent != cs->nrPacketsSentFoundInDump) {
+		printf("  Estimated loss rate based on retransmission\n");
+		printf("    Based on sent pkts (adj. for fragmentation) : %10.2f %%\n",
+			   (((double) cs->nrRetrans / cs->nrPacketsSent) * 100));
+		printf("    Based on sent pkts (found in dump)          : %10.2f %%\n",
+			   (((double) cs->nrRetrans / cs->nrPacketsSentFoundInDump) * 100));
+
+	}
+	else {
+		printf("  Estimated loss rate based on retransmissions  : %10.2f %%\n",
+			   (((double) cs->nrRetrans / cs->nrPacketsSent) * 100));
+	}
 
 	if (GlobOpts::withRecv && cs->ranges_sent) {
 		print_stats_separator(false);
 		printf("Receiver side loss stats:\n");
-		printf("  Bytes Lost (actual loss on receiver side)    : %10lu\n", cs->bytes_lost);
-		printf("  Bytes Loss                                   : %10.2f %%\n", ((double) (cs->bytes_lost) / cs->totBytesSent) * 100);
-		printf("  Ranges Lost (actual loss on receiver side)   : %10lu\n", cs->ranges_lost);
-		printf("  Ranges Loss                                  : %10.2f %%\n", ((double) (cs->ranges_lost) / cs->ranges_sent) * 100);
+		printf("  Bytes Lost (actual loss on receiver side)     : %10lu\n", cs->bytes_lost);
+		printf("  Bytes Loss                                    : %10.2f %%\n", ((double) (cs->bytes_lost) / cs->totBytesSent) * 100);
+		printf("  Ranges Lost (actual loss on receiver side)    : %10lu\n", cs->ranges_lost);
+		printf("  Ranges Loss                                   : %10.2f %%\n", ((double) (cs->ranges_lost) / cs->ranges_sent) * 100);
 	}
 
 	print_stats_separator(false);
 	printf("Payload size stats:\n");
 
 	if (aggregated) {
-		printf("  Average of all packets in all connections    : %10d\n",
+		printf("  Average of all packets in all connections     : %10d\n",
 		       (int) floorf((double) (cs->totBytesSent / cs->nrDataPacketsSent)));
-		printf("  Average of the average for each connection   : %10lld\n", bs->avgLength);
+		printf("  Average of the average for each connection    : %10lld\n", bs->avgLength);
 	}
 	else {
-		printf("  Average                                      : %10lld\n", bs->avgLength);
+		printf("  Average                                       : %10lld\n", bs->avgLength);
 	}
 
 	if (bs != NULL) {
 		if (aggregated) {
-			printf("  Minimum (average for all connections)        : %10lld\n" \
-			       "  Maximum (average for all connections)        : %10lld\n",
+			printf("  Minimum (average for all connections)         : %10lld\n" \
+			       "  Maximum (average for all connections)         : %10lld\n",
 			       bs->minLength, bs->maxLength);
 		}
 		else {
-			printf("  Minimum                                      : %10lld\n" \
-			       "  Maximum                                      : %10lld\n",
+			printf("  Minimum                                       : %10lld\n" \
+			       "  Maximum                                       : %10lld\n",
 			       bs->minLength, bs->maxLength);
 		}
 
 		if (bs->percentiles_lengths.percentiles.size()) {
-			bs->percentiles_lengths.print("  %*sth percentile %-26s   : %10.0f\n", true);
+			bs->percentiles_lengths.print("  %*sth percentile %-26s    : %10.0f\n", true);
 		}
 	}
 
 	if (cs->rdb_bytes_sent) {
 		print_stats_separator(false);
 		printf("RDB stats:\n");
-		printf("  RDB packets                                  : %10d (%.2f%% of data packets sent)\n", cs->bundleCount, ((double) cs->bundleCount) / cs->nrDataPacketsSent * 100);
-		printf("  RDB bytes bundled                            : %10lu (%.2f%% of total bytes sent)\n", cs->rdb_bytes_sent, ((double) cs->rdb_bytes_sent) / cs->totBytesSent * 100);
+		printf("  RDB packets                                   : %10d (%.2f%% of data packets sent)\n", cs->bundleCount, ((double) cs->bundleCount) / cs->nrDataPacketsSent * 100);
+		printf("  RDB bytes bundled                             : %10lu (%.2f%% of total bytes sent)\n", cs->rdb_bytes_sent, ((double) cs->rdb_bytes_sent) / cs->totBytesSent * 100);
 
 		if (GlobOpts::withRecv) {
-			printf("  RDB packet hits                              : %10d (%.2f%% of RDB packets sent)\n", cs->rdb_packet_hits, ((double) cs->rdb_packet_hits) / cs->bundleCount * 100);
-			printf("  RDB packet misses                            : %10d (%.2f%% of RDB packets sent)\n", cs->rdb_packet_misses, ((double) cs->rdb_packet_misses) / cs->bundleCount * 100);
-			printf("  RDB byte hits                                : %10lu (%.2f%% of RDB bytes, %.2f%% of total bytes)\n",
+			printf("  RDB packet hits                               : %10d (%.2f%% of RDB packets sent)\n", cs->rdb_packet_hits, ((double) cs->rdb_packet_hits) / cs->bundleCount * 100);
+			printf("  RDB packet misses                             : %10d (%.2f%% of RDB packets sent)\n", cs->rdb_packet_misses, ((double) cs->rdb_packet_misses) / cs->bundleCount * 100);
+			printf("  RDB byte hits                                 : %10lu (%.2f%% of RDB bytes, %.2f%% of total bytes)\n",
 				   cs->rdb_byte_hits, ((double) cs->rdb_byte_hits / cs->rdb_bytes_sent) * 100, ((double) cs->rdb_byte_hits / cs->totBytesSent) * 100);
-			printf("  RDB byte misses                              : %10lu (%.2f%% of RDB bytes, %.2f%% of total bytes)\n",
+			printf("  RDB byte misses                               : %10lu (%.2f%% of RDB bytes, %.2f%% of total bytes)\n",
 				   cs->rdb_byte_misses, ((double) cs->rdb_byte_misses / cs->rdb_bytes_sent) * 100, ((double) cs->rdb_byte_misses / cs->totBytesSent) * 100);
 		}
 	}
@@ -476,20 +486,20 @@ void Dump::printBytesLatencyStats(struct connStats *cs, struct byteStats* bs, bo
 		printf(":\n");
 
 	if (aggregated) {
-		printf("  Minimum latencies (min, avg, max)            :    %7d, %7d, %7d ms\n", aggregatedMin->minLat, bs->minLat, aggregatedMax->minLat);
-		printf("  Average latencies (min, avg, max)            :    %7lld, %7lld, %7lld ms\n", aggregatedMin->avgLat, bs->avgLat, aggregatedMax->avgLat);
-		printf("  Maximum latencies (min, avg, max)            :    %7d, %7d, %7d ms\n", aggregatedMin->maxLat, bs->maxLat, aggregatedMax->maxLat);
-		printf("  Average for all packets in all all conns     : %10lld ms\n", bs->cumLat / cs->nrPacketsSent);
+		printf("  Minimum latencies (min, avg, max)             :    %7d, %7d, %7d ms\n", aggregatedMin->minLat, bs->minLat, aggregatedMax->minLat);
+		printf("  Average latencies (min, avg, max)             :    %7lld, %7lld, %7lld ms\n", aggregatedMin->avgLat, bs->avgLat, aggregatedMax->avgLat);
+		printf("  Maximum latencies (min, avg, max)             :    %7d, %7d, %7d ms\n", aggregatedMin->maxLat, bs->maxLat, aggregatedMax->maxLat);
+		printf("  Average for all packets in all all conns      : %10lld ms\n", bs->cumLat / cs->nrPacketsSent);
 
 	}
 	else {
-		printf("  Minimum                                      : %7d ms\n", bs->minLat);
-		printf("  Average                                      : %7lld ms\n", bs->avgLat);
-		printf("  Maximum                                      : %7d ms\n", bs->maxLat);
+		printf("  Minimum                                       : %7d ms\n", bs->minLat);
+		printf("  Average                                       : %7lld ms\n", bs->avgLat);
+		printf("  Maximum                                       : %7d ms\n", bs->maxLat);
 	}
 
 	if (bs->percentiles_latencies.percentiles.size()) {
-		bs->percentiles_latencies.print("  %*sth percentile %-26s   : %10.0f\n", true);
+		bs->percentiles_latencies.print("  %*sth percentile %-26s    : %10.0f\n", true);
 	}
 
 	if (GlobOpts::verbose) {
@@ -499,13 +509,13 @@ void Dump::printBytesLatencyStats(struct connStats *cs, struct byteStats* bs, bo
 		}
 
 		print_stats_separator(false);
-		printf("  Max retransmissions                          : %10lu \n", bs->retrans.size());
+		printf("  Max retransmissions                           : %10lu \n", bs->retrans.size());
 		for (ulong i = 0; i < bs->retrans.size(); i++) {
 			if ((GlobOpts::verbose < 2) && i > 2)
 				break;
 			if (bs->retrans[i] == 0)
 				break;
-			printf("  %2lu. retransmission (count / accumulated)     : %6d / %d\n", i+1, bs->retrans[i], retrans_accumed[i]);
+			printf("  %2lu. retransmission (count / accumulated)      : %6d / %d\n", i+1, bs->retrans[i], retrans_accumed[i]);
 		}
 		print_stats_separator(false);
 
@@ -513,10 +523,10 @@ void Dump::printBytesLatencyStats(struct connStats *cs, struct byteStats* bs, bo
 		for (ulong i = dupacks_accumed.size() - 1; i > 0; i--) {
 			dupacks_accumed[i-1] += dupacks_accumed[i];
 		}
-		printf("  Max dupacks                                  : %10lu \n", bs->dupacks.size());
+		printf("  Max dupacks                                   : %10lu \n", bs->dupacks.size());
 		for (ulong i = 0; i < bs->dupacks.size(); i++) {
 			if ((GlobOpts::verbose > 1) || i < 3)
-				printf("  %2lu. dupacks (count / accumulated)            : %6d / %d\n", i+1, bs->dupacks[i], dupacks_accumed[i]);
+				printf("  %2lu. dupacks (count / accumulated)             : %6d / %d\n", i+1, bs->dupacks[i], dupacks_accumed[i]);
 			//printf("  Occurrences of %2lu. dupacks                   : %d\n", i + 1, bs->dupacks[i]);
 		}
 	}
