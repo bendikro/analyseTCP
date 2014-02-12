@@ -50,8 +50,11 @@ void RangeManager::insertSentRange(struct sendData *sd) {
 		if (debug_print)
 			printf("-------Creating first range---------\n");
 #endif
-		if (!(sd->data.flags & TH_RST))
+		if (!(sd->data.flags & TH_RST)) {
 			lastSeq = endSeq;
+			if (sd->data.flags & TH_SYN)
+				lastSeq += 1;
+		}
 	}
 	else if (startSeq == lastSeq) { /* Next packet in correct sequence */
 #ifdef DEBUG
@@ -62,10 +65,7 @@ void RangeManager::insertSentRange(struct sendData *sd) {
 #endif
 		lastSeq = startSeq + sd->data.payloadSize;
 	}
-
 	/* Check for instances where sent packets are lost from the packet trace */
-
-	/* TODO: Add this as a warning if incomplete dump option is not given */
 	else if (startSeq > lastSeq) {
 		// This is most probably the ack on the FIN ack from receiver, so ignore
 		if (sd->data.payloadSize != 0) {

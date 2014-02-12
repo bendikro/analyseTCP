@@ -913,16 +913,22 @@ void Dump::printConns() {
 	fillWithSortedConns(sortedConns);
 	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
 	struct connStats cs;
+	struct connStats csAggregated;
+	memset(&csAggregated, 0, sizeof(struct connStats));
 
 	printf("\nConnections in sender dump: %lu\n\n", conns.size());
 	printf("        %-30s   %-17s %-12s   %12s   %12s\n", "Conn key", "Duration (sec)", "Packets sent", "Bytes loss", "Ranges loss");
 	for (cIt = sortedConns.begin(); cIt != sortedConns.end(); cIt++) {
 		memset(&cs, 0, sizeof(struct connStats));
 		cIt->second->addPacketStats(&cs);
+		cIt->second->addPacketStats(&csAggregated);
 		printf("   %-40s   %-17d   %-11d   %4.1f %%        %4.1f %%\n", cIt->second->getConnKey().c_str(), cs.duration,
 		       cs.nrPacketsSent, (cs.bytes_lost / (double) cs.totBytesSent) * 100,
 			   (cs.ranges_lost / (double) cs.ranges_sent) * 100);
 	}
+	printf("\n   %-40s   %-17d   %-11d   %4.1f %%        %4.1f %%\n", "Average", 0,
+		   csAggregated.nrPacketsSent/(int)sortedConns.size(), (csAggregated.bytes_lost / (double) csAggregated.totBytesSent) * 100,
+		   (csAggregated.ranges_lost / (double) csAggregated.ranges_sent) * 100);
 }
 
 /*
