@@ -642,10 +642,12 @@ static inline bool after_or_equal(uint32_t seq1, uint32_t seq2) {
  * Returns the relative sequence number or ULONG_MAX if it failed.
  **/
 uint64_t Dump::get_relative_sequence_number(uint32_t seq, uint32_t firstSeq, ulong largestSeq, uint32_t largestSeqAbsolute) {
-	static ulong wrap_index;
-	static uint64_t seq_relative;
+	uint64_t wrap_index;
+	uint64_t seq_relative;
 	wrap_index = firstSeq + largestSeq;
-	//printf("\nget_relative_sequence_number: seq: %u, firstSeq: %u, largestSeq: %lu, largestSeqAbsolute: %u\n", seq, firstSeq, largestSeq, largestSeqAbsolute);
+	wrap_index += 1;
+
+	//printf("\nget_relative_sequence_number: seq: %u, firstSeq: %u, largestSeq: %lu, largestSeqAbsolute: %u, wrap_index: %lu\n", seq, firstSeq, largestSeq, largestSeqAbsolute, wrap_index);
 	// Either seq has wrapped, or a retrans (or maybe reorder if netem is run on sender machine)
 	if (seq < largestSeqAbsolute) {
 		// This is an earlier sequence number
@@ -660,9 +662,12 @@ uint64_t Dump::get_relative_sequence_number(uint32_t seq, uint32_t firstSeq, ulo
 	// When seq is greater, it is either newer data, or it is older data because
 	// largestSeqAbsolute just wrapped. E.g. largestSeqAbsolute == 10, and seq = 4294967250
 	else {
+		//printf("wrap_index: %lu\n", wrap_index);
 		// This is newer seq
 		if (after_or_equal(largestSeqAbsolute, seq)) {
+			//printf("after_or_equal\n");
 			wrap_index += (seq - largestSeqAbsolute);
+			//printf("new wrap_index: %lu\n", wrap_index);
 		}
 		// Acks older data than largestAckSeqAbsolute, largestAckSeqAbsolute has wrapped.
 		else {
@@ -674,10 +679,12 @@ uint64_t Dump::get_relative_sequence_number(uint32_t seq, uint32_t firstSeq, ulo
 	// When seq has wrapped, wrap_index will make sure the relative sequence number continues to grow
 	seq_relative = seq + (wrap_index * 4294967296L) - firstSeq;
 	if (seq_relative > 9999999999) {
+		printf("wrap_index: %lu\n", wrap_index);
 		printf("\nget_relative_sequence_number: seq: %u, firstSeq: %u, largestSeq: %lu, largestSeqAbsolute: %u\n", seq, firstSeq, largestSeq, largestSeqAbsolute);
 		printf("seq_relative: %lu\n", seq_relative);
 		assert(0 && "Incorrect sequence number calculation!\n");
 	}
+	//printf("RETURN seq_relative: %lu\n", seq_relative);
 	return seq_relative;
 }
 

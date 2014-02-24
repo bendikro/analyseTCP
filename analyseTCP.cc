@@ -180,6 +180,10 @@ void usage (char* argv){
 	printf(" --analyse-start=<start sec>       : Start analyzing <start sec> into the stream(s)\n");
 	printf(" --analyse-end=<end sec>           : Stop analyzing <end sec> before the end of the stream(s)\n");
 	printf(" --analyse-duration=<duration sec> : Stop analyzing after <duration sec> after the start\n");
+
+#ifdef DEBUG
+	printf("\nCompiled in DEBUG mode\n");
+#endif
 	exit(0);
 }
 

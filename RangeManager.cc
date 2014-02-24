@@ -167,7 +167,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 
 #ifdef DEBUG
 	int debug_print = GlobOpts::debugLevel == 6;
-	//debug_print = 0;
+	debug_print = 1;
 
 	//	if (start_seq >= 21647733)
 	//if (start_seq >= 21643733)
@@ -417,6 +417,8 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 							range_received->packet_retrans_count++;
 						range_received->data_retrans_count++;
 
+						printf("data_seg->retrans: %d\n", data_seg->retrans);
+						//fprintf(stderr, "Conn: %s\n", conn->getConnKey().c_str());
 						assert("Retrans?" && data_seg->retrans != 0);
 						//cur_br->retrans_count += data_seg->retrans;
 						range_received->rdb_count += data_seg->is_rdb;
@@ -1013,7 +1015,7 @@ void RangeManager::validateContent() {
 	}
 
 	if (conn->totBytesSent != (conn->totNewDataSent + conn->totRDBBytesSent + conn->totRetransBytesSent)) {
-		printf("conn->totBytesSent(%lld) does not equal (totNewDataSent + totRDBBytesSent + totRetransBytesSent) (%u)\n",
+		printf("conn->totBytesSent(%lu) does not equal (totNewDataSent + totRDBBytesSent + totRetransBytesSent) (%lu)\n",
 		       conn->totBytesSent, (conn->totNewDataSent + conn->totRDBBytesSent + conn->totRetransBytesSent));
 		printf("Conn: %s\n", conn->getConnKey().c_str());
 		warn_with_file_and_linenum(__FILE__, __LINE__);
@@ -1071,6 +1073,8 @@ void RangeManager::validateContent() {
 
 		prev = it;
 	}
+
+	//cerr << "Number of ranges: " << ranges.size() << endl;
 
 	if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
 		cerr << "First seq: " << firstSeq << " Last seq: " <<  lastSeq << endl;

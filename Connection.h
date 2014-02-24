@@ -12,19 +12,19 @@ class RangeManager;
 class Connection {
 
 public:
-	int nrPacketsSent;
-	int nrDataPacketsSent;
-	int totPacketSize;
-	long long totBytesSent;
-	int totRDBBytesSent;
-	int totNewDataSent;
-	int totRetransBytesSent;
-	int nrRetrans;
+	uint64_t nrPacketsSent;
+	uint64_t nrDataPacketsSent;
+	uint64_t totPacketSize;
+	uint64_t totBytesSent;
+	uint64_t totRDBBytesSent;
+	uint64_t totNewDataSent;
+	uint64_t totRetransBytesSent;
+	uint64_t nrRetrans;
 	struct in_addr srcIp;
 	uint16_t srcPort;
 	struct in_addr dstIp;
 	uint16_t dstPort;
-	int bundleCount; // Number of packets with RDB data
+	uint64_t bundleCount; // Number of packets with RDB data
 	// Used for calulcating relative sequence number
 	uint64_t lastLargestStartSeq;
 	uint64_t lastLargestEndSeq;           // This is the last largest sent (relative) end sequence number
