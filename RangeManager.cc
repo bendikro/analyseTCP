@@ -9,6 +9,8 @@ map<const long, int> GlobStats::cdf;
 map<const int, int> GlobStats::dcCdf;
 float GlobStats::avgDrift = 0;
 
+const char *received_type_str[] = {"DEF", "DTA", "RDB", "RTR"};
+
 RangeManager::~RangeManager() {
 	map<ulong, ByteRange*>::iterator it, it_end;
 	it = ranges.begin();
@@ -133,7 +135,7 @@ void RangeManager::insertRecvRange(struct sendData *sd) {
 	tmpSeq->seq = sd->data.seq;
 	tmpSeq->endSeq = sd->data.endSeq;
 	tmpSeq->tstamp_pcap = (sd->data.tstamp_pcap);
-	tmpSeq->data = sd->data.data;
+	//tmpSeq->data = sd->data.data;
 	tmpSeq->payloadSize = sd->data.payloadSize;
 	tmpSeq->is_rdb = sd->data.is_rdb;
 	tmpSeq->retrans = sd->data.retrans;
@@ -417,7 +419,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 							range_received->packet_retrans_count++;
 						range_received->data_retrans_count++;
 
-						printf("data_seg->retrans: %d\n", data_seg->retrans);
+						//printf("data_seg->retrans: %d\n", data_seg->retrans);
 						//fprintf(stderr, "Conn: %s\n", conn->getConnKey().c_str());
 						assert("Retrans?" && data_seg->retrans != 0);
 						//cur_br->retrans_count += data_seg->retrans;
@@ -457,6 +459,8 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 			}
 #endif
 			last_br = new ByteRange(start_seq, new_end_seq);
+			//printf("ByteRange size: %lu\n", sizeof(*last_br));
+
 			last_br->original_payload_size = data_seg->payloadSize;
 			if (data_seg->is_rdb) {
 				last_br->original_packet_is_rdb = true;
@@ -1073,8 +1077,6 @@ void RangeManager::validateContent() {
 
 		prev = it;
 	}
-
-	//cerr << "Number of ranges: " << ranges.size() << endl;
 
 	if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
 		cerr << "First seq: " << firstSeq << " Last seq: " <<  lastSeq << endl;

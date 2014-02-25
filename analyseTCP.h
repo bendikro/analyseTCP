@@ -231,15 +231,15 @@ struct DataSeg {
 	uint64_t rdb_end_seq;   /* end seq of rdb data */
 	uint32_t seq_absolute;  /* Absolute value of the sequence number */
 	uint64_t ack;
-	ulong window;
-	uint payloadSize;       /* Payload size */
-	bool retrans;           /* is a retransmission */
-	bool is_rdb;            /* is a rdb packet */
+	uint16_t window;
+	uint16_t payloadSize;       /* Payload size */
+	bool retrans : 1,       /* is a retransmission */
+		is_rdb : 1;         /* is a rdb packet */
 	struct timeval tstamp_pcap;
 	uint32_t tstamp_tcp;
 	uint32_t tstamp_tcp_echo;
 	u_char flags;
-	u_char *data;
+//	u_char *data;
 };
 
 /* Struct used to forward relevant data about an anlysed packet */

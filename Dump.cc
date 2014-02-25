@@ -605,7 +605,7 @@ void Dump::processSent(const struct pcap_pkthdr* header, const u_char *data) {
 	findTCPTimeStamp(&sd.data, opt, sd.tcpOptionLen);
 
 	/* define/compute tcp payload (segment) offset */
-	sd.data.data = (u_char *) (data + SIZE_ETHERNET + ipHdrLen + tcpHdrLen);
+	//sd.data.data = (u_char *) (data + SIZE_ETHERNET + ipHdrLen + tcpHdrLen);
 
 	sentPacketCount++;
 	sentBytesCount += sd.data.payloadSize;
@@ -886,7 +886,7 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data) {
 	findTCPTimeStamp(&sd.data, opt, sd.tcpOptionLen);
 
 	/* define/compute tcp payload (segment) offset */
-	sd.data.data = (u_char *) (data + SIZE_ETHERNET + ipHdrLen + tcpHdrLen);
+	//sd.data.data = (u_char *) (data + SIZE_ETHERNET + ipHdrLen + tcpHdrLen);
 	recvPacketCount++;
 	recvBytesCount += sd.data.payloadSize;
 	tmpConn->registerRecvd(&sd);

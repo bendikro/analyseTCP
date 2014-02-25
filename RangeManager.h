@@ -18,6 +18,10 @@ using namespace std;
 #include "analyseTCP.h"
 #include "time_util.h"
 
+enum received_type {DEF, DATA, RDB, RETR};
+
+extern const char *received_type_str[4];
+
 /* Forward declarations */
 class ByteRange;
 class Connection;

@@ -1,8 +1,6 @@
 #include "ByteRange.h"
 #include "color_print.h"
 
-const char *received_type_str[] = {"DEF", "DTA", "RDB", "RTR"};
-
 bool ByteRange::match_received_type() {
 	return match_received_type(false);
 }

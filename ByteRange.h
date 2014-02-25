@@ -19,70 +19,41 @@ using namespace std;
 #include "RangeManager.h"
 #include "time_util.h"
 
-enum received_type {DEF, DATA, RDB, RETR};
-extern const char *received_type_str[4];
-
-/* Modified timersub macro that has defined behaviour
-   also for negative differences */
-# define negtimersub(a, b, result)									\
-	do {															\
-		(result)->tv_sec = (a)->tv_sec - (b)->tv_sec;				\
-		(result)->tv_usec = (a)->tv_usec - (b)->tv_usec;			\
-		if ( (result)->tv_sec > 0) {								\
-			if ((result)->tv_usec < 0) {							\
-				--(result)->tv_sec;									\
-				(result)->tv_usec += 1000000;						\
-			}														\
-		} else if ( (result)->tv_sec < 0 ) {						\
-			if ((result)->tv_usec > 0) {							\
-				++(result)->tv_sec;									\
-				(result)->tv_usec = 1000000 - (result)->tv_usec;	\
-			} else { /* if (tv_usec < 0) */							\
-				(result)->tv_usec *= -1;							\
-			}														\
-			if((result)->tv_sec == 0 )								\
-				(result)->tv_usec *= -1;							\
-		}															\
-	} while (0)
-
 class ByteRange {
 public:
-	uint64_t startSeq;
-	uint64_t endSeq;
-	int received_count;       // Count number of times this byte range has been received
-	int sent_count;           // Count number of times this byte range has been sent
-	int byte_count;
-	int original_payload_size;
-	int packet_sent_count;    // Count number of packet transmissions. This value is not copied when splitting a byte range!
-	int packet_retrans_count; // Count number of packet retransmissions. This value is not copied when splitting a byte range!
-	int data_retrans_count;   // Count number of times this byte range has been retransmitted
-	int rdb_count;            // Count number of times this byte range has been transmitted as redundant (rdb) data
-
-	int rdb_byte_miss;
-	int rdb_byte_hits;
-	received_type recv_type;  // 0 == first transfer, 1 == RDB, 2 == retrans
-	int recv_type_num;        // Which packet of the specific type was first received
+	uint64_t startSeq;                 // The relative sequence number of the first byte in this range
+	uint64_t endSeq;                   // The relative sequence number of the last byte in this range
+	uint8_t received_count;            // Count number of times this byte range has been received
+	uint8_t sent_count;                // Count number of times this byte range has been sent
+	uint16_t byte_count;               // The number of bytes in this range
+	uint16_t original_payload_size;
+	uint8_t packet_sent_count;         // Count number of packet transmissions. This value is not copied when splitting a byte range!
+	uint8_t packet_retrans_count;      // Count number of packet retransmissions. This value is not copied when splitting a byte range!
+	uint8_t data_retrans_count;        // Count number of times this byte range has been retransmitted
+	uint8_t rdb_count;                 // Count number of times this byte range has been transmitted as redundant (rdb) data
+	uint8_t rdb_byte_miss;
+	uint8_t rdb_byte_hits;
 
 	timeval received_tstamp_pcap;
-	uint32_t received_tstamp_tcp;
-
 	vector<timeval> sent_tstamp_pcap;  // pcap tstamp for regular packet and retrans
 
+	uint32_t received_tstamp_tcp;
 	vector<uint32_t> tstamps_tcp;      // tcp tstamp for regular packet and retrans
 	vector<uint32_t> rdb_tstamps_tcp;  // tcp tstamp for data in RDB packets
 	vector<uint32_t> lost_tstamps_tcp; // tcp tstamp matched to recevied used to find which packets were lost
 
 	struct timeval ackTime;
-	bool acked : 1,
-		original_packet_is_rdb : 1;
-	uint8 fin;
-	uint8 syn;
-	uint8 rst;
-	uint8 acked_sent; // Count if an ack was sent for this sequence number
-	int ack_count;
-	u_short tcp_window;
-	int dupack_count;
-
+	uint8_t acked : 1,
+		original_packet_is_rdb : 1,
+		recv_type : 3;                 // DEF, DATA, RDB, RETR
+	uint8_t recv_type_num;             // Which packet of the specific type was first received
+	uint8_t fin;
+	uint8_t syn;
+	uint8_t rst;
+	uint8_t acked_sent;                // Count acks sent for this sequence number
+	uint8_t ack_count;                 // Count number of times this packet was acked
+	uint8_t dupack_count;
+	uint16_t tcp_window;
 	long diff, dcDiff;
 
 	ByteRange(uint32_t start, uint32_t end) {
@@ -190,8 +161,8 @@ public:
 	uint64_t getEndSeq() { return endSeq; }
 	int getSendAckTimeDiff(RangeManager *rm);
 	int getNumRetrans() { return packet_retrans_count; }
-	int getNumBundled() { return rdb_count; }
-	int getNumBytes() { return byte_count; }
+	uint8_t getNumBundled() { return rdb_count; }
+	uint16_t getNumBytes() { return byte_count; }
 	int getOrinalPayloadSize() { return original_payload_size; }
 	int getTotalBytesTransfered() { return byte_count + byte_count * data_retrans_count + byte_count * rdb_count; }
 	bool isAcked() { return acked; }
