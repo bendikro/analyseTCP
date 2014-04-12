@@ -1856,7 +1856,7 @@ void RangeManager::genRFiles(string connKey) {
 
 			vector<int>& vec_retr = *diff_times[num_retr_tmp];
 			for (unsigned long int i = 0; i < diff_times[num_retr_tmp]->size(); i++) {
-				stream << vec_retr[i];
+				stream << vec_retr[i] << endl;
 			}
 			stream.close();
 		}

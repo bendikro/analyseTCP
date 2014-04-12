@@ -104,7 +104,7 @@ public:
 	static vector<std::tr1::shared_ptr<vector <int> > > ack_latency_vectors;
 
 	GlobStats() {
-		retrans_filenames.push_back(string("all-retr-"));
+		retrans_filenames.push_back(string("latency-all-"));
 	}
 	void update_vectors_size(vector<std::tr1::shared_ptr<vector <int> > > &vectors, ulong count) {
 		for (ulong i = vectors.size(); i < count; i++) {
@@ -117,7 +117,7 @@ public:
 		stringstream filename_tmp;
 		for (ulong i = retrans_filenames.size(); i < count; i++) {
 			filename_tmp.str("");
-			filename_tmp << i << "retr-";
+			filename_tmp << i << "latency-retr-";
 			retrans_filenames.push_back(filename_tmp.str());
 		}
 	}

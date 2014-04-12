@@ -499,7 +499,7 @@ void Dump::printBytesLatencyStats(struct connStats *cs, struct byteStats* bs, bo
 	}
 
 	if (bs->percentiles_latencies.percentiles.size()) {
-		bs->percentiles_latencies.print("  %*sth percentile %-26s    : %10.0f\n", true);
+		bs->percentiles_latencies.print("  %*sth percentile %-26s    : %10.0f ms\n", true);
 	}
 
 	if (GlobOpts::verbose) {
