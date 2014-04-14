@@ -35,7 +35,7 @@ private:
 	int redundantBytes;
 	long lowestDiff; /* Used to create CDF. */
 	long lowestDcDiff; /* Lowest diff when compensated for clock drift */
-	float drift; /* Clock drift (ms/s) */
+	double drift; /* Clock drift (ms/s) */
 
 	int minimum_segment_size;
 	int maximum_segment_size;
@@ -101,7 +101,7 @@ public:
 		return ranges.rbegin()->second;
 	}
 	ByteRange* getHighestAcked();
-	int getTimeInterval(ByteRange *r);
+	double getTimeInterval(ByteRange *r);
 	uint32_t getDuration();
 	uint32_t getDuration(map<ulong, ByteRange*>::iterator brIt, map<ulong, ByteRange*>::iterator brIt_end);
 	void validateContent();

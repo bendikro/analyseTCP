@@ -37,6 +37,7 @@ public:
 	timeval received_tstamp_pcap;
 	vector<timeval> sent_tstamp_pcap;  // pcap tstamp for regular packet and retrans
 
+	uint8_t send_tcp_stamp_recv_index; // The index of the element in the tstamps_tcp vector that matches the received tcp time stamp
 	uint32_t received_tstamp_tcp;
 	vector<uint32_t> tstamps_tcp;      // tcp tstamp for regular packet and retrans
 	vector<uint32_t> rdb_tstamps_tcp;  // tcp tstamp for data in RDB packets
@@ -65,6 +66,7 @@ public:
 		dupack_count = 0;
 		acked = 0;
 		ack_count = 0;
+		send_tcp_stamp_recv_index = 0;
 		update_byte_count();
 		original_payload_size = byte_count;
 		packet_sent_count = 1;

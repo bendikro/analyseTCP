@@ -1118,6 +1118,11 @@ void RangeManager::printPacketDetails() {
 			   it->second->data_retrans_count, it->second->rdb_count, received_type_str[it->second->recv_type],
 			   it->second->rdb_byte_miss, it->second->rdb_byte_hits);
 		printf(" ACKtime: %4d ", it->second->getSendAckTimeDiff(this));
+		printf(" RecvDiff: %4ld ", (it->second->getDcDiff() - lowestDcDiff));
+
+		if (GlobOpts::verbose) {
+			printf(" (%4ld) ", it->second->getSendAckTimeDiff(this) - (it->second->getDcDiff() - lowestDcDiff));
+		}
 
 		if (it->second->syn || it->second->rst || it->second->fin) {
 			if (it->second->syn)
@@ -1409,10 +1414,9 @@ void RangeManager::registerRecvDiffs() {
 					printf("   Receieved seq: %10lu         -      %10lu\n", relative_seq(tmpRd->seq), relative_seq(tmpRd->endSeq));
 				}
 
-				if (timercmp(&(tmpRd->tstamp_pcap), &match, <))
+				if (match_count == 1 || timercmp(&(tmpRd->tstamp_pcap), &match, <))
 					match = tmpRd->tstamp_pcap;
 				matched = packet_index;
-				//it->second->received++;
 
 				if (GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5) {
 					cerr << "Found overlapping DataSeg:     seq: " <<
@@ -1456,32 +1460,39 @@ void RangeManager::registerRecvDiffs() {
 			}
 		}
 
-		//it->second->setRecvTime(&match);
 
-		if (GlobOpts::transport) {
-			it->second->setRecvTime(&match);
-		} else {
-			/* Use lowest time that has been found for this range,
-			   if the timestamp is lower than the highest time we
-			   have seen yet, use the highest time (to reflect application
-			   layer delay) */
-			if (timercmp(&match, &highestRecvd, >)) {
-				highestRecvd = match;
-			}
-			it->second->setRecvTime(&highestRecvd);
-		}
+// TODO: Fix the application layer delay
+//		if (GlobOpts::transport) {
+//			it->second->setRecvTime(&match);
+//		} else {
+//			/* Use lowest time that has been found for this range,
+//			   if the timestamp is lower than the highest time we
+//			   have seen yet, use the highest time (to reflect application
+//			   layer delay) */
+//			//printf("match: %ld.%ld\n", match.tv_sec, match.tv_usec);
+//
+//			if (timercmp(&match, &highestRecvd, >)) {
+//				highestRecvd = match;
+//			}
+//			it->second->setRecvTime(&highestRecvd);
+//			//printf("Setting recv time to highestRecvd: %ld\n", highestRecvd.tv_sec);
+//		}
 
 		/* Calculate diff and check for lowest value */
+		it->second->match_received_type();
 		it->second->setDiff();
 		long diff = it->second->getRecvDiff();
-		if (diff < lowestDiff)
+		if (diff < lowestDiff) {
 			lowestDiff = diff;
+		}
 
 		if (GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5) {
 			cerr << "SendTime: " << it->second->getSendTime()->tv_sec << "."
 				 << it->second->getSendTime()->tv_usec << endl;
-			cerr << "RecvTime: " << it->second->getRecvTime()->tv_sec << "."
-				 << it->second->getRecvTime()->tv_usec << endl;
+			cerr << "RecvTime: ";
+			if (it->second->getRecvTime() != NULL)
+				cerr << it->second->getRecvTime()->tv_sec;
+			cerr << endl;
 			cerr << "RecvDiff=" << diff << endl;
 			cerr << "recvd.size()= " << recvd.size() << endl;
 		}
@@ -1534,55 +1545,7 @@ int RangeManager::calcDrift() {
 	// connection.duration > 120 seconds,
 	// calculate clock drift
 
-	if (ranges.size() > 500 && getDuration() > 120) {
-		map<ulong, ByteRange*>::iterator startIt;
-		map<ulong, ByteRange*>::reverse_iterator endIt;
-		long minDiffStart = LONG_MAX;
-		long minDiffEnd = LONG_MAX;
-		struct timeval minTimeStart, minTimeEnd, tv;
-		int time;
-		float tmpDrift;
-		timerclear(&minTimeStart);
-		timerclear(&minTimeEnd);
-
-		startIt = ranges.begin();
-		for (int i = 0; i < 200; i++) {
-			if(startIt->second->getRecvDiff() < minDiffStart){
-				minDiffStart = startIt->second->getRecvDiff();
-				minTimeStart = *(startIt->second->getSendTime());
-			}
-			startIt++;
-		}
-
-		endIt = ranges.rbegin();
-		for (int i = 0; i < 200; i++) {
-			if (endIt->second->getRecvDiff() < minDiffEnd) {
-				minDiffEnd = endIt->second->getRecvDiff();
-				minTimeEnd = *(endIt->second->getSendTime());
-			}
-			endIt++;
-		}
-
-		if (!timerisset(&minTimeEnd) || !timerisset(&minTimeStart)) {
-			printf("Timvals have not not populated! minTimeStart is zero: %s, minTimeEnd is zero: %s\n",
-				   !timerisset(&minTimeStart) ? "Yes" : "No", !timerisset(&minTimeEnd) ? "Yes" : "No");
-			warn_with_file_and_linenum(__FILE__, __LINE__);
-		}
-
-		/* Get time interval between values */
-		timersub(&minTimeEnd, &minTimeStart, &tv);
-		time = tv.tv_sec + (tv.tv_usec / 1000000);
-
-		tmpDrift = (float)(minDiffEnd - minDiffStart) / time;
-
-		if (GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5){
-			cerr << "startMin: " << minDiffStart << endl;
-			cerr << "endMin: " << minDiffEnd << endl;
-			cerr << "Time: " << time << endl;
-			cerr << "Clock drift: " << tmpDrift << " ms/s" << endl;
-		}
-		drift = tmpDrift;
-	} else {
+	if (ranges.size() < 500 || getDuration() < 120) {
 		if (GlobOpts::debugLevel != 0) {
 			cerr << "\nConnection has less than 500 ranges or a duration of less than 2 minutes." << endl;
 			cerr << "Drift-compensated CDF will therefore not be calculated." << endl;
@@ -1590,6 +1553,56 @@ int RangeManager::calcDrift() {
 		drift = -1;
 		return -1;
 	}
+
+	map<ulong, ByteRange*>::iterator startIt;
+	map<ulong, ByteRange*>::reverse_iterator endIt;
+	long minDiffStart = LONG_MAX;
+	long minDiffEnd = LONG_MAX;
+	struct timeval minTimeStart, minTimeEnd, tv;
+	float time;
+	float tmpDrift;
+	timerclear(&minTimeStart);
+	timerclear(&minTimeEnd);
+
+	startIt = ranges.begin();
+
+	for (int i = 0; i < 200; i++) {
+		if(startIt->second->getRecvDiff() < minDiffStart){
+			minDiffStart = startIt->second->getRecvDiff();
+			minTimeStart = *(startIt->second->getSendTime());
+		}
+		startIt++;
+	}
+
+	endIt = ranges.rbegin();
+	for (int i = 0; i < 200; i++) {
+		if (endIt->second->getRecvDiff() < minDiffEnd) {
+			minDiffEnd = endIt->second->getRecvDiff();
+			minTimeEnd = *(endIt->second->getSendTime());
+		}
+		endIt++;
+	}
+
+	if (!timerisset(&minTimeEnd) || !timerisset(&minTimeStart)) {
+		printf("Timvals have not not populated! minTimeStart is zero: %s, minTimeEnd is zero: %s\n",
+			   !timerisset(&minTimeStart) ? "Yes" : "No", !timerisset(&minTimeEnd) ? "Yes" : "No");
+		warn_with_file_and_linenum(__FILE__, __LINE__);
+	}
+
+	/* Get time interval between values */
+	timersub(&minTimeEnd, &minTimeStart, &tv);
+	time = tv.tv_sec + (tv.tv_usec / 1000000.0);
+	tmpDrift = (float) (minDiffEnd - minDiffStart) / time;
+
+	if (GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5) {
+		cerr << "startMin: " << minDiffStart << endl;
+		cerr << "startTime: " << minTimeStart.tv_sec << "." << minTimeStart.tv_usec << endl;
+		cerr << "endMin: " << minDiffEnd << endl;
+		cerr << "endTime: " << minTimeEnd.tv_sec << "." << minTimeEnd.tv_usec << endl;
+		cerr << "Time: " << time << endl;
+		cerr << "Clock drift: " << tmpDrift << " ms/s" << endl;
+	}
+	drift = tmpDrift;
 	return 0;
 }
 
@@ -1626,13 +1639,13 @@ void RangeManager::makeCdf() {
 
 /* Returns the difference between the start
    of the dump and r in seconds */
-inline int RangeManager::getTimeInterval(ByteRange *r) {
+inline double RangeManager::getTimeInterval(ByteRange *r) {
 	struct timeval start, current, tv;
-	int time;
+	double time;
 	start = *(ranges.begin()->second->getSendTime());
 	current = *(r->getSendTime());
 	timersub(&current, &start, &tv);
-	time = tv.tv_sec + (tv.tv_usec / 1000000);
+	time = (tv.tv_sec * 1000 + (tv.tv_usec / 1000)) / 1000.0;
 	return time;
 }
 
@@ -1643,14 +1656,14 @@ void RangeManager::registerDcDiffs() {
 	it_end = analyse_range_end;
 
 	for (; it != it_end; it++) {
-		long diff = it->second->getRecvDiff();
+		double diff = (double) it->second->getRecvDiff();
 		/* Compensate for drift */
-		diff -= (int)(drift * getTimeInterval(it->second));
-
+		diff -= (drift * getTimeInterval(it->second));
 		it->second->setDcDiff(diff);
 
-		if (diff < lowestDcDiff)
+		if (diff < lowestDcDiff) {
 			lowestDcDiff = diff;
+		}
 
 		if(GlobOpts::debugLevel==4 || GlobOpts::debugLevel==5){
 			cerr << "dcDiff: " << diff << endl;
@@ -1718,7 +1731,7 @@ void RangeManager::writeCDF(ofstream *stream) {
 		//printf("first: %ld, second: %d\n", (*nit).first, (*nit).second);
 		cdfSum += (double) (*nit).second / getNumBytes();
 		sprintf(print_buf, "time: %10ld    CDF: %.10f", (*nit).first, cdfSum);
-		printf("%s\n", print_buf);
+		//printf("%s\n", print_buf);
 		*stream << print_buf << endl;
 	}
 }
@@ -1803,6 +1816,8 @@ void RangeManager::write_loss_over_time(unsigned slice_interval, unsigned timesl
   Generates the retransmission data for the R files.
   The latency for each range is stored based on the
   number of tetransmissions for the range.
+  The aggregation option controls of per stream or only
+  aggregated result files should be made.
 */
 void RangeManager::genRFiles(string connKey) {
 	map<ulong, ByteRange*>::iterator it, it_end;
@@ -1810,7 +1825,6 @@ void RangeManager::genRFiles(string connKey) {
 	it_end = analyse_range_end;
 
 	static vector<std::tr1::shared_ptr<vector <int> > > diff_times;
-//	static vector<vector <int> *> diff_times;
 	ulong num_retr_tmp;
 	int diff_tmp;
 	for (; it != it_end; it++) {

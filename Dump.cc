@@ -1003,7 +1003,7 @@ void Dump::makeCDF() {
 	}
 }
 
-void Dump::writeCDF(){
+void Dump::writeCDF() {
 	ofstream cdf_f;
 	stringstream cdffn;
 	cdffn << GlobOpts::prefix << "latency-cdf.dat";
@@ -1016,7 +1016,7 @@ void Dump::writeCDF(){
 	cdf_f.close();
 }
 
-void Dump::writeDcCdf(){
+void Dump::writeDcCdf() {
 	ofstream dccdf_f;
 	stringstream dccdffn;
 	dccdffn << GlobOpts::prefix << "latency-dccdf.dat";
@@ -1029,7 +1029,7 @@ void Dump::writeDcCdf(){
 	dccdf_f.close();
 }
 
-void Dump::writeAggCdf(){
+void Dump::writeAggCdf() {
 	char print_buf[300];
 	ofstream stream;
 	stringstream filename;
@@ -1050,7 +1050,7 @@ void Dump::writeAggCdf(){
 	}
 }
 
-void Dump::writeAggDcCdf(){
+void Dump::writeAggDcCdf() {
 	char print_buf[300];
 	ofstream stream;
 	stringstream filename;
@@ -1072,7 +1072,7 @@ void Dump::writeAggDcCdf(){
 	}
 }
 
-void Dump::makeDcCdf(){
+void Dump::makeDcCdf() {
 	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
 	for(cIt = conns.begin(); cIt != conns.end(); cIt++){
 		cIt->second->makeDcCdf();
@@ -1094,34 +1094,27 @@ void Dump::printDumpStats() {
 	}
 
 	cout << endl;
-/*
+
 	if (GlobOpts::withRecv) {
 		map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
 		long int ranges_count = 0;
 		long int ranges_lost = 0;
 		long int ranges_sent = 0;
-		uint64_t lost_bytes = 0;
 		for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
 			ranges_count += cIt->second->rm->getByteRangesCount();
 			ranges_sent += cIt->second->rm->getByteRangesSent();
 			ranges_lost += cIt->second->rm->getByteRangesLost();
-			lost_bytes += cIt->second->rm->getLostBytes();
 		}
-
 		cout << "  Received Bytes        : " << recvBytesCount << endl;
-		cout << "  Bytes Lost            : " << (lost_bytes) << endl;
-		cout << "  Bytes Loss            : " << ((double) (lost_bytes) / sentBytesCount) * 100 <<  " \%" << endl;
 		if ((sentPacketCount - recvPacketCount) < 0) {
 			colored_printf(YELLOW, "Negative loss values is probably caused by GSO/TSO on sender side (see readme)\n");
 		}
 		cout << "  Packets Lost          : " << (sentPacketCount - recvPacketCount) << endl;
-		cout << "  Packet  Loss          : " << ((double) (sentPacketCount - recvPacketCount) / sentPacketCount) * 100 <<  " \%" << endl;
+		cout << "  Packet Loss           : " << ((double) (sentPacketCount - recvPacketCount) / sentPacketCount) * 100 <<  " \%" << endl;
 		cout << "  Ranges Count          : " << (ranges_count) << endl;
 		cout << "  Ranges Sent           : " << (ranges_sent) << endl;
 		cout << "  Ranges Lost           : " << (ranges_lost) << endl;
-		cout << "  Ranges Loss           : " << ((double) (ranges_lost) / ranges_sent) * 100 <<  " \%" << endl;
 	}
-*/
 }
 
 void Dump::genRFiles() {

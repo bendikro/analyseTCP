@@ -16,6 +16,7 @@ bool ByteRange::match_received_type(bool print) {
 			printf("     timestamp: %u\n", tstamps_tcp[i]);
 		}
 		if (tstamps_tcp[i] == received_tstamp_tcp) {
+			send_tcp_stamp_recv_index = i; // Store the index of the send packet that matches the first received packet
 			// Retrans
 			if (i > 0) {
 				recv_type = RETR;
@@ -152,7 +153,7 @@ void ByteRange::setDiff() {
 	struct timeval tv;
 	long ms = 0;
 	/* Use own macro in order to handle negative diffs */
-	negtimersub(&received_tstamp_pcap, &sent_tstamp_pcap[0], &tv);
+	negtimersub(&received_tstamp_pcap, &sent_tstamp_pcap[send_tcp_stamp_recv_index], &tv);
 
 	ms += tv.tv_sec * 1000;
 	if(ms >= 0)
@@ -162,9 +163,9 @@ void ByteRange::setDiff() {
 	diff = ms;
 }
 
-void ByteRange::printValues(){
-	cerr << endl << "-------RangePrint-------" << endl;
+void ByteRange::printValues() {
 /*
+  cerr << endl << "-------RangePrint-------" << endl;
   cerr << "startSeq   : " << rm->relative_seq(startSeq) << endl;
   cerr << "endSeq     : " << rm->relative_seq(endSeq) << endl;
   cerr << "sendTime   : " << sendTime.tv_sec << "." << sendTime.tv_usec << endl;
@@ -178,7 +179,7 @@ void ByteRange::printValues(){
 */
 }
 
-timeval* ByteRange::getSendTime(){
+timeval* ByteRange::getSendTime() {
 	if (sent_tstamp_pcap[0].tv_sec == 0 && sent_tstamp_pcap[0].tv_usec == 0)
 		return NULL;
 	else

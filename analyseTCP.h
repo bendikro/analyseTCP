@@ -117,7 +117,7 @@ public:
 		stringstream filename_tmp;
 		for (ulong i = retrans_filenames.size(); i < count; i++) {
 			filename_tmp.str("");
-			filename_tmp << i << "latency-retr-";
+			filename_tmp << "latency-retr" << i << "-";
 			retrans_filenames.push_back(filename_tmp.str());
 		}
 	}

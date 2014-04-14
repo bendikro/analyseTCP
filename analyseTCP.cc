@@ -28,6 +28,7 @@
 #include "Dump.h"
 #include "color_print.h"
 #include <getopt.h>
+#include <sys/stat.h>
 
 vector<string> GlobStats::retrans_filenames;
 vector<std::tr1::shared_ptr<vector <int> > > GlobStats::ack_latency_vectors;
@@ -159,7 +160,7 @@ void usage (char* argv){
 	printf("                     : (if not set, application-layer delay is calculated)\n");
 	printf(" -u<prefix>          : Write statistics to comma-separated files (for use with R)\n");
 	printf("                       Optional argument <prefix> assigns an output filename prefix (No space between option and argument).\n");
-	printf(" -o <output-dir>     : Directory to write the statistics results (implies -u)\n");
+	printf(" -o <output-dir>     : Directory to write the statistics results\n");
 	printf(" -m <IP>             : Sender side external NAT address (as seen on recv dump)\n");
 	printf(" -n <IP>             : Receiver side local address (as seen on recv dump)\n");
 	printf(" -a                  : Produce aggregated statistics (off by default, optional)\n");
@@ -306,7 +307,6 @@ void parse_cmd_args(int argc, char *argv[]) {
 			}
 		} break;
 		case 'o':
-			GlobOpts::genRFiles = true;
 			GlobOpts::RFiles_dir = optarg;
 			break;
 		case 'a':
@@ -370,6 +370,13 @@ int main(int argc, char *argv[]){
 	if (GlobOpts::RFiles_dir.length()) {
 		if (!endsWith(GlobOpts::RFiles_dir, string("/")))
 			GlobOpts::RFiles_dir += "/";
+
+		struct stat sb;
+		if (!(stat(GlobOpts::RFiles_dir.c_str(), &sb) == 0 && S_ISDIR(sb.st_mode))) {
+			printf("Output directory does not exist!\n");
+			exit(1);
+		}
+
 		GlobOpts::prefix = GlobOpts::RFiles_dir + GlobOpts::prefix;
 	}
 
