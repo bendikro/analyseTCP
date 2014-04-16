@@ -154,10 +154,10 @@ void usage (char* argv){
 	printf(" -q <sender port>    : Sender port. If not given, analyse all sender ports\n");
 	printf(" -p <receiver port>  : Receiver port. If not given, analyse all receiver ports\n");
 	printf(" -g <pcap-file>      : Receiver-side dumpfile\n");
-	printf(" -c                  : Write CDF stats to file.\n");
-	printf(" -l<interval>        : Write loss over time to file with optional time slice interval (Default is 1 second).\n");
-	printf(" -t                  : Calculate transport-layer delays\n");
+	printf(" -c                  : Write CDF of byte based latency variation to file.\n");
+	printf(" -t                  : Calculate transport-layer delays for latency variation\n");
 	printf("                     : (if not set, application-layer delay is calculated)\n");
+	printf(" -l<interval>        : Write loss over time to file with optional time slice interval (Default is 1 second).\n");
 	printf(" -u<prefix>          : Write statistics to comma-separated files (for use with R)\n");
 	printf("                       Optional argument <prefix> assigns an output filename prefix (No space between option and argument).\n");
 	printf(" -o <output-dir>     : Directory to write the statistics results\n");
@@ -400,21 +400,14 @@ int main(int argc, char *argv[]){
 
 	if (GlobOpts::withRecv) {
 		if (GlobOpts::withCDF) {
-			senderDump->makeCDF();
-			/* Calculate clock drift for all eligible connections
-			   eligible: more than 500 ranges &&
-			   more than 2 minutes duration
-			   make drift compensated CDF*/
-			senderDump->makeDcCdf();
+			senderDump->makeByteLatencyVariationCDF();
 
 			if (!GlobOpts::aggOnly) {
-				senderDump->writeCDF();
-				senderDump->writeDcCdf();
+				senderDump->writeByteLatencyVariationCDF();
 			}
 
 			if (GlobOpts::aggregate){
-				senderDump->writeAggCdf();
-				senderDump->writeAggDcCdf();
+				senderDump->writeAggByteLatencyVariationCDF();
 			}
 		}
 	}

@@ -46,7 +46,8 @@ public:
 	struct timeval ackTime;
 	uint8_t acked : 1,
 		original_packet_is_rdb : 1,
-		recv_type : 3;                 // DEF, DATA, RDB, RETR
+		recv_type : 2,                 // DEF, DATA, RDB, RETR
+		app_layer_latency_tstamp;      // If application layer latency should use the receiver time stamp (1), or the stampt of previous range (0).
 	uint8_t recv_type_num;             // Which packet of the specific type was first received
 	uint8_t fin;
 	uint8_t syn;
@@ -55,7 +56,7 @@ public:
 	uint8_t ack_count;                 // Count number of times this packet was acked
 	uint8_t dupack_count;
 	uint16_t tcp_window;
-	long diff, dcDiff;
+	long diff;
 
 	ByteRange(uint32_t start, uint32_t end) {
 		startSeq = start;
@@ -79,7 +80,6 @@ public:
 		rdb_byte_miss = 0;
 		rdb_byte_hits = 0;
 		diff = 0;
-		dcDiff = 0;
 		tcp_window = 0;
 		ackTime.tv_sec = 0;
 		ackTime.tv_usec = 0;
@@ -88,10 +88,12 @@ public:
 		rst = 0;
 		original_packet_is_rdb = false;
 		acked_sent = 0;
+		app_layer_latency_tstamp = 0;
 	}
 
-	inline void increase_received(uint32_t tstamp_tcp, timeval tstamp_pcap) {
+	inline void increase_received(uint32_t tstamp_tcp, timeval tstamp_pcap, bool in_sequence) {
 		if (!received_count) {
+			app_layer_latency_tstamp = in_sequence;
 			received_tstamp_tcp = tstamp_tcp;
 			received_tstamp_pcap = tstamp_pcap;
 		}
@@ -155,8 +157,7 @@ public:
 		return new_br;
 	}
 
-	bool match_received_type();
-	bool match_received_type(bool print);
+	bool match_received_type(bool print=false);
 	void print_tstamps_tcp();
 
 	uint64_t getStartSeq() { return startSeq; }
@@ -169,10 +170,9 @@ public:
 	int getTotalBytesTransfered() { return byte_count + byte_count * data_retrans_count + byte_count * rdb_count; }
 	bool isAcked() { return acked; }
 	void insertAckTime(timeval *tv) { ackTime = *tv; acked = true; }
-	void setDiff();
-	void setDcDiff(long diff) { dcDiff = diff;}
-	long getDcDiff() { return dcDiff;}
+	void calculateRecvDiff(timeval *recv_tstamp = NULL);
 	long getRecvDiff() { return diff; }
+	void setRecvDiff(long diff) { this->diff = diff; }
 	void printValues();
 	void print_tstamps_pcap();
 	timeval* getSendTime();
@@ -180,5 +180,7 @@ public:
 	timeval* getAckTime();
 	void setRecvTime(timeval *tv) { received_tstamp_pcap = *tv; }
 };
+
+double getTimeInterval(ByteRange *start, ByteRange *end);
 
 #endif /* BYTERANGE_H */

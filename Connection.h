@@ -1,9 +1,6 @@
 #ifndef CONNECTION_H
 #define CONNECTION_H
 
-/* Forward declarations */
-class RangeManager;
-
 #include "RangeManager.h"
 #include <math.h>
 #include <netinet/in.h>
@@ -69,10 +66,8 @@ public:
 	void genBytesLatencyStats(struct byteStats* bs);
 	void validateRanges();
 	timeval get_duration() ;
-	void makeCDF();
-	void writeCDF(ofstream *stream);
-	void writeDcCdf(ofstream *stream);
-	void makeDcCdf();
+	void makeByteLatencyVariationCDF();
+	void writeByteLatencyVariationCDF(ofstream *stream);
 	void addRDBStats(int *rdb_sent, int *rdb_miss, int *rdb_hits, int *totBytesSent);
 	void genRFiles();
 	ulong getNumUniqueBytes();

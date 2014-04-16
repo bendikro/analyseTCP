@@ -1,8 +1,16 @@
 #include "ByteRange.h"
 #include "color_print.h"
 
-bool ByteRange::match_received_type() {
-	return match_received_type(false);
+/* Returns the difference between the start
+   of the dump and r in seconds */
+double getTimeInterval(ByteRange *start, ByteRange *end) {
+	struct timeval start_tv, current, tv;
+	double time;
+	start_tv = *(start->getSendTime());
+	current = *(end->getSendTime());
+	timersub(&current, &start_tv, &tv);
+	time = (tv.tv_sec * 1000 + (tv.tv_usec / 1000)) / 1000.0;
+	return time;
 }
 
 bool ByteRange::match_received_type(bool print) {
@@ -149,11 +157,14 @@ int ByteRange::getSendAckTimeDiff(RangeManager *rm) {
 	return ms;
 }
 
-void ByteRange::setDiff() {
+void ByteRange::calculateRecvDiff(timeval *recv_tstamp) {
 	struct timeval tv;
 	long ms = 0;
+	if (recv_tstamp == NULL) {
+		recv_tstamp = &received_tstamp_pcap;
+	}
 	/* Use own macro in order to handle negative diffs */
-	negtimersub(&received_tstamp_pcap, &sent_tstamp_pcap[send_tcp_stamp_recv_index], &tv);
+	negtimersub(recv_tstamp, &sent_tstamp_pcap[send_tcp_stamp_recv_index], &tv);
 
 	ms += tv.tv_sec * 1000;
 	if(ms >= 0)

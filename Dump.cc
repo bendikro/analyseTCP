@@ -869,6 +869,7 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data) {
 	sd.data.is_rdb       = false;
 	sd.data.rdb_end_seq  = 0;
 	sd.data.retrans      = 0;
+	sd.data.in_sequence  = 0;
 	sd.data.flags        = tcp->th_flags;
 	sd.data.window       = ntohs(tcp->th_win);
 
@@ -996,14 +997,14 @@ void Dump::write_loss_to_file() {
 		fclose(loss_lost_file);
 }
 
-void Dump::makeCDF() {
+void Dump::makeByteLatencyVariationCDF() {
 	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
 	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
-		cIt->second->makeCDF();
+		cIt->second->makeByteLatencyVariationCDF();
 	}
 }
 
-void Dump::writeCDF() {
+void Dump::writeByteLatencyVariationCDF() {
 	ofstream cdf_f;
 	stringstream cdffn;
 	cdffn << GlobOpts::prefix << "latency-cdf.dat";
@@ -1011,25 +1012,12 @@ void Dump::writeCDF() {
 
 	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
 	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
-		cIt->second->writeCDF(&cdf_f);
+		cIt->second->writeByteLatencyVariationCDF(&cdf_f);
 	}
 	cdf_f.close();
 }
 
-void Dump::writeDcCdf() {
-	ofstream dccdf_f;
-	stringstream dccdffn;
-	dccdffn << GlobOpts::prefix << "latency-dccdf.dat";
-	dccdf_f.open((char*)((dccdffn.str()).c_str()), ios::out);
-
-	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
-	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
-		cIt->second->writeDcCdf(&dccdf_f);
-	}
-	dccdf_f.close();
-}
-
-void Dump::writeAggCdf() {
+void Dump::writeAggByteLatencyVariationCDF() {
 	char print_buf[300];
 	ofstream stream;
 	stringstream filename;
@@ -1038,8 +1026,8 @@ void Dump::writeAggCdf() {
 
 	map<const long, int>::iterator nit, nit_end;
 	double cdfSum = 0;
-	nit = GlobStats::cdf.begin();
-	nit_end = GlobStats::cdf.end();
+	nit = GlobStats::byteLatencyVariationCDFValues.begin();
+	nit_end = GlobStats::byteLatencyVariationCDFValues.end();
 
 	stream << endl << endl << "#Aggregated CDF:" << endl;
 	stream << "#Relative delay      Percentage" << endl;
@@ -1047,35 +1035,6 @@ void Dump::writeAggCdf() {
 		cdfSum += (double)(*nit).second / GlobStats::totNumBytes;
 		sprintf(print_buf, "time: %10ld    CDF: %.10f\n", (*nit).first, cdfSum);
 		stream << print_buf;
-	}
-}
-
-void Dump::writeAggDcCdf() {
-	char print_buf[300];
-	ofstream stream;
-	stringstream filename;
-	filename << GlobOpts::prefix << "latency-agg-dccdf.dat";
-	stream.open((char*)((filename.str()).c_str()), ios::out);
-
-	map<const int, int>::iterator nit, nit_end;
-	double cdfSum = 0;
-	nit = GlobStats::dcCdf.begin();
-	nit_end = GlobStats::dcCdf.end();
-
-	stream << endl << "#Aggregated, drift-compensated CDF:" << endl;
-	stream << "#------ Average drift : " << GlobStats::avgDrift << "ms/s ------" << endl;
-	stream << "#Relative delay      Percentage" << endl;
-	for (; nit != nit_end; nit++) {
-		cdfSum += (double)(*nit).second / GlobStats::totNumBytes;
-		sprintf(print_buf, "time: %10d    CDF: %.10f\n", (*nit).first, cdfSum);
-		stream << print_buf;
-	}
-}
-
-void Dump::makeDcCdf() {
-	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
-	for(cIt = conns.begin(); cIt != conns.end(); cIt++){
-		cIt->second->makeDcCdf();
 	}
 }
 

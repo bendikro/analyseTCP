@@ -5,9 +5,7 @@
 #include "color_print.h"
 #include "util.h"
 
-map<const long, int> GlobStats::cdf;
-map<const int, int> GlobStats::dcCdf;
-float GlobStats::avgDrift = 0;
+map<const long, int> GlobStats::byteLatencyVariationCDFValues;
 
 const char *received_type_str[] = {"DEF", "DTA", "RDB", "RTR"};
 
@@ -18,18 +16,24 @@ RangeManager::~RangeManager() {
 	for (; it != it_end; it++) {
 		delete it->second;
 	}
-
-	vector<DataSeg*>::iterator rit, rit_end;
-	rit = recvd.begin();
-	rit_end = recvd.end();
-	for (; rit != rit_end; rit++) {
-		delete *rit;
-	}
 }
 
-bool RangeManager::hasReceiveData() {
-	return !recvd.empty();
+/*
+  If relative_seq option is enabled, the seq argument is returned as is.
+  If disabled, it will convert the seq to the absolute sequence number (the actual value found in the TCP header)
+ */
+ulong RangeManager::relative_seq(ulong seq) {
+	if (GlobOpts::relative_seq)
+		return seq;
+	ulong wrap_index;
+	wrap_index = (firstSeq + seq) / 4294967296L;
+	//	printf("relative_seq: seq: %lu, first + seq: %lu, wrap_index: %lu\n", seq, firstSeq + seq, wrap_index);
+	ulong res = seq + firstSeq;
+	res -= ((ulong) wrap_index * 4294967296L);
+	//printf("relative_seq  ret: %lu\n", res);
+	return res;
 }
+
 
 /* Register all bytes with a common send time as a range */
 void RangeManager::insertSentRange(struct sendData *sd) {
@@ -127,33 +131,31 @@ void RangeManager::insertSentRange(struct sendData *sd) {
 	}
 }
 
-/* Register all bytes with a common send time as a range */
-void RangeManager::insertRecvRange(struct sendData *sd) {
-	static struct DataSeg *tmpSeq;
-	tmpSeq = new struct DataSeg();
+void RangeManager::insertReceivedRange(struct sendData *sd) {
+	struct DataSeg *tmpSeg = new struct DataSeg();
 
-	tmpSeq->seq = sd->data.seq;
-	tmpSeq->endSeq = sd->data.endSeq;
-	tmpSeq->tstamp_pcap = (sd->data.tstamp_pcap);
-	//tmpSeq->data = sd->data.data;
-	tmpSeq->payloadSize = sd->data.payloadSize;
-	tmpSeq->is_rdb = sd->data.is_rdb;
-	tmpSeq->retrans = sd->data.retrans;
-	tmpSeq->tstamp_tcp = sd->data.tstamp_tcp;
-	tmpSeq->window = sd->data.window;
-	tmpSeq->flags = sd->data.flags;
+	tmpSeg->seq = sd->data.seq;
+	tmpSeg->endSeq = sd->data.endSeq;
+	tmpSeg->tstamp_pcap = (sd->data.tstamp_pcap);
+	//tmpSeg->data = sd->data.data;
+	tmpSeg->payloadSize = sd->data.payloadSize;
+	tmpSeg->is_rdb = sd->data.is_rdb;
+	tmpSeg->retrans = sd->data.retrans;
+	tmpSeg->tstamp_tcp = sd->data.tstamp_tcp;
+	tmpSeg->window = sd->data.window;
+	tmpSeg->flags = sd->data.flags;
 
-	if (tmpSeq->payloadSize > 0)
-		tmpSeq->endSeq -= 1;
+	if (tmpSeg->payloadSize > 0)
+		tmpSeg->endSeq -= 1;
 
 	if (GlobOpts::debugLevel == 3 || GlobOpts::debugLevel == 5) {
-		cerr << "Inserting receive data: startSeq=" << relative_seq(tmpSeq->seq) << ", endSeq=" << relative_seq(tmpSeq->endSeq) << endl;
-		if (tmpSeq->seq == 0 || tmpSeq->endSeq == 0) {
+		cerr << "Inserting receive data: startSeq=" << relative_seq(tmpSeg->seq) << ", endSeq=" << relative_seq(tmpSeg->endSeq) << endl;
+		if (tmpSeg->seq == 0 || tmpSeg->endSeq == 0) {
 			cerr << "Erroneous seq." << endl;
 		}
 	}
 	/* Insert all packets into data structure */
-	recvd.push_back(tmpSeq);
+	insert_byte_range(tmpSeg->seq, tmpSeg->endSeq, false, tmpSeg, 0);
 	return;
 }
 
@@ -437,7 +439,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 #endif
 					}
 					else {
-						range_received->increase_received(data_seg->tstamp_tcp, data_seg->tstamp_pcap);
+						range_received->increase_received(data_seg->tstamp_tcp, data_seg->tstamp_pcap, data_seg->in_sequence);
 					}
 
 					if (insert_more_recursively) {
@@ -495,7 +497,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 			if (start_seq > lastSeq) {
 				last_br = new ByteRange(start_seq, end_seq);
 				last_br->original_payload_size = data_seg->payloadSize;
-				last_br->increase_received(data_seg->tstamp_tcp, data_seg->tstamp_pcap);
+				last_br->increase_received(data_seg->tstamp_tcp, data_seg->tstamp_pcap, data_seg->in_sequence);
 
 				//last_br->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_pcap, this_is_rdb_data);
 				if (data_seg->flags & TH_SYN) {
@@ -567,7 +569,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 					*/
 					// Set receied tstamp for SYN/FIN
 					if (data_seg->flags & TH_SYN || data_seg->flags & TH_FIN) {
-						brIt->second->increase_received(data_seg->tstamp_tcp, data_seg->tstamp_pcap);
+						brIt->second->increase_received(data_seg->tstamp_tcp, data_seg->tstamp_pcap, data_seg->in_sequence);
 					}
 				}
 			}
@@ -586,7 +588,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 				// The ack on the syn-ack
 				if (end_seq == firstSeq +1) {
 					brIt = ranges.find(start_seq -1);
-					brIt->second->increase_received(data_seg->tstamp_tcp, data_seg->tstamp_pcap);
+					brIt->second->increase_received(data_seg->tstamp_tcp, data_seg->tstamp_pcap, data_seg->in_sequence);
 					assert(0 && "The ack on the syn-ack??\n");
 					return;
 				}
@@ -628,7 +630,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 #endif
 				}
 				else {
-					brIt->second->increase_received(data_seg->tstamp_tcp, data_seg->tstamp_pcap);
+					brIt->second->increase_received(data_seg->tstamp_tcp, data_seg->tstamp_pcap, data_seg->in_sequence);
 					assert(brIt->second->received_tstamp_tcp && "TEST\n");
 				}
 
@@ -667,7 +669,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 #endif
 				}
 				else {
-					brIt->second->increase_received(data_seg->tstamp_tcp, data_seg->tstamp_pcap);
+					brIt->second->increase_received(data_seg->tstamp_tcp, data_seg->tstamp_pcap, data_seg->in_sequence);
 				}
 				ranges.insert(pair<ulong, ByteRange*>(new_br->startSeq, new_br));
 			}
@@ -703,7 +705,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 #endif
 			}
 			else {
-				brIt->second->increase_received(data_seg->tstamp_tcp, data_seg->tstamp_pcap);
+				brIt->second->increase_received(data_seg->tstamp_tcp, data_seg->tstamp_pcap, data_seg->in_sequence);
 #ifdef DEBUG
 				if (debug_print) {
 					printf("Setting received timestamp: %u\n", brIt->second->received_tstamp_tcp);
@@ -1091,6 +1093,10 @@ void RangeManager::validateContent() {
 	}
 }
 
+
+/*
+  Print a list of all the registered ranges.
+*/
 void RangeManager::printPacketDetails() {
 	map<ulong, ByteRange*>::iterator it, it_end;
 	it = analyse_range_start;
@@ -1101,13 +1107,6 @@ void RangeManager::printPacketDetails() {
 	cout << endl << "Packet details for conn: " << conn->getConnKey() << endl;
 
 	for (; it != it_end; it++) {
-		//if (it->second->syn || it->second->rst || it->second->fin) {
-		//	printf("Range (%3s%3s %3s):", it->second->syn ? "SYN" : "", it->second->fin ? "FIN" : "", it->second->rst ? "RST" : "");
-		//}
-		//else
-		//	printf("Range (%4lu, %4d):", it->second->endSeq == it->second->startSeq ? 0 : it->second->endSeq - it->second->startSeq +1,
-		//		   it->second->original_payload_size);
-
 		printf("Range (%4lu, %4d):", it->second->endSeq == it->second->startSeq ? 0 : it->second->endSeq - it->second->startSeq +1,
 			   it->second->original_payload_size);
 
@@ -1118,10 +1117,10 @@ void RangeManager::printPacketDetails() {
 			   it->second->data_retrans_count, it->second->rdb_count, received_type_str[it->second->recv_type],
 			   it->second->rdb_byte_miss, it->second->rdb_byte_hits);
 		printf(" ACKtime: %4d ", it->second->getSendAckTimeDiff(this));
-		printf(" RecvDiff: %4ld ", (it->second->getDcDiff() - lowestDcDiff));
+		printf(" RecvDiff: %4ld ", (it->second->getRecvDiff() - lowestRecvDiff));
 
 		if (GlobOpts::verbose) {
-			printf(" (%4ld) ", it->second->getSendAckTimeDiff(this) - (it->second->getDcDiff() - lowestDcDiff));
+			printf(" (%4ld) ", it->second->getSendAckTimeDiff(this) - (it->second->getRecvDiff() - lowestRecvDiff));
 		}
 
 		if (it->second->syn || it->second->rst || it->second->fin) {
@@ -1146,22 +1145,6 @@ void RangeManager::printPacketDetails() {
 	}
 }
 
-/*
-  Based on the receiver side dump, calucate the retrans, loss and RDB data statistics.
-*/
-void RangeManager::analyseReceiverSideData() {
-	if (GlobOpts::withRecv) {
-		vector<DataSeg*>::iterator rit, rit_end;
-		/* Create map with references to the ranges */
-		rit = recvd.begin();
-		rit_end = recvd.end();
-
-		for (; rit != rit_end ; rit++) {
-			struct DataSeg *tmpRd = *rit;
-			insert_byte_range(tmpRd->seq, tmpRd->endSeq, false, tmpRd, 0);
-		}
-	}
-}
 
 void RangeManager::calculateRetransAndRDBStats() {
 	calculateRealLoss(analyse_range_start, analyse_range_end);
@@ -1315,259 +1298,103 @@ void RangeManager::calculateRealLoss(map<ulong, ByteRange*>::iterator brIt, map<
 #endif
 }
 
-/* Reads all packets from receiver dump into a vector */
-void RangeManager::registerRecvDiffs() {
-	vector<DataSeg*>::iterator rit, rit_end;
-
-	/* Create map with references to the ranges */
-	rit = recvd.begin();
-	rit_end = recvd.end();
-	multimap<ulong, struct DataSeg*> rsMap;
-
-	for (; rit != rit_end ; rit++) {
-		struct DataSeg *tmpRd = *rit;
-		rsMap.insert(pair<ulong, struct DataSeg*>(tmpRd->seq, tmpRd));
-	}
-
-	std::pair <std::multimap<ulong, struct DataSeg*>::iterator, std::multimap<ulong, struct DataSeg*>::iterator> ret;
-
-	map<ulong, ByteRange*>::iterator it, it_end;
-	it = ranges.begin();
-	it_end = ranges.end();
-
-	int ranges_not_received = 0;
-	int packet_index = -1;
-	for (; it != it_end; it++) {
-		int matched = -1;
-		ulong sndStartSeq = it->second->getStartSeq();
-		ulong sndEndSeq = it->second->getEndSeq();
-
-		packet_index++;
-		/*
-		  printf("Range (%4lu): %lu - %lu: retrans_count: %d, rdb_count: %d",
-		  it->second->getEndSeq() - it->second->getStartSeq() +1,
-		  relative_seq(it->second->getStartSeq()), relative_seq(it->second->getEndSeq()),
-		  it->second->getNumRetrans(), it->second->getNumBundled());
-		  printf(" ACKtime: %d\n", it->second->getSendAckTimeDiff(this));
-		*/
-		if (GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5) {
-			cerr << "Processing range:                    " << relative_seq(sndStartSeq) << " - " << relative_seq(sndEndSeq) << "- Sent:"
-				 << it->second->getSendTime()->tv_sec << "." << it->second->getSendTime()->tv_usec << endl;
-		}
-
-		// If sent packet is an ack, it's not registered on receiver side as data, so ignore
-		if (it->second->getNumBytes() == 0) {
-			continue;
-		}
-
-		/* Traverse recv data structs to find
-		   lowest time for all corresponding bytes */
-		multimap<ulong, struct DataSeg*>::iterator lowIt, highIt;
-		/* Add and subtract one MTU(and some) from the start seq
-		   to get range of valid packets to process */
-		ulong msRange = 1600;
-
-		ulong absLow = sndStartSeq - msRange;
-		ulong absHigh = sndStartSeq + msRange;
-
-		if (sndStartSeq < msRange) {
-			absLow = 0;
-		}
-
-		lowIt = rsMap.lower_bound(absLow);
-		highIt = rsMap.upper_bound(absHigh);
-
-		timeval match;
-		timerclear(&match);
-
-		if (GlobOpts::debugLevel == 7) {
-			printf("\n\nSent        seq: (%10lu - %10lu) Len: %u\n", relative_seq(sndStartSeq), relative_seq(sndEndSeq), it->second->getNumBytes());
-		}
-
-		if (GlobOpts::debugLevel == 7) {
-			printf("Searching       : %lu - count: %ld\n", relative_seq(sndStartSeq), rsMap.count(sndStartSeq));
-		}
-
-		for (; lowIt != highIt; lowIt++) {
-			struct DataSeg *tmpRd = lowIt->second;
-			int match_count = 0;
-
-			if (GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5) {
-				cerr << "\nProcessing received packet with seq: " <<
-					relative_seq(tmpRd->seq) << " - " << relative_seq(tmpRd->endSeq) << " | Recvd:"
-					 << tmpRd->tstamp_pcap.tv_sec << "." << tmpRd->tstamp_pcap.tv_usec << endl;
-				if (GlobOpts::debugLevel == 5) {
-					cerr << "absLow: " << relative_seq(absLow) << " - absHigh: " << relative_seq(absHigh) << endl;
-				}
-			}
-
-			if (GlobOpts::debugLevel == 7) {
-				printf("   Checking seq: (%5lu - %5lu)\n", relative_seq(tmpRd->seq), relative_seq(tmpRd->endSeq));
-			}
-			/* If the received packet matches the range */
-			if (tmpRd->seq <= sndStartSeq && tmpRd->endSeq >= sndEndSeq) {
-				/* Set match time to the lowest observed value that
-				   matches the range */
-				match_count++;
-
-				if (GlobOpts::debugLevel == 7) {
-					printf("   Receieved seq: %10lu         -      %10lu\n", relative_seq(tmpRd->seq), relative_seq(tmpRd->endSeq));
-				}
-
-				if (match_count == 1 || timercmp(&(tmpRd->tstamp_pcap), &match, <))
-					match = tmpRd->tstamp_pcap;
-				matched = packet_index;
-
-				if (GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5) {
-					cerr << "Found overlapping DataSeg:     seq: " <<
-						relative_seq(tmpRd->seq) << " - " << relative_seq(tmpRd->endSeq) << " - Recvd:"
-						 << tmpRd->tstamp_pcap.tv_sec << "." << tmpRd->tstamp_pcap.tv_usec << endl;
-				}
-
-				if (tmpRd->seq == sndStartSeq && tmpRd->endSeq == sndEndSeq) {
-
-					if (GlobOpts::debugLevel == 7) {
-						printf("               Found exact match");
-					}
-					break;
-				}
-				else if (tmpRd->seq >= sndStartSeq && tmpRd->endSeq <= sndEndSeq) {
-					break;
-				}
-			}
-		}
-
-		/* Check if match has been found */
-		if (matched == -1) {
-			// We found the next after the expected, this is the ack on the fin (if payload is 0)
-			int count = rsMap.count(it->second->getStartSeq() +1);
-			if (count) {
-				struct DataSeg *tmpRd = rsMap.find(it->second->getStartSeq() +1)->second;
-				if (tmpRd->payloadSize != 0) {
-					count = 0;
-				}
-			}
-
-			if (!count) {
-				assert(0 && "Some ranges were not received!");
-				ranges_not_received++;
-				if (GlobOpts::debugLevel == 8) {
-					fprintf(stderr, "Packet not found on receiver (%lu - %lu) Len: %u\n",
-							relative_seq(it->second->getStartSeq()),
-							relative_seq(it->second->getEndSeq()),  it->second->getNumBytes());
-				}
-				continue;
-			}
-		}
-
-
-// TODO: Fix the application layer delay
-//		if (GlobOpts::transport) {
-//			it->second->setRecvTime(&match);
-//		} else {
-//			/* Use lowest time that has been found for this range,
-//			   if the timestamp is lower than the highest time we
-//			   have seen yet, use the highest time (to reflect application
-//			   layer delay) */
-//			//printf("match: %ld.%ld\n", match.tv_sec, match.tv_usec);
-//
-//			if (timercmp(&match, &highestRecvd, >)) {
-//				highestRecvd = match;
-//			}
-//			it->second->setRecvTime(&highestRecvd);
-//			//printf("Setting recv time to highestRecvd: %ld\n", highestRecvd.tv_sec);
-//		}
-
-		/* Calculate diff and check for lowest value */
-		it->second->match_received_type();
-		it->second->setDiff();
-		long diff = it->second->getRecvDiff();
-		if (diff < lowestDiff) {
-			lowestDiff = diff;
-		}
-
-		if (GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5) {
-			cerr << "SendTime: " << it->second->getSendTime()->tv_sec << "."
-				 << it->second->getSendTime()->tv_usec << endl;
-			cerr << "RecvTime: ";
-			if (it->second->getRecvTime() != NULL)
-				cerr << it->second->getRecvTime()->tv_sec;
-			cerr << endl;
-			cerr << "RecvDiff=" << diff << endl;
-			cerr << "recvd.size()= " << recvd.size() << endl;
-		}
-	}
-
-	if (ranges_not_received) {
-		cout << conn->getSrcIp() << ":" << conn->srcPort << " -> " << conn->getDstIp() << ":" << conn->dstPort << " : ";
-		fprintf(stdout, "Found %d ranges that have no corresponding received packet.\n", ranges_not_received);
-	}
-}
-
-ulong RangeManager::relative_seq(ulong seq) {
-	if (GlobOpts::relative_seq)
-		return seq;
-	ulong wrap_index;
-	wrap_index = (firstSeq + seq) / 4294967296L;
-	//	printf("relative_seq: seq: %lu, first + seq: %lu, wrap_index: %lu\n", seq, firstSeq + seq, wrap_index);
-	ulong res = seq + firstSeq;
-	res -= ((ulong) wrap_index * 4294967296L);
-	//printf("relative_seq  ret: %lu\n", res);
-	return res;
-}
-
 ByteRange* RangeManager::getHighestAcked() {
 	if (highestAckedByteRangeIt == ranges.end())
 		return NULL;
 	return highestAckedByteRangeIt->second;
 }
 
+/*
+   Returns duration of connection (in seconds)
+*/
 uint32_t RangeManager::getDuration() {
 	map<ulong, ByteRange*>::iterator brIt_end = ranges.end();
 	brIt_end--;
-	return getDuration(ranges.begin(), brIt_end);
+	return getDuration(brIt_end->second);
 }
 
-/* Returns duration of connection (in seconds)*/
-uint32_t RangeManager::getDuration(map<ulong, ByteRange*>::iterator brIt, map<ulong, ByteRange*>::iterator brIt_last) {
-	uint32_t time;
-	struct timeval startTv, endTv, tv;
-	endTv = *(brIt_last->second->getSendTime());
-	startTv = *(brIt->second->getSendTime());
-	timersub(&endTv, &startTv, &tv);
-	time = tv.tv_sec + (tv.tv_usec / 1000000);
-	return time;
+inline double RangeManager::getDuration(ByteRange *brLast) {
+	return getTimeInterval(ranges.begin()->second, brLast);
+}
+
+
+void RangeManager::calculateLatencyVariation() {
+	registerRecvDiffs();
+	calculateClockDrift();
+	doDriftCompensation();
+}
+
+
+void RangeManager::registerRecvDiffs() {
+	map<ulong, ByteRange*>::iterator it, it_end;
+	it = ranges.begin();
+	it_end = ranges.end();
+	timeval *last_app_layer_tstamp = NULL;
+
+	for (; it != it_end; it++) {
+		if (!it->second->received_count) {
+			continue;
+		}
+
+		if (!GlobOpts::transport) {
+			if (it->second->app_layer_latency_tstamp)
+				last_app_layer_tstamp = &it->second->received_tstamp_pcap;
+			assert(last_app_layer_tstamp != NULL && "last_app_layer_tstamp is invalid!");
+		}
+
+		/* Calculate diff and check for lowest value */
+		it->second->match_received_type();
+		it->second->calculateRecvDiff(last_app_layer_tstamp);
+	}
+
+	if (GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5) {
+		cerr << "SendTime: " << it->second->getSendTime()->tv_sec << "."
+			 << it->second->getSendTime()->tv_usec << endl;
+		cerr << "RecvTime: ";
+		if (it->second->getRecvTime() != NULL)
+			cerr << it->second->getRecvTime()->tv_sec;
+		cerr << endl;
+	}
+}
+
+
+void RangeManager::doDriftCompensation() {
+	map<ulong, ByteRange*>::iterator it, it_end;
+	it = analyse_range_start;
+	it_end = analyse_range_end;
+
+	for (; it != it_end; it++) {
+		double diff = (double) it->second->getRecvDiff();
+		/* Compensate for drift */
+		diff -= (drift * getDuration(it->second));
+		it->second->setRecvDiff(diff);
+
+		if (diff < lowestRecvDiff) {
+			lowestRecvDiff = diff;
+		}
+		if(GlobOpts::debugLevel==4 || GlobOpts::debugLevel==5){
+			cerr << "dcDiff: " << diff << endl;
+		}
+	}
 }
 
 /* Calculate clock drift on CDF */
-int RangeManager::calcDrift() {
-	// If connection > 500 ranges &&
-	// connection.duration > 120 seconds,
-	// calculate clock drift
-
-	if (ranges.size() < 500 || getDuration() < 120) {
-		if (GlobOpts::debugLevel != 0) {
-			cerr << "\nConnection has less than 500 ranges or a duration of less than 2 minutes." << endl;
-			cerr << "Drift-compensated CDF will therefore not be calculated." << endl;
-		}
-		drift = -1;
-		return -1;
-	}
-
+int RangeManager::calculateClockDrift() {
 	map<ulong, ByteRange*>::iterator startIt;
 	map<ulong, ByteRange*>::reverse_iterator endIt;
 	long minDiffStart = LONG_MAX;
 	long minDiffEnd = LONG_MAX;
 	struct timeval minTimeStart, minTimeEnd, tv;
-	float time;
-	float tmpDrift;
+	float time, tmpDrift;
 	timerclear(&minTimeStart);
 	timerclear(&minTimeEnd);
 
 	startIt = ranges.begin();
 
-	for (int i = 0; i < 200; i++) {
-		if(startIt->second->getRecvDiff() < minDiffStart){
+	const uint64_t n = std::min(200UL, ranges.size() / 2 - 1);
+
+	for (uint64_t i = 0; i < n; i++) {
+		if (startIt->second->getRecvDiff() < minDiffStart) {
 			minDiffStart = startIt->second->getRecvDiff();
 			minTimeStart = *(startIt->second->getSendTime());
 		}
@@ -1575,7 +1402,7 @@ int RangeManager::calcDrift() {
 	}
 
 	endIt = ranges.rbegin();
-	for (int i = 0; i < 200; i++) {
+	for (uint64_t i = 0; i < n; i++) {
 		if (endIt->second->getRecvDiff() < minDiffEnd) {
 			minDiffEnd = endIt->second->getRecvDiff();
 			minTimeEnd = *(endIt->second->getSendTime());
@@ -1606,96 +1433,35 @@ int RangeManager::calcDrift() {
 	return 0;
 }
 
-void RangeManager::makeCdf() {
-	long diff;
+void RangeManager::makeByteLatencyVariationCDF() {
 	map<ulong, ByteRange*>::iterator it, it_end;
 	it = analyse_range_start;
 	it_end = analyse_range_end;
+	map<const long, int>::iterator element, end, endAggr;
+	end = byteLatencyVariationCDFValues.end();
+	endAggr = GlobStats::byteLatencyVariationCDFValues.end();
 
 	for (; it != it_end; it++) {
-		diff = it->second->getRecvDiff();
-		diff -= lowestDiff;
+		long diff = it->second->getRecvDiff() - lowestRecvDiff;
+		element = byteLatencyVariationCDFValues.find(diff);
 
-		if (cdf.count(diff) > 0) {
+		if (element != end) {
 			/*  Add bytes to bucket */
-			map<const long, int>::iterator element = cdf.find(diff);
-			element->second = element->second + it->second->getNumBytes();
-		} else {
-			/* Initiate new bucket */
-			cdf.insert(pair<long, int>(diff, it->second->getNumBytes()));
-		}
-		if (GlobOpts::aggregate) {
-			if ( GlobStats::cdf.count(diff) > 0 ){
-				/*  Add bytes to bucket */
-				map<const long, int>::iterator element = GlobStats::cdf.find(diff);
-				element->second = element->second + it->second->getNumBytes();
-			} else {
-				/* Initiate new bucket */
-				GlobStats::cdf.insert(pair<int, int>(diff, it->second->getNumBytes()));
-			}
-		}
-	}
-}
-
-/* Returns the difference between the start
-   of the dump and r in seconds */
-inline double RangeManager::getTimeInterval(ByteRange *r) {
-	struct timeval start, current, tv;
-	double time;
-	start = *(ranges.begin()->second->getSendTime());
-	current = *(r->getSendTime());
-	timersub(&current, &start, &tv);
-	time = (tv.tv_sec * 1000 + (tv.tv_usec / 1000)) / 1000.0;
-	return time;
-}
-
-
-void RangeManager::registerDcDiffs() {
-	map<ulong, ByteRange*>::iterator it, it_end;
-	it = analyse_range_start;
-	it_end = analyse_range_end;
-
-	for (; it != it_end; it++) {
-		double diff = (double) it->second->getRecvDiff();
-		/* Compensate for drift */
-		diff -= (drift * getTimeInterval(it->second));
-		it->second->setDcDiff(diff);
-
-		if (diff < lowestDcDiff) {
-			lowestDcDiff = diff;
-		}
-
-		if(GlobOpts::debugLevel==4 || GlobOpts::debugLevel==5){
-			cerr << "dcDiff: " << diff << endl;
-		}
-	}
-}
-
-void RangeManager::makeDcCdf() {
-	map<ulong, ByteRange*>::iterator it, it_end;
-	it = analyse_range_start;
-	it_end = analyse_range_end;
-
-	for (; it != it_end; it++) {
-		long diff = it->second->getDcDiff() - lowestDcDiff;
-		if (dcCdf.count(diff) > 0) {
-			/*  Add bytes to bucket */
-			map<const int, int>::iterator element = dcCdf.find(diff);
 			//printf("setting getNumBytes: %d\n", it->second->getNumBytes());
 			//element->second = element->second + it->second->getOrinalPayloadSize();
 			element->second = element->second + it->second->getNumBytes();
 		} else {
 			/* Initiate new bucket */
-			dcCdf.insert(pair<int, int>(diff, it->second->getNumBytes()));
+			byteLatencyVariationCDFValues.insert(pair<long, int>(diff, it->second->getNumBytes()));
 		}
 		if (GlobOpts::aggregate) {
-			if (GlobStats::dcCdf.count(diff) > 0) {
+			element = GlobStats::byteLatencyVariationCDFValues.find(diff);
+			if (element != endAggr) {
 				/*  Add bytes to bucket */
-				map<const int, int>::iterator element = GlobStats::dcCdf.find(diff);
 				element->second = element->second + it->second->getNumBytes();
 			} else {
 				/* Initiate new bucket */
-				GlobStats::dcCdf.insert(pair<int, int>(diff, it->second->getNumBytes()));
+				GlobStats::byteLatencyVariationCDFValues.insert(pair<long, int>(diff, it->second->getNumBytes()));
 			}
 		}
 
@@ -1704,61 +1470,62 @@ void RangeManager::makeDcCdf() {
 		}
 	}
 	GlobStats::totNumBytes += getNumBytes();
-
-	if (drift != -1) {
-		if (GlobStats::avgDrift == 0)
-			GlobStats::avgDrift = drift;
-		else
-			GlobStats::avgDrift = (GlobStats::avgDrift + drift) / 2;
-	}
 }
 
-void RangeManager::writeCDF(ofstream *stream) {
+
+void RangeManager::writeByteLatencyVariationCDF(ofstream *stream) {
 	map<const long, int>::iterator nit, nit_end;
 	double cdfSum = 0;
 	char print_buf[300];
-	nit = cdf.begin();
-	nit_end = cdf.end();
+	nit = byteLatencyVariationCDFValues.begin();
+	nit_end = byteLatencyVariationCDFValues.end();
 
 	if (GlobOpts::debugLevel== 4 || GlobOpts::debugLevel== 5) {
-		*stream << "lowestDiff: " << lowestDiff << endl;
+		cerr << "lowestRecvDiff: " << lowestRecvDiff << endl;
 	}
-
-	*stream << "#Relative delay      Percentage" << endl;
-	for (; nit != nit_end; nit++) {
-		//printf("first: %ld, second: %d, numBytes: %d, second/NumBytes: %f\n", (*nit).first, (*nit).second, getNumBytes(), (double) (*nit).second / getNumBytes());
-		//printf("second: %d, numBytes: %d\n", (*nit).second, getNumBytes());
-		//printf("first: %ld, second: %d\n", (*nit).first, (*nit).second);
-		cdfSum += (double) (*nit).second / getNumBytes();
-		sprintf(print_buf, "time: %10ld    CDF: %.10f", (*nit).first, cdfSum);
-		//printf("%s\n", print_buf);
-		*stream << print_buf << endl;
-	}
-}
-
-void RangeManager::writeDcCdf(ofstream *stream) {
-	map<const int, int>::iterator nit, nit_end;
-	double cdfSum = 0;
-	char print_buf[300];
-	nit = dcCdf.begin();
-	nit_end = dcCdf.end();
-
-	if (GlobOpts::debugLevel== 4 || GlobOpts::debugLevel== 5) {
-		cerr << "lowestDcDiff: " << lowestDcDiff << endl;
-	}
-
-	/* Do not print cdf for short conns */
-	if (drift == -1)
-		return;
 
 	*stream << "#------ Drift : " << drift << "ms/s ------" << endl;
 	*stream << "#Relative delay      Percentage" << endl;
-	for(; nit != nit_end; nit++){
+	for (; nit != nit_end; nit++) {
 		cdfSum += (double)(*nit).second / getNumBytes();
-		sprintf(print_buf, "time: %10d    CDF: %.10f", (*nit).first, cdfSum);
+		sprintf(print_buf, "time: %10ld    CDF: %.10f", (*nit).first, cdfSum);
 		*stream << print_buf << endl;
 	}
 }
+
+/*
+void RangeManager::writePacketLatencyVariationValues(ofstream *stream) {
+
+	timeval tv;
+	long time;
+	map<ulong, ByteRange*>::iterator it, it_end;
+	it = analyse_range_start;
+	it_end = analyse_range_end;
+
+	for (; it != it_end; it++) {
+		long diff = it->second->getRecvDiff() - lowestRecvDiff;
+		tv = sent_tstamp_pcap[0];
+		time = tv.tv_sec * 1000 + (tv.tv_usec / 1000.0);
+
+		packetLatencyVariationValues.insert(pair<long, uint16_t>(start_seq, diff)
+
+		if (GlobOpts::aggregate) {
+	}
+
+	//multimap<const long, int> packetLatencyVariationValues
+	map<const long, int>::iterator nit, nit_end;
+
+void RangeManager::writePacketLatencyVariationValues(ofstream *stream) {
+
+	nit = packetLatencyVariationValues.begin();
+	nit_end = packetLatencyVariationValues.end();
+	for(; nit != nit_end; nit++){
+		cdfSum += (double) (*nit).second / getNumBytes();
+		sprintf(print_buf, "time: %10ld    CDF: %.10f", (*nit).first, cdfSum);
+		*stream << print_buf << endl;
+	}
+}
+*/
 
 /*
   Writes the loss stats for the connection over time.

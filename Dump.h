@@ -94,12 +94,9 @@ public:
 	void printStatistics();
 	void genRFiles();
 	void write_loss_to_file();
-	void makeCDF();
-	void makeDcCdf();
-	void writeCDF();
-	void writeDcCdf();
-	void writeAggCdf();
-	void writeAggDcCdf();
+	void makeByteLatencyVariationCDF();
+	void writeByteLatencyVariationCDF();
+	void writeAggByteLatencyVariationCDF();
 	void free_resources();
 	void findTCPTimeStamp(struct DataSeg* data, uint8_t* opts, int option_length);
 	Connection* getConn(const struct in_addr *srcIp, const struct in_addr *dstIp, const uint16_t *srcPort, const uint16_t *dstPort, const uint32_t *seq);

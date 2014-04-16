@@ -3,7 +3,7 @@
 
 uint32_t Connection::getDuration(bool analyse_range_duration) {
 	if (analyse_range_duration)
-		return rm->getDuration(rm->analyse_range_start, rm->analyse_range_last);
+		return getTimeInterval(rm->analyse_range_start->second, rm->analyse_range_last->second);
 	else
 		return rm->getDuration();
 }
@@ -141,9 +141,6 @@ void Connection::registerRange(struct sendData* sd) {
 	}
 
 	rm->insertSentRange(sd);
-	//rm->analyse_range_start = rm->ranges.begin();
-	//rm->analyse_range_end = rm->ranges.end();
-	//rm->printPacketDetails();
 
 	if (GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5) {
 		cerr << "Last range: seq: " << rm->relative_seq(rm->getLastRange()->getStartSeq())
@@ -180,9 +177,6 @@ bool Connection::registerAck(struct DataSeg *seg) {
 }
 
 void Connection::calculateRetransAndRDBStats() {
-	if (GlobOpts::withRecv) {
-		rm->analyseReceiverSideData();
-	}
 	set_analyse_range_interval();
 	rm->calculateRetransAndRDBStats();
 }
@@ -341,33 +335,25 @@ void Connection::validateRanges(){
 
 void Connection::registerRecvd(struct sendData *sd) {
 	/* Insert range into datastructure */
-	rm->insertRecvRange(sd);
+	if (sd->data.seq <= lastLargestRecvEndSeq + 1 &&
+		sd->data.endSeq > lastLargestRecvEndSeq + 1) {
+		sd->data.in_sequence = 1;
+	}
+
+	rm->insertReceivedRange(sd);
 	lastLargestRecvEndSeq = sd->data.endSeq;
 	lastLargestRecvSeqAbsolute = sd->data.seq_absolute + sd->data.payloadSize;
 }
 
-void Connection::makeCDF(){
-	rm->registerRecvDiffs();
-	rm->makeCdf();
+void Connection::makeByteLatencyVariationCDF() {
+	rm->calculateLatencyVariation();
+	rm->makeByteLatencyVariationCDF();
 }
 
-void Connection::writeCDF(ofstream *stream) {
+void Connection::writeByteLatencyVariationCDF(ofstream *stream) {
 	*stream << endl;
 	*stream << "#------CDF - Conn: " << getConnKey() << " --------" << endl;
-	rm->writeCDF(stream);
-}
-
-void Connection::writeDcCdf(ofstream *stream) {
-	*stream << endl;
-	*stream << "#------Drift-compensated CDF - Conn: " << getConnKey() << " --------" << endl;
-	rm->writeDcCdf(stream);
-}
-
-void Connection::makeDcCdf(){
-	if (rm->calcDrift() == 0) {
-		rm->registerDcDiffs();
-		rm->makeDcCdf();
-	}
+	rm->writeByteLatencyVariationCDF(stream);
 }
 
 void Connection::genRFiles() {

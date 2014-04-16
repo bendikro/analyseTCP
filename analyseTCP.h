@@ -90,8 +90,8 @@ public:
 
 class GlobStats {
 public:
-	static map<const long, int> cdf;
-	static map<const int, int> dcCdf;
+	static map<const long, int> byteLatencyVariationCDFValues;
+	static map<const long, int> packetLatencyVariationValues;
 	static float avgDrift;
 	static int totNumBytes;
 	static vector<string> retrans_filenames;
@@ -234,7 +234,8 @@ struct DataSeg {
 	uint16_t window;
 	uint16_t payloadSize;       /* Payload size */
 	bool retrans : 1,       /* is a retransmission */
-		is_rdb : 1;         /* is a rdb packet */
+		is_rdb : 1,         /* is a rdb packet */
+		in_sequence : 1;    // Is the segment expected or out of order
 	struct timeval tstamp_pcap;
 	uint32_t tstamp_tcp;
 	uint32_t tstamp_tcp_echo;
