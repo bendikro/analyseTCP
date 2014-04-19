@@ -41,7 +41,7 @@ private:
 
 	map<ulong, ByteRange*>::iterator highestAckedByteRangeIt;
 	map<const long, int> byteLatencyVariationCDFValues;
-	multimap<const long, uint16_t> packetLatencyVariationValues;
+	//multimap<const long, uint16_t> packetLatencyVariationValues;
 
 public:
 	map<ulong, ByteRange*> ranges;
@@ -103,10 +103,11 @@ public:
 	void registerRecvDiffs();
 	void makeByteLatencyVariationCDF();
 	void writeByteLatencyVariationCDF(ofstream *stream);
+	void writeSentTimesAndQueueingDelayVariance(const uint64_t first_tstamp, ofstream& stream);
 	int calculateClockDrift();
 	void doDriftCompensation();
 	void insert_byte_range(ulong start_seq, ulong end_seq, bool sent, struct DataSeg *data_seq, int level);
-	void genRFiles(string connKey);
+	void genAckLatencyFiles(long first_tstamp, const string& connKey);
 	int getNumBytes() { return lastSeq; } // lastSeq is the last relative seq number
 	long int getByteRangesCount() { return ranges.size(); }
 	long int getAnalysedByteRangesCount() { return ranges.size(); }

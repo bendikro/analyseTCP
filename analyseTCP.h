@@ -58,6 +58,20 @@ using namespace std;
 
 typedef unsigned char uint8;
 
+struct LatencyItem {
+	long time_ms;
+	int latency;
+	LatencyItem(long time_ms, int latency)
+		: time_ms(time_ms), latency(latency) { }
+
+	string str() const;
+	operator string() const { return str(); }
+};
+
+ofstream& operator<<(ofstream& os, const LatencyItem& lat);
+
+#define TV_TO_MS(tv) ((int64_t)(tv.tv_sec * 1000L + (tv.tv_usec / 1000L)))
+
 /* Class to keep global options */
 class GlobOpts {
 private:
@@ -71,12 +85,14 @@ public:
 	static bool withRecv;
 	static bool withLoss;
 	static int lossAggrSeconds;
+	static bool withSentTimes;
+	static uint64_t sentAggrMs;
 	static bool withCDF;
 	static bool relative_seq;
 	static bool print_packets;
 	static string sendNatIP;
 	static string recvNatIP;
-	static bool genRFiles;
+	static bool genAckLatencyFiles;
 	static string prefix;
 	static string RFiles_dir;
 	static bool connDetails;
@@ -86,6 +102,7 @@ public:
 	static int analyse_start;
 	static int analyse_end;
 	static int analyse_duration;
+	static bool oneway_delay_variance;
 };
 
 class GlobStats {
@@ -101,15 +118,14 @@ public:
 	// Index 2 contains latency data for all ranges retransmitted 2 times
 	// ...
 	//static vector<vector <int> *> ack_latency_vectors;
-	static vector<std::tr1::shared_ptr<vector <int> > > ack_latency_vectors;
+	static vector<std::tr1::shared_ptr<vector <LatencyItem> > > ack_latency_vectors;
 
 	GlobStats() {
 		retrans_filenames.push_back(string("latency-all-"));
 	}
-	void update_vectors_size(vector<std::tr1::shared_ptr<vector <int> > > &vectors, ulong count) {
+	void update_vectors_size(vector<std::tr1::shared_ptr<vector <LatencyItem> > > &vectors, ulong count) {
 		for (ulong i = vectors.size(); i < count; i++) {
-			//vectors.push_back(new vector<int>());
-			vectors.push_back(std::tr1::shared_ptr<vector <int> > (new vector<int>()));
+			vectors.push_back(std::tr1::shared_ptr<vector <LatencyItem> > (new vector<LatencyItem>()));
 		}
 	}
 	void update_retrans_filenames(ulong count) {

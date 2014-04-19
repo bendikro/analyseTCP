@@ -63,6 +63,7 @@ struct SortedConnectionKeyComparator {
 class Dump {
 
 private:
+	timeval first_sent_time;
 	string srcIp;
 	string dstIp;
 	string filename;
@@ -92,8 +93,9 @@ public:
 	void printDumpStats();
 	void printConns();
 	void printStatistics();
-	void genRFiles();
+	void genAckLatencyFiles();
 	void write_loss_to_file();
+	void calculateLatencyVariation();
 	void makeByteLatencyVariationCDF();
 	void writeByteLatencyVariationCDF();
 	void writeAggByteLatencyVariationCDF();
@@ -101,6 +103,8 @@ public:
 	void findTCPTimeStamp(struct DataSeg* data, uint8_t* opts, int option_length);
 	Connection* getConn(const struct in_addr *srcIp, const struct in_addr *dstIp, const uint16_t *srcPort, const uint16_t *dstPort, const uint32_t *seq);
 	void fillWithSortedConns(map<ConnectionMapKey*, Connection*, SortedConnectionKeyComparator> &sortedConns);
+	void writeSentTimesAndQueueingDelayVariance();
+	void writeSentTimesGroupedByInterval();
 };
 
 #endif /* DUMP_H */

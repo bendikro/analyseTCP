@@ -29,34 +29,50 @@
 #include "color_print.h"
 #include <getopt.h>
 #include <sys/stat.h>
+#include <sstream>
 
 vector<string> GlobStats::retrans_filenames;
-vector<std::tr1::shared_ptr<vector <int> > > GlobStats::ack_latency_vectors;
+vector<std::tr1::shared_ptr<vector <LatencyItem> > > GlobStats::ack_latency_vectors;
 GlobStats *globStats;
 
 /* Initialize global options */
-bool GlobOpts::aggregate        = false;
-bool GlobOpts::aggOnly          = false;
-bool GlobOpts::withRecv         = false;
-bool GlobOpts::withLoss         = false;
-bool GlobOpts::withCDF          = false;
-bool GlobOpts::transport        = false;
-bool GlobOpts::genRFiles        = false;
-string GlobOpts::prefix         = "";
-string GlobOpts::RFiles_dir     = "";
-int GlobOpts::debugLevel        = 0;
-int GlobOpts::lossAggrSeconds   = 1;
-bool GlobOpts::relative_seq     = false;
-bool GlobOpts::print_packets    = false;
-string GlobOpts::sendNatIP      = "";
-string GlobOpts::recvNatIP      = "";
-bool GlobOpts::connDetails      = false;
-int GlobOpts::verbose           = 0;
-int GlobOpts::max_retrans_stats = 6;
-string GlobOpts::percentiles    = "";
-int GlobOpts::analyse_start     = 0;
-int GlobOpts::analyse_end       = 0;
-int GlobOpts::analyse_duration  = 0;
+bool GlobOpts::aggregate          		= false;
+bool GlobOpts::aggOnly            		= false;
+bool GlobOpts::withRecv           		= false;
+bool GlobOpts::withLoss           		= false;
+bool GlobOpts::withCDF            		= false;
+bool GlobOpts::transport          		= false;
+bool GlobOpts::genAckLatencyFiles 		= false;
+bool GlobOpts::withSentTimes			= false;
+string GlobOpts::prefix           		= "";
+string GlobOpts::RFiles_dir       		= "";
+int GlobOpts::debugLevel          		= 0;
+int GlobOpts::lossAggrSeconds     		= 1;
+uint64_t GlobOpts::sentAggrMs     		= 1000;
+bool GlobOpts::relative_seq       		= false;
+bool GlobOpts::print_packets      		= false;
+string GlobOpts::sendNatIP        		= "";
+string GlobOpts::recvNatIP        		= "";
+bool GlobOpts::connDetails        		= false;
+int GlobOpts::verbose             		= 0;
+int GlobOpts::max_retrans_stats   		= 6;
+string GlobOpts::percentiles      		= "";
+int GlobOpts::analyse_start       		= 0;
+int GlobOpts::analyse_end         		= 0;
+int GlobOpts::analyse_duration    		= 0;
+bool GlobOpts::oneway_delay_variance	= false;
+
+string LatencyItem::str() const {
+	ostringstream buffer;
+	buffer << time_ms << "," << latency;
+	//buffer << latency;
+	return buffer.str();
+}
+
+ofstream& operator<<(ofstream& stream, const LatencyItem& lat) {
+	stream << lat.str();
+	return stream;
+}
 
 void warn_with_file_and_linenum(string file, int linenum) {
 	cout << "Error at ";
@@ -157,8 +173,11 @@ void usage (char* argv){
 	printf(" -c                  : Write CDF of byte based latency variation to file.\n");
 	printf(" -t                  : Calculate transport-layer delays for latency variation\n");
 	printf("                     : (if not set, application-layer delay is calculated)\n");
-	printf(" -l<interval>        : Write loss over time to file with optional time slice interval (Default is 1 second).\n");
+	printf(" -l<interval>        : Write loss over time to file with optional time slice interval (seconds, default=1).\n");
+	printf(" -G<interval>        : Write sent-times to file grouped by time slice interval (milliseconds, default=1000).\n");
 	printf(" -u<prefix>          : Write statistics to comma-separated files (for use with R)\n");
+	printf(" -Q                  : Write sent-times and one-way delay variance (queuing delay).\n");
+	printf("                       This will implicitly set -t.\n");
 	printf("                       Optional argument <prefix> assigns an output filename prefix (No space between option and argument).\n");
 	printf(" -o <output-dir>     : Directory to write the statistics results\n");
 	printf(" -m <IP>             : Sender side external NAT address (as seen on recv dump)\n");
@@ -188,7 +207,7 @@ void usage (char* argv){
 	exit(0);
 }
 
-#define OPTSTRING "s:r:p:q:f:m:n:o:g:d:i::u::l::o:aAetjychvk"
+#define OPTSTRING "s:r:p:q:f:m:n:o:g:d:i::u::l::G::o:aAetjychvkQ"
 
 static struct option long_options[] = {
 	{"src-ip",                   required_argument, 0, 's'},
@@ -217,6 +236,8 @@ static struct option long_options[] = {
 	{"analyse-start",            required_argument, 0, 'S'},
 	{"analyse-end",              required_argument, 0, 'E'},
 	{"analyse-duration",         required_argument, 0, 'D'},
+	{"queuing-delay",			 no_argument,       0, 'Q'},
+	{"sent-interval",			 optional_argument, 0, 'G'},
 	{0, 0, 0, 0}
 };
 
@@ -280,12 +301,24 @@ void parse_cmd_args(int argc, char *argv[]) {
 			GlobOpts::withLoss = true;
 			if (optarg) {
 				char *sptr = NULL;
-				long int ret = strtol(optarg, &sptr, 10);
+				long ret = strtol(optarg, &sptr, 10);
 				if (ret <= 0 || sptr == NULL || *sptr != '\0') {
 					colored_printf(RED, "Option -l requires a valid integer: '%s'\n", optarg);
 					usage(argv[0]);
 				}
 				GlobOpts::lossAggrSeconds = ret;
+			}
+			break;
+		case 'G':
+			GlobOpts::withSentTimes = true;
+			if (optarg) {
+				char *sptr = NULL;
+				uint64_t ret = strtoul(optarg, &sptr, 10);
+				if (ret == 0 || sptr == NULL || *sptr != '\0') {
+					colored_printf(RED, "Option -%c requires a valid integer: '%s'\n", c, optarg);
+					usage(argv[0]);
+				}
+				GlobOpts::sentAggrMs = ret;
 			}
 			break;
 		case 'i':
@@ -301,7 +334,7 @@ void parse_cmd_args(int argc, char *argv[]) {
 			GlobOpts::transport = true;
 			break;
 		case 'u': {
-			GlobOpts::genRFiles = true;
+			GlobOpts::genAckLatencyFiles = true;
 			if (optarg) {
 				GlobOpts::prefix = optarg;
 			}
@@ -339,6 +372,10 @@ void parse_cmd_args(int argc, char *argv[]) {
 			break;
 		case 'D':
 			GlobOpts::analyse_duration = atoi(optarg);
+			break;
+		case 'Q':
+			GlobOpts::oneway_delay_variance = true;
+			GlobOpts::transport = true;
 			break;
 		case 'h':
 			usage(argv[0]);
@@ -398,7 +435,13 @@ int main(int argc, char *argv[]){
 	   place timestamp diffs in buckets */
 	senderDump->calculateRetransAndRDBStats();
 
-	if (GlobOpts::withRecv) {
+	if (GlobOpts::withRecv && (GlobOpts::withCDF || GlobOpts::oneway_delay_variance)) {
+
+		assert((!GlobOpts::oneway_delay_variance || (GlobOpts::oneway_delay_variance && GlobOpts::transport)) 
+				&& "One-way delay variance was chosen, but delay is set to application layer");
+
+		senderDump->calculateLatencyVariation();
+
 		if (GlobOpts::withCDF) {
 			senderDump->makeByteLatencyVariationCDF();
 
@@ -410,15 +453,22 @@ int main(int argc, char *argv[]){
 				senderDump->writeAggByteLatencyVariationCDF();
 			}
 		}
+
+		if (GlobOpts::oneway_delay_variance) {
+			senderDump->writeSentTimesAndQueueingDelayVariance();
+		}
 	}
 
-	if (GlobOpts::genRFiles)
-		senderDump->genRFiles();
+	if (GlobOpts::genAckLatencyFiles)
+		senderDump->genAckLatencyFiles();
 
 	if (GlobOpts::connDetails) {
 		senderDump->printConns();
 		return 0;
 	}
+
+	if (GlobOpts::withSentTimes)
+		senderDump->writeSentTimesGroupedByInterval();
 
 	if (GlobOpts::withLoss)
 		senderDump->write_loss_to_file();

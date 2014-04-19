@@ -130,10 +130,11 @@ bool Connection::registerSent(struct sendData* sd) {
 /* Process range for outgoing packet */
 void Connection::registerRange(struct sendData* sd) {
 	if (GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5) {
-		static timeval offset;
 		if (firstSendTime.tv_sec == 0 && firstSendTime.tv_usec == 0) {
 			firstSendTime = sd->data.tstamp_pcap;
 		}
+
+		timeval offset;
 		timersub(&(sd->data.tstamp_pcap), &firstSendTime, &offset);
 		cerr << "\nRegistering new outgoing. Seq: " << rm->relative_seq(sd->data.seq) << " - "
 		     << rm->relative_seq(sd->data.endSeq) << " Absolute seq: " << sd->data.seq << " - " << sd->data.endSeq << " Payload: " << sd->data.payloadSize << endl;
@@ -345,19 +346,10 @@ void Connection::registerRecvd(struct sendData *sd) {
 	lastLargestRecvSeqAbsolute = sd->data.seq_absolute + sd->data.payloadSize;
 }
 
-void Connection::makeByteLatencyVariationCDF() {
-	rm->calculateLatencyVariation();
-	rm->makeByteLatencyVariationCDF();
-}
-
 void Connection::writeByteLatencyVariationCDF(ofstream *stream) {
 	*stream << endl;
 	*stream << "#------CDF - Conn: " << getConnKey() << " --------" << endl;
 	rm->writeByteLatencyVariationCDF(stream);
-}
-
-void Connection::genRFiles() {
-	rm->genRFiles(getConnKey());
 }
 
 ulong Connection::getNumUniqueBytes() {

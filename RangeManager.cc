@@ -132,38 +132,38 @@ void RangeManager::insertSentRange(struct sendData *sd) {
 }
 
 void RangeManager::insertReceivedRange(struct sendData *sd) {
-	struct DataSeg *tmpSeg = new struct DataSeg();
 
-	tmpSeg->seq = sd->data.seq;
-	tmpSeg->endSeq = sd->data.endSeq;
-	tmpSeg->tstamp_pcap = (sd->data.tstamp_pcap);
-	//tmpSeg->data = sd->data.data;
-	tmpSeg->payloadSize = sd->data.payloadSize;
-	tmpSeg->is_rdb = sd->data.is_rdb;
-	tmpSeg->retrans = sd->data.retrans;
-	tmpSeg->tstamp_tcp = sd->data.tstamp_tcp;
-	tmpSeg->window = sd->data.window;
-	tmpSeg->flags = sd->data.flags;
+	DataSeg tmpSeg;
 
-	if (tmpSeg->payloadSize > 0)
-		tmpSeg->endSeq -= 1;
+	tmpSeg.seq = sd->data.seq;
+	tmpSeg.endSeq = sd->data.endSeq;
+	tmpSeg.tstamp_pcap = (sd->data.tstamp_pcap);
+	//tmpSeg.data = sd->data.data;
+	tmpSeg.payloadSize = sd->data.payloadSize;
+	tmpSeg.is_rdb = sd->data.is_rdb;
+	tmpSeg.retrans = sd->data.retrans;
+	tmpSeg.tstamp_tcp = sd->data.tstamp_tcp;
+	tmpSeg.window = sd->data.window;
+	tmpSeg.flags = sd->data.flags;
+
+	if (tmpSeg.payloadSize > 0)
+		tmpSeg.endSeq -= 1;
 
 	if (GlobOpts::debugLevel == 3 || GlobOpts::debugLevel == 5) {
-		cerr << "Inserting receive data: startSeq=" << relative_seq(tmpSeg->seq) << ", endSeq=" << relative_seq(tmpSeg->endSeq) << endl;
-		if (tmpSeg->seq == 0 || tmpSeg->endSeq == 0) {
+		cerr << "Inserting receive data: startSeq=" << relative_seq(tmpSeg.seq) << ", endSeq=" << relative_seq(tmpSeg.endSeq) << endl;
+		if (tmpSeg.seq == 0 || tmpSeg.endSeq == 0) {
 			cerr << "Erroneous seq." << endl;
 		}
 	}
 	/* Insert all packets into data structure */
-	insert_byte_range(tmpSeg->seq, tmpSeg->endSeq, false, tmpSeg, 0);
-	return;
+	insert_byte_range(tmpSeg.seq, tmpSeg.endSeq, false, &tmpSeg, 0);
 }
 
 /*
   This inserts the the data into the ranges map.
   It's called both with sent end received data ranges.
 */
-void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, struct DataSeg *data_seg, int level) {
+void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, DataSeg *data_seg, int level) {
 	ByteRange *last_br = NULL;
 	map<ulong, ByteRange*>::iterator brIt, brIt_end;
 	brIt_end = ranges.end();
@@ -1473,6 +1473,24 @@ void RangeManager::makeByteLatencyVariationCDF() {
 }
 
 
+void RangeManager::writeSentTimesAndQueueingDelayVariance(const uint64_t first_tstamp, ofstream& stream) {
+	map<ulong, ByteRange*>::iterator it, it_end;
+	it = analyse_range_start;
+	it_end = analyse_range_end;
+
+	//const long first = TV_TO_MS(ranges[0]->sent_tstamp_pcap[0]);
+
+	for (; it != it_end; it++) {
+		long diff = it->second->getRecvDiff() - lowestRecvDiff;
+		int64_t ts = TV_TO_MS(it->second->sent_tstamp_pcap[it->second->send_tcp_stamp_recv_index]);
+
+		assert(diff >= 0 && "Negative diff, this shouldn't happen!");
+
+		LatencyItem lat(((uint64_t) ts) - first_tstamp, diff);
+		stream << lat << endl;
+	}
+}
+
 void RangeManager::writeByteLatencyVariationCDF(ofstream *stream) {
 	map<const long, int>::iterator nit, nit_end;
 	double cdfSum = 0;
@@ -1586,34 +1604,47 @@ void RangeManager::write_loss_over_time(unsigned slice_interval, unsigned timesl
   The aggregation option controls of per stream or only
   aggregated result files should be made.
 */
-void RangeManager::genRFiles(string connKey) {
+void RangeManager::genAckLatencyFiles(long first_tstamp, const string& connKey) {
 	map<ulong, ByteRange*>::iterator it, it_end;
 	it = analyse_range_start;
 	it_end = analyse_range_end;
 
-	static vector<std::tr1::shared_ptr<vector <int> > > diff_times;
+	vector<std::tr1::shared_ptr<vector <LatencyItem> > > diff_times;
 	ulong num_retr_tmp;
 	int diff_tmp;
+	ulong send_time_ms;
+
+	//long first_tstamp = TV_TO_MS(ranges[0]->sent_tstamp_pcap[0]);
+
 	for (; it != it_end; it++) {
 		diff_tmp = it->second->getSendAckTimeDiff(this);
 		if (diff_tmp > 0) {
 			num_retr_tmp = it->second->getNumRetrans();
 
+			send_time_ms = TV_TO_MS(it->second->sent_tstamp_pcap[0]);
+			//printf("%lu.%lu -> %lu\n", it->second->sent_tstamp_pcap[0].tv_sec, it->second->sent_tstamp_pcap[0].tv_usec, send_time_ms);
+
+			send_time_ms -= first_tstamp;
+
 			if (num_retr_tmp >= GlobStats::ack_latency_vectors.size()) {
 				globStats->update_retrans_filenames(num_retr_tmp + 1);
 			}
 			// all
-			GlobStats::ack_latency_vectors[0]->push_back(diff_tmp);
-			// Retrans vector for that number of retransmissions
-			GlobStats::ack_latency_vectors[num_retr_tmp]->push_back(diff_tmp);
+			GlobStats::ack_latency_vectors[0]->push_back(LatencyItem(send_time_ms, diff_tmp));
+			if (num_retr_tmp) {
+				// Retrans vector for that number of retransmissions
+				GlobStats::ack_latency_vectors[num_retr_tmp]->push_back(LatencyItem(send_time_ms, diff_tmp));
+			}
 
 			// Add value to be written to file
 			if (!(GlobOpts::aggOnly)) {
 				if (num_retr_tmp >= diff_times.size()) {
 					globStats->update_vectors_size(diff_times, num_retr_tmp +1);
 				}
-				diff_times[0]->push_back(diff_tmp);
-				diff_times[num_retr_tmp]->push_back(diff_tmp);
+				diff_times[0]->push_back(LatencyItem(send_time_ms, diff_tmp));
+				if (num_retr_tmp) {
+					diff_times[num_retr_tmp]->push_back(LatencyItem(send_time_ms, diff_tmp));
+				}
 			}
 		}
 	}
@@ -1635,7 +1666,7 @@ void RangeManager::genRFiles(string connKey) {
 			ofstream stream;
 			stream.open(filenames[num_retr_tmp].c_str(), ios::out);
 
-			vector<int>& vec_retr = *diff_times[num_retr_tmp];
+			vector<LatencyItem>& vec_retr = *diff_times[num_retr_tmp];
 			for (unsigned long int i = 0; i < diff_times[num_retr_tmp]->size(); i++) {
 				stream << vec_retr[i] << endl;
 			}

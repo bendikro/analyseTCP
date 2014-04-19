@@ -66,10 +66,12 @@ public:
 	void genBytesLatencyStats(struct byteStats* bs);
 	void validateRanges();
 	timeval get_duration() ;
-	void makeByteLatencyVariationCDF();
+	void calculateLatencyVariation() { rm->calculateLatencyVariation(); }
+	void makeByteLatencyVariationCDF() { rm->makeByteLatencyVariationCDF(); }
 	void writeByteLatencyVariationCDF(ofstream *stream);
+	void writeSentTimesAndQueueingDelayVariance(const uint64_t first, ofstream& stream) { rm->writeSentTimesAndQueueingDelayVariance(first, stream); }
 	void addRDBStats(int *rdb_sent, int *rdb_miss, int *rdb_hits, int *totBytesSent);
-	void genRFiles();
+	void genAckLatencyFiles(long first_tstamp) { rm->genAckLatencyFiles(first_tstamp, getConnKey()); }
 	ulong getNumUniqueBytes();
 	string getConnKey();
 	string getSrcIp();

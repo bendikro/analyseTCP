@@ -6,7 +6,9 @@ extern GlobStats *globStats;
 int GlobStats::totNumBytes;
 
 /* Methods for class Dump */
-Dump::Dump(string src_ip, string dst_ip, string src_port, string dst_port, string fn) {
+Dump::Dump(string src_ip, string dst_ip, string src_port, string dst_port, string fn) 
+{
+	timerclear(&first_sent_time);
 	srcIp = src_ip;
 	dstIp = dst_ip;
 	srcPort = src_port;
@@ -601,6 +603,10 @@ void Dump::processSent(const struct pcap_pkthdr* header, const u_char *data) {
 		sd.data.endSeq -= 1;
 	}
 
+	if (first_sent_time.tv_sec == 0 && first_sent_time.tv_usec == 0) {
+		first_sent_time = header->ts;
+	}
+
 	uint8_t* opt = (uint8_t*) tcp + 20;
 	findTCPTimeStamp(&sd.data, opt, sd.tcpOptionLen);
 
@@ -939,6 +945,10 @@ void Dump::printConns() {
 		   (csAggregated.ranges_lost / (double) csAggregated.ranges_sent) * 100);
 }
 
+void Dump::writeSentTimesGroupedByInterval() {
+	// TODO
+}
+
 /*
   Writes packet loss to file aggregated of GlobOpts::lossAggrSeconds in CSV format.
   loss-retr uses loss based on retransmissions.
@@ -997,11 +1007,42 @@ void Dump::write_loss_to_file() {
 		fclose(loss_lost_file);
 }
 
+
+void Dump::calculateLatencyVariation() {
+	map<ConnectionMapKey*, Connection*>::iterator it;
+	for (it = conns.begin(); it != conns.end(); ++it) {
+		it->second->calculateLatencyVariation();
+	}
+}
+
 void Dump::makeByteLatencyVariationCDF() {
 	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
 	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
 		cIt->second->makeByteLatencyVariationCDF();
 	}
+}
+
+void Dump::writeSentTimesAndQueueingDelayVariance() {
+	map<ConnectionMapKey*, Connection*>::iterator it;
+	const uint64_t first_tstamp = (uint64_t) TV_TO_MS(first_sent_time);
+
+	ofstream all_stream;
+	all_stream.open((GlobOpts::prefix + "queueing-delay-all.dat").c_str(), ios::out);
+
+	for (it = conns.begin(); it != conns.end(); ++it) {
+			it->second->writeSentTimesAndQueueingDelayVariance(first_tstamp, all_stream);
+
+			string filename;
+			filename = GlobOpts::prefix + "queueing-delay-" + it->second->getConnKey() + ".dat";
+
+			ofstream stream;
+			stream.open(filename.c_str(), ios::out);
+			it->second->writeSentTimesAndQueueingDelayVariance(first_tstamp, stream);
+			stream.close();
+
+	}
+
+	all_stream.close();
 }
 
 void Dump::writeByteLatencyVariationCDF() {
@@ -1076,10 +1117,18 @@ void Dump::printDumpStats() {
 	}
 }
 
-void Dump::genRFiles() {
-	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
+void Dump::genAckLatencyFiles() {
+	map<ConnectionMapKey*, Connection*>::iterator cIt = conns.begin();
+
+	long first_ts = TV_TO_MS(cIt->second->firstSendTime);
+	for (; cIt != conns.end(); cIt++) {
+		long ts = TV_TO_MS(cIt->second->firstSendTime);
+		first_ts = (ts < first_ts) ? ts : first_ts;
+	}
+	
+
 	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
-		cIt->second->genRFiles();
+		cIt->second->genAckLatencyFiles(first_ts);
 	}
 
 	if (!GlobOpts::aggregate)
@@ -1094,7 +1143,7 @@ void Dump::genRFiles() {
 		filenames[i] += "aggr.dat";
 	}
 
-	vector<int>::iterator it, it_end;
+	vector<LatencyItem>::iterator it, it_end;
 	unsigned long int i;
 	for (i = 0; i < GlobStats::ack_latency_vectors.size(); i++) {
 		ofstream stream;
@@ -1102,7 +1151,7 @@ void Dump::genRFiles() {
 		it = GlobStats::ack_latency_vectors[i]->begin();
 		it_end = GlobStats::ack_latency_vectors[i]->end();
 		for (; it != it_end; it++) {
-			stream << *it << endl;
+			stream << it->str() << endl;
 		}
 		stream.close();
 	}
