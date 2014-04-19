@@ -564,8 +564,6 @@ void Dump::findTCPTimeStamp(struct DataSeg* data, uint8_t* opts, int option_leng
 
 /* Process outgoing packets */
 void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
-	static uint64_t sent_time_bucket_idx = 0;
-
 	//const struct sniff_ethernet *ethernet; /* The ethernet header */
 	const sniff_ip *ip; /* The IP header */
 	const sniff_tcp *tcp; /* The TCP header */
@@ -625,12 +623,12 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 
 	if (GlobOpts::withSentTimes) {
 		uint64_t relative_ts = TV_TO_MS(header->ts) - TV_TO_MS(first_sent_time);
-		sent_time_bucket_idx = relative_ts / GlobOpts::sentAggrMs;
+		uint64_t sent_time_bucket_idx = relative_ts / GlobOpts::sentAggrMs;
 
 		while (sent_time_bucket_idx >= sentTimes.size()) {
 			sentTimes.push_back(vector<timeval>( ));
 		}
-		
+
 		sentTimes[sent_time_bucket_idx].push_back(header->ts);
 	}
 }
@@ -959,15 +957,48 @@ void Dump::printConns() {
 
 void Dump::writeSentTimesGroupedByInterval() {
 	vector< vector<timeval> >::iterator slice;
+	uint64_t bucket;
 
 	ofstream stream;
 	stream.open((GlobOpts::prefix + "sent-times-all.dat").c_str(), ios::out);
 
-	for (slice = sentTimes.begin(); slice != sentTimes.end(); ++slice) {
-		stream << slice->size() << endl;
+	for (bucket = 0, slice = sentTimes.begin(); slice != sentTimes.end(); ++slice, ++bucket) {
+		stream << bucket << ", " << slice->size() << endl;
 	}
 
 	stream.close();
+}
+
+void Dump::write_loss_to_file() {
+	assert(GlobOpts::withRecv && "Calculating loss is only possible with receiver dump");
+
+	vector< pair<uint64_t,uint64_t> >* all_loss = new vector< pair<uint64_t,uint64_t> >();
+
+	map<ConnectionMapKey*, Connection*>::iterator conn;
+	for (conn = conns.begin(); conn != conns.end(); ++conn) {
+		string filename;
+		filename = GlobOpts::prefix + "loss-" + conn->second->getConnKey() + ".dat";
+
+		ofstream stream;
+		stream.open(filename.c_str(), ios::out);
+
+		conn->second->rm->writeLossGroupedByInterval(TV_TO_MS(first_sent_time), *all_loss, stream);
+
+		stream.close();
+	}
+
+
+	ofstream stream;
+	stream.open((GlobOpts::prefix + "loss-all.dat").c_str(), ios::out);
+
+	uint64_t idx;
+	vector< pair<uint64_t,uint64_t> >::iterator it;
+	for (it = all_loss->begin(), idx = 0; it != all_loss->end(); ++it, ++idx) {
+		stream << idx << ", " << it->first << ", " << it->second << endl;
+	}
+
+	stream.close();
+	delete all_loss;
 }
 
 /*
@@ -975,7 +1006,7 @@ void Dump::writeSentTimesGroupedByInterval() {
   loss-retr uses loss based on retransmissions.
   With receiver side dump, the actual loss is used in loss-lost.
 */
-void Dump::write_loss_to_file() {
+/*void Dump::write_loss_to_file() {
 	FILE *loss_retr_file, *loss_lost_file = NULL;
 	stringstream loss_retr_fn, loss_lost_fn;
 	loss_retr_fn << GlobOpts::prefix << "loss-retr" << ".dat";
@@ -1026,7 +1057,7 @@ void Dump::write_loss_to_file() {
 	fclose(loss_retr_file);
 	if (GlobOpts::withRecv)
 		fclose(loss_lost_file);
-}
+}*/
 
 
 void Dump::calculateLatencyVariation() {

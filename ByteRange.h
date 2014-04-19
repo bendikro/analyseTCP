@@ -41,7 +41,7 @@ public:
 	uint32_t received_tstamp_tcp;
 	vector<uint32_t> tstamps_tcp;      // tcp tstamp for regular packet and retrans
 	vector<uint32_t> rdb_tstamps_tcp;  // tcp tstamp for data in RDB packets
-	vector<uint32_t> lost_tstamps_tcp; // tcp tstamp matched to recevied used to find which packets were lost
+	vector< pair<uint32_t,timeval> > lost_tstamps_tcp; // tcp tstamp matched to recevied used to find which packets were lost
 
 	struct timeval ackTime;
 	uint8_t acked : 1,
@@ -99,10 +99,10 @@ public:
 		}
 		received_count++;
 
-		vector<uint32_t>::iterator it, it_end;
+		vector< pair<uint32_t,timeval> >::iterator it, it_end;
 		it = lost_tstamps_tcp.begin(), it_end = lost_tstamps_tcp.end();
 		while (it != it_end) {
-			if (*it == tstamp_tcp) {
+			if (it->first == tstamp_tcp) {
 				lost_tstamps_tcp.erase(it);
 				break;
 			}
@@ -119,7 +119,7 @@ public:
 		}
 		sent_count++;
 		sent_tstamp_pcap.push_back(tstamp_pcap);
-		lost_tstamps_tcp.push_back(tstamp_tcp);
+		lost_tstamps_tcp.push_back(pair<uint32_t,timeval>(tstamp_tcp, tstamp_pcap));
 	}
 
 	void update_byte_count() {

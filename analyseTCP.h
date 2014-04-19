@@ -84,7 +84,7 @@ public:
 	static int  debugLevel;
 	static bool withRecv;
 	static bool withLoss;
-	static int lossAggrSeconds;
+	static uint64_t lossAggrMs;
 	static bool withSentTimes;
 	static uint64_t sentAggrMs;
 	static bool withCDF;

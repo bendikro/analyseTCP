@@ -47,7 +47,7 @@ bool GlobOpts::withSentTimes			= false;
 string GlobOpts::prefix           		= "";
 string GlobOpts::RFiles_dir       		= "";
 int GlobOpts::debugLevel          		= 0;
-int GlobOpts::lossAggrSeconds     		= 1;
+uint64_t GlobOpts::lossAggrMs     		= 1000;
 uint64_t GlobOpts::sentAggrMs     		= 1000;
 bool GlobOpts::relative_seq       		= false;
 bool GlobOpts::print_packets      		= false;
@@ -88,6 +88,7 @@ bool endsWith(const string& s, const string& suffix) {
 	return s.rfind(suffix) == (s.size()-suffix.size());
 }
 
+#ifdef DEBUG
 void test(Dump *d) {
 	uint32_t first_seq = 1000;
 	uint32_t seq = 2000;
@@ -159,6 +160,7 @@ void test(Dump *d) {
 
 	exit(1);
 }
+#endif
 
 void usage (char* argv){
 	printf("Usage: %s [-s|r|p|f|g|t|u|m|n|a|A|e|u|d|l|j|y|o|k]\n", argv);
@@ -173,7 +175,8 @@ void usage (char* argv){
 	printf(" -c                  : Write CDF of byte based latency variation to file.\n");
 	printf(" -t                  : Calculate transport-layer delays for latency variation\n");
 	printf("                     : (if not set, application-layer delay is calculated)\n");
-	printf(" -l<interval>        : Write loss over time to file with optional time slice interval (seconds, default=1).\n");
+	printf(" -l<interval>        : Write loss over time to file with optional time slice interval (milliseconds, default=1000).\n");
+	printf("                       This requires option -l.\n");
 	printf(" -G<interval>        : Aggregate sent packets over time slice interval (milliseconds, default=1000).\n");
 	printf(" -u<prefix>          : Write statistics to comma-separated files (for use with R)\n");
 	printf(" -Q                  : Write sent-times and one-way delay variance (queuing delay).\n");
@@ -236,7 +239,7 @@ static struct option long_options[] = {
 	{"analyse-start",            required_argument, 0, 'S'},
 	{"analyse-end",              required_argument, 0, 'E'},
 	{"analyse-duration",         required_argument, 0, 'D'},
-	{"queuing-delay",			 no_argument,       0, 'Q'},
+	{"queueing-delay",			 no_argument,       0, 'Q'},
 	{"sent-interval",			 optional_argument, 0, 'G'},
 	{0, 0, 0, 0}
 };
@@ -263,7 +266,7 @@ void parse_cmd_args(int argc, char *argv[]) {
 
 		switch (c) {
 		case 0 :
-			printf("LONG OPTION! flag: %s\n", long_options[option_index].name);
+			//printf("LONG OPTION! flag: %s\n", long_options[option_index].name);
 			if (long_options[option_index].flag != 0) {
 				printf("Skipping argument?!?!\n");
 				break;
@@ -301,12 +304,12 @@ void parse_cmd_args(int argc, char *argv[]) {
 			GlobOpts::withLoss = true;
 			if (optarg) {
 				char *sptr = NULL;
-				long ret = strtol(optarg, &sptr, 10);
-				if (ret <= 0 || sptr == NULL || *sptr != '\0') {
-					colored_printf(RED, "Option -l requires a valid integer: '%s'\n", optarg);
+				uint64_t ret = strtoul(optarg, &sptr, 10);
+				if (ret == 0 || sptr == NULL || *sptr != '\0') {
+					colored_printf(RED, "Option -%c requires a valid integer: '%s'\n", c, optarg);
 					usage(argv[0]);
 				}
-				GlobOpts::lossAggrSeconds = ret;
+				GlobOpts::lossAggrMs = ret;
 			}
 			break;
 		case 'G':
@@ -392,6 +395,20 @@ void parse_cmd_args(int argc, char *argv[]) {
 		usage(argv[0]);
 	}
 
+	if (GlobOpts::withLoss && !GlobOpts::withRecv) {
+		printf("Option --loss-interval requires option --receiver-dump\n");
+		usage(argv[0]);
+	}
+
+	if (GlobOpts::oneway_delay_variance) {
+		printf("Option --queueuing-delay is set, setting --transport\n");
+		GlobOpts::transport = true;
+	}
+
+	if (GlobOpts::aggOnly) {
+		GlobOpts::aggregate = true;
+	}
+
 	if (sendfn == "") {
 		usage(argv[0]);
 	}
@@ -462,18 +479,18 @@ int main(int argc, char *argv[]){
 	if (GlobOpts::genAckLatencyFiles)
 		senderDump->genAckLatencyFiles();
 
-	if (GlobOpts::connDetails) {
-		senderDump->printConns();
-		return 0;
-	}
-
 	if (GlobOpts::withSentTimes)
 		senderDump->writeSentTimesGroupedByInterval();
 
 	if (GlobOpts::withLoss)
 		senderDump->write_loss_to_file();
 
-	if ((GlobOpts::print_packets)) {
+	if (GlobOpts::connDetails) {
+		senderDump->printConns();
+		return 0;
+	}
+
+	if (GlobOpts::print_packets) {
 		senderDump->printPacketDetails();
 	}
 

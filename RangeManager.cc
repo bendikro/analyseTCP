@@ -1256,7 +1256,7 @@ void RangeManager::calculateRealLoss(map<ulong, ByteRange*>::iterator brIt, map<
 			if (prev_pack_lost) {
 				for (ulong i = 0; i < brIt->second->lost_tstamps_tcp.size(); i++) {
 					for (ulong u = 0; u < prev->lost_tstamps_tcp.size(); u++) {
-						if (brIt->second->lost_tstamps_tcp[i] == prev->lost_tstamps_tcp[u]) {
+						if (brIt->second->lost_tstamps_tcp[i].first == prev->lost_tstamps_tcp[u].first) {
 							lost -= 1;
 							if (!lost) {
 								i = brIt->second->lost_tstamps_tcp.size();
@@ -1545,10 +1545,59 @@ void RangeManager::writePacketLatencyVariationValues(ofstream *stream) {
 }
 */
 
+void RangeManager::writeLossGroupedByInterval(const uint64_t first, vector< pair<uint64_t,uint64_t> >& loss, ofstream& stream) {
+	vector< pair<uint32_t, timeval> >::iterator lossIt, lossEnd;
+	map<ulong, ByteRange*>::iterator range;
+
+	vector<uint64_t>* loss_count = new vector<uint64_t>();
+	vector<uint64_t>* loss_bytes = new vector<uint64_t>();
+
+	for (range = analyse_range_start; range != analyse_range_end; ++range) {
+		lossIt = range->second->lost_tstamps_tcp.begin();
+		lossEnd = range->second->lost_tstamps_tcp.end();
+
+		for (; lossIt != lossEnd; ++lossIt) {
+			uint64_t relative_ts = TV_TO_MS(lossIt->second) - first;
+			uint64_t bucket_idx = relative_ts / GlobOpts::lossAggrMs;
+
+			vector<uint64_t>& c_loss = *loss_count;
+			vector<uint64_t>& b_loss = *loss_bytes;
+
+			while (bucket_idx >= c_loss.size()) {
+				c_loss.push_back(0);
+				b_loss.push_back(0);
+			}
+
+			c_loss[bucket_idx] += 1;
+			b_loss[bucket_idx] += range->second->byte_count;		
+		}
+	}
+
+	const uint64_t num_buckets = loss_count->size();
+
+	while (num_buckets >= loss.size()) {
+		loss.push_back(pair<uint64_t, uint64_t>(0, 0));
+	}
+
+	for (uint64_t idx = 0; idx < num_buckets; ++idx) {
+		pair<uint64_t, uint64_t> p(
+				loss[idx].first + loss_count->at(idx),
+				loss[idx].second + loss_bytes->at(idx)
+				);
+		
+		loss[idx] = p;
+		stream << idx << ", " << loss_count->at(idx) << ", " << loss_bytes->at(idx) << endl;
+	}
+
+	delete loss_count;
+	delete loss_bytes;
+}
+
 /*
   Writes the loss stats for the connection over time.
   The slice_interval defines the interval for which to aggregate the loss.
 */
+/*
 void RangeManager::write_loss_over_time(unsigned slice_interval, unsigned timeslice_count, FILE *loss_retrans_out, FILE *loss_loss_out) {
 	map<ulong, ByteRange*>::iterator brIt, brIt_end;
 	int lost_count = 0;
@@ -1596,6 +1645,7 @@ void RangeManager::write_loss_over_time(unsigned slice_interval, unsigned timesl
 	if (loss_loss_out)
 		fprintf(loss_loss_out, "\n");
 }
+*/
 
 /*
   Generates the retransmission data for the R files.
