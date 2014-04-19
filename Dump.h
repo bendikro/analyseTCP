@@ -76,6 +76,7 @@ private:
 	uint64_t ackCount;
 	uint32_t max_payload_size;
 	map<ConnectionMapKey*, Connection*, ConnectionKeyComparator> conns;
+	vector< vector<timeval> > sentTimes;
 
 	void processSent(const struct pcap_pkthdr* header, const u_char *data);
 	void processRecvd(const struct pcap_pkthdr* header, const u_char *data);

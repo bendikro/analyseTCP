@@ -563,15 +563,15 @@ void Dump::findTCPTimeStamp(struct DataSeg* data, uint8_t* opts, int option_leng
 }
 
 /* Process outgoing packets */
-void Dump::processSent(const struct pcap_pkthdr* header, const u_char *data) {
-	//static const struct sniff_ethernet *ethernet; /* The ethernet header */
-	static const struct sniff_ip *ip; /* The IP header */
-	static const struct sniff_tcp *tcp; /* The TCP header */
-	static Connection *tmpConn;
-	static u_int ipSize;
-	static u_int ipHdrLen;
-	static u_int tcpHdrLen;
-	static struct sendData sd;
+void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
+	static uint64_t sent_time_bucket_idx = 0;
+
+	//const struct sniff_ethernet *ethernet; /* The ethernet header */
+	const sniff_ip *ip; /* The IP header */
+	const sniff_tcp *tcp; /* The TCP header */
+	u_int ipSize;
+	u_int ipHdrLen;
+	u_int tcpHdrLen;
 
 	/* Finds the different headers+payload */
 	//ethernet = (struct sniff_ethernet*) data;
@@ -581,9 +581,10 @@ void Dump::processSent(const struct pcap_pkthdr* header, const u_char *data) {
 	tcp = (struct sniff_tcp*) (data + SIZE_ETHERNET + ipHdrLen);
 	tcpHdrLen = TH_OFF(tcp) * 4;
 
-	tmpConn = getConn(&ip->ip_src, &ip->ip_dst, &tcp->th_sport, &tcp->th_dport, &tcp->th_seq);
+	Connection* tmpConn = getConn(&ip->ip_src, &ip->ip_dst, &tcp->th_sport, &tcp->th_dport, &tcp->th_seq);
 
 	/* Prepare packet data struct */
+	sendData sd;
 	sd.totalSize         = header->len;
 	sd.ipSize            = ipSize;
 	sd.ipHdrLen          = ipHdrLen;
@@ -621,6 +622,17 @@ void Dump::processSent(const struct pcap_pkthdr* header, const u_char *data) {
 
 	if (tmpConn->registerSent(&sd))
 		tmpConn->registerRange(&sd);
+
+	if (GlobOpts::withSentTimes) {
+		uint64_t relative_ts = TV_TO_MS(header->ts) - TV_TO_MS(first_sent_time);
+		sent_time_bucket_idx = relative_ts / GlobOpts::sentAggrMs;
+
+		while (sent_time_bucket_idx >= sentTimes.size()) {
+			sentTimes.push_back(vector<timeval>( ));
+		}
+		
+		sentTimes[sent_time_bucket_idx].push_back(header->ts);
+	}
 }
 
 
@@ -946,7 +958,16 @@ void Dump::printConns() {
 }
 
 void Dump::writeSentTimesGroupedByInterval() {
-	// TODO
+	vector< vector<timeval> >::iterator slice;
+
+	ofstream stream;
+	stream.open((GlobOpts::prefix + "sent-times-all.dat").c_str(), ios::out);
+
+	for (slice = sentTimes.begin(); slice != sentTimes.end(); ++slice) {
+		stream << slice->size() << endl;
+	}
+
+	stream.close();
 }
 
 /*

@@ -174,7 +174,7 @@ void usage (char* argv){
 	printf(" -t                  : Calculate transport-layer delays for latency variation\n");
 	printf("                     : (if not set, application-layer delay is calculated)\n");
 	printf(" -l<interval>        : Write loss over time to file with optional time slice interval (seconds, default=1).\n");
-	printf(" -G<interval>        : Write sent-times to file grouped by time slice interval (milliseconds, default=1000).\n");
+	printf(" -G<interval>        : Aggregate sent packets over time slice interval (milliseconds, default=1000).\n");
 	printf(" -u<prefix>          : Write statistics to comma-separated files (for use with R)\n");
 	printf(" -Q                  : Write sent-times and one-way delay variance (queuing delay).\n");
 	printf("                       This will implicitly set -t.\n");
