@@ -956,6 +956,10 @@ void Dump::printConns() {
 		   (csAggregated.ranges_lost / (double) csAggregated.ranges_sent) * 100);
 }
 
+
+/*
+ * Writes number of packets sent aggregated over time slices to file
+ */
 void Dump::writePacketCountGroupedByInterval() {
 	vector< vector<timeval> >::iterator slice;
 	uint64_t bucket;
@@ -993,6 +997,19 @@ ofstream& operator<<(ofstream& stream, const LossInterval& value) {
 	return stream;
 }
 
+/*
+ * Writes loss to file
+ * The columns are ordered as follows:
+ * 1 time slice index
+ * 2 ranges sent
+ * 3 bytes sent
+ * 4 ranges lost
+ * 5 bytes lost
+ * 6 ranges lost relative to ranges sent within time slice
+ * 7 bytes lost relative to bytes sent within time slice
+ * 8 ranges lost relative to total ranges sent
+ * 9 bytes lost relative to total bytes sent
+ */
 void Dump::write_loss_to_file() {
 	assert(GlobOpts::withRecv && "Calculating loss is only possible with receiver dump");
 
@@ -1152,7 +1169,7 @@ void Dump::writeSentTimesAndQueueingDelayVariance() {
 void Dump::writeByteLatencyVariationCDF() {
 	ofstream cdf_f;
 	stringstream cdffn;
-	cdffn << GlobOpts::prefix << "latency-cdf.dat";
+	cdffn << GlobOpts::prefix << "latency-variation-cdf.dat";
 	cdf_f.open((char*)((cdffn.str()).c_str()), ios::out);
 
 	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
@@ -1166,7 +1183,7 @@ void Dump::writeAggByteLatencyVariationCDF() {
 	char print_buf[300];
 	ofstream stream;
 	stringstream filename;
-	filename << GlobOpts::prefix << "latency-agg-cdf.dat";
+	filename << GlobOpts::prefix << "latency-variation-aggr-cdf.dat";
 	stream.open((char*)((filename.str()).c_str()), ios::out);
 
 	map<const long, int>::iterator nit, nit_end;
@@ -1239,7 +1256,7 @@ void Dump::genAckLatencyFiles() {
 		return;
 
 	vector<string> filenames = GlobStats::retrans_filenames;
-	filenames.push_back("all-durations-");
+	filenames.push_back("durations-all-");
 
 	globStats->prefix_filenames(filenames);
 
