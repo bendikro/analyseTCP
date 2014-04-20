@@ -162,35 +162,50 @@ void test(Dump *d) {
 }
 #endif
 
-void usage (char* argv){
-	printf("Usage: %s [-s|r|p|f|g|t|u|m|n|a|A|e|u|d|l|j|y|o|k]\n", argv);
+#define OPTSTRING "f:s:g:r:q:p:m:n:o:u:lctL::G::QaAeji::yvkd:h"
+
+void usage (char* argv, int exit_status=1){
+	string s(OPTSTRING);
+	string::iterator c = s.begin();
+
+	printf("Usage: %s [-%c", argv, *c++);
+	for (; c != s.end(); ++c) {
+		if (*c != ':') {
+			printf("|-%c", *c);
+		}
+	}
+	printf("]\n");
+	
+
 	printf("Required options:\n");
 	printf(" -f <pcap-file>      : Sender-side dumpfile.\n");
 	printf("Other options:\n");
 	printf(" -s <sender ip>      : Sender ip.\n");
-	printf(" -r <receiver ip>    : Receiver ip. If not given, analyse all receiver IPs\n");
-	printf(" -q <sender port>    : Sender port. If not given, analyse all sender ports\n");
-	printf(" -p <receiver port>  : Receiver port. If not given, analyse all receiver ports\n");
-	printf(" -g <pcap-file>      : Receiver-side dumpfile\n");
-	printf(" -c                  : Write CDF of byte based latency variation to file.\n");
-	printf(" -t                  : Calculate transport-layer delays for latency variation\n");
-	printf("                     : (if not set, application-layer delay is calculated)\n");
-	printf(" -l<interval>        : Write loss over time to file with optional time slice interval (milliseconds, default=1000).\n");
-	printf("                       This requires option -l.\n");
-	printf(" -G<interval>        : Aggregate sent packets over time slice interval (milliseconds, default=1000).\n");
-	printf(" -u<prefix>          : Write statistics to comma-separated files (for use with R)\n");
-	printf(" -Q                  : Write sent-times and one-way delay variance (queuing delay).\n");
+	printf(" -g <pcap-file>      : Receiver-side dumpfile.\n");
+	printf(" -r <receiver ip>    : Receiver ip. If not given, analyse all receiver IPs.\n");
+	printf(" -q <sender port>    : Sender port. If not given, analyse all sender ports.\n");
+	printf(" -p <receiver port>  : Receiver port. If not given, analyse all receiver ports.\n");
+	printf(" -m <IP>             : Sender side external NAT address as seen on receiver-side dump\n");
+	printf(" -n <IP>             : Receiver side local address as seen on receiver-side dump\n");
+	printf(" -o <output-dir>     : Output directory to write the result files in.\n");
+	printf(" -u<prefix>          : Use <prefix> as filename prefix for output files.\n");
+	printf(" -l                  : Write ACK-based latency values to file.\n");
+	printf(" -c                  : Write byte-based latency variation CDF to file.\n");
+	printf("                       If -t is not set, application-layer latency variation will be used.\n");
+	printf(" -t                  : Use transport-layer delays instead of application-layer (affects -c and -Q)\n");
+	printf(" -L<interval>        : Write loss over time to file, aggregated by interval in milliseconds (default=1000).\n");
+	printf("                       This requires a receiver-side dumpfile (-g).\n");
+	printf(" -G<interval>        : Write packet count over time to file, aggregated by interval in milliseconds (default=1000).\n");
+	printf(" -Q                  : Write sent-times and one-way delay variation (queueing delay) to file.\n");
 	printf("                       This will implicitly set -t.\n");
 	printf("                       Optional argument <prefix> assigns an output filename prefix (No space between option and argument).\n");
-	printf(" -o <output-dir>     : Directory to write the statistics results\n");
-	printf(" -m <IP>             : Sender side external NAT address (as seen on recv dump)\n");
-	printf(" -n <IP>             : Receiver side local address (as seen on recv dump)\n");
 	printf(" -a                  : Produce aggregated statistics (off by default, optional)\n");
-	printf(" -A                  : Only print aggregated statistics (off by default, optional)\n");
-	printf(" -e                  : Only print the connections found in the trace\n");
-	printf(" -j                  : Print relative sequence numbers.\n");
-	printf(" -i<percentiles>     : Calculate the specified percentiles (Optional comma separated list of percentiles).\n");
-	printf(" -y                  : Print details for each packet (requires receiver side dump).\n");
+	printf(" -A                  : Only print aggregated statistics.\n");
+	printf(" -e                  : List the connections found in the dumpfile.\n");
+	printf(" -j                  : Use relative sequence numbers in output.\n");
+	printf(" -i<percentiles>     : Calculate the specified percentiles for latency and packet size (Optional comma separated list of percentiles).\n");
+	printf(" -y                  : Print details for each packet.\n");
+	printf("                       This requires a receiver-side dumpfile (-g).\n");
 	printf(" -v                  : Be verbose, print more statistics details\n");
 	printf(" -k                  : Use colors when printing\n");
 	printf(" -d                  : Indicate debug level\n");
@@ -200,47 +215,48 @@ void usage (char* argv){
 	printf("                       4 = Only output when comparing sender and receiver.\n");
 	printf("                       5 = Print all debug messages.\n");
 	printf("\n");
-	printf(" --analyse-start=<start sec>       : Start analyzing <start sec> into the stream(s)\n");
-	printf(" --analyse-end=<end sec>           : Stop analyzing <end sec> before the end of the stream(s)\n");
-	printf(" --analyse-duration=<duration sec> : Stop analyzing after <duration sec> after the start\n");
+	printf(" --analyse-start=<start>       : Start analysing <start> seconds into the stream(s)\n");
+	printf(" --analyse-end=<end>           : Stop analysing <end> seconds before the end of the stream(s)\n");
+	printf(" --analyse-duration=<duration> : Stop analysing after <duration> seconds after the start\n");
 
 #ifdef DEBUG
 	printf("\nCompiled in DEBUG mode\n");
 #endif
-	exit(0);
+
+	exit(exit_status);
 }
 
-#define OPTSTRING "s:r:p:q:f:m:n:o:g:d:i::u::l::G::o:aAetjychvkQ"
 
 static struct option long_options[] = {
-	{"src-ip",                   required_argument, 0, 's'},
-	{"dst-ip",                   required_argument, 0, 'r'},
-	{"src-port",                 required_argument, 0, 'q'},
-	{"dst-port",                 required_argument, 0, 'p'},
-	{"src-nat-ip",               required_argument, 0, 'm'},
-	{"dst-nat-ip",               required_argument, 0, 'n'},
-	{"sender-dump",              required_argument, 0, 'f'},
-	{"receiver-dump",            required_argument, 0, 'g'},
-	{"output-dir",               required_argument, 0, 'o'},
-	{"cdf",                      no_argument,       0, 'c'},
-	{"csv",                      optional_argument, 0, 'u'},
-	{"loss-interval",            optional_argument, 0, 'l'},
-	{"percentiles",              optional_argument, 0, 'i'},
-	{"transport",                no_argument,       0, 't'},
-	{"conn-details",             no_argument,       0, 'e'},
-	{"aggregated",               no_argument,       0, 'a'},
-	{"aggregated-only",          no_argument,       0, 'A'},
-	{"relative-seqs",            no_argument,       0, 'j'},
-	{"range-details",            no_argument,       0, 'y'},
-	{"color-print",              no_argument,       0, 'k'},
-	{"help",                     no_argument,       0, 'h'},
-	{"verbose",                  optional_argument, 0, 'v'},
-	{"debug",                    required_argument, 0, 'd'},
-	{"analyse-start",            required_argument, 0, 'S'},
-	{"analyse-end",              required_argument, 0, 'E'},
-	{"analyse-duration",         required_argument, 0, 'D'},
-	{"queueing-delay",			 no_argument,       0, 'Q'},
-	{"sent-interval",			 optional_argument, 0, 'G'},
+	{"src-ip",                   	required_argument, 0, 's'},
+	{"dst-ip",                   	required_argument, 0, 'r'},
+	{"src-port",                 	required_argument, 0, 'q'},
+	{"dst-port",                 	required_argument, 0, 'p'},
+	{"src-nat-ip",               	required_argument, 0, 'm'},
+	{"dst-nat-ip",              	required_argument, 0, 'n'},
+	{"sender-dump",              	required_argument, 0, 'f'},
+	{"receiver-dump",            	required_argument, 0, 'g'},
+	{"output-dir",               	required_argument, 0, 'o'},
+	{"prefix",                   	required_argument, 0, 'u'},
+	{"transport-layer",   		 	no_argument,       0, 't'},
+	{"latency-variation",        	no_argument,       0, 'c'},
+	{"latency-values",           	no_argument,       0, 'l'},
+	{"queueing-delay",			 	no_argument,       0, 'Q'},
+	{"sent-interval",			 	optional_argument, 0, 'G'},
+	{"loss-interval",            	optional_argument, 0, 'L'},
+	{"percentiles",              	optional_argument, 0, 'i'},
+	{"connection-list",          	no_argument,       0, 'e'},
+	{"aggregated",               	no_argument,       0, 'a'},
+	{"aggregated-only",          	no_argument,       0, 'A'},
+	{"relative-sequence-numbers",	no_argument,       0, 'j'},
+	{"packet-details",             	no_argument,       0, 'y'},
+	{"colored-print",              	no_argument,       0, 'k'},
+	{"help",                     	no_argument,       0, 'h'},
+	{"verbose",                  	optional_argument, 0, 'v'},
+	{"debug",                    	required_argument, 0, 'd'},
+	{"analyse-start",            	required_argument, 0, 'S'},
+	{"analyse-end",              	required_argument, 0, 'E'},
+	{"analyse-duration",         	required_argument, 0, 'D'},
 	{0, 0, 0, 0}
 };
 
@@ -258,20 +274,8 @@ void parse_cmd_args(int argc, char *argv[]) {
 	// Default to disable color prints
 	disable_colors = true;
 
-	while (1) {
-		c = getopt_long(argc, argv, OPTSTRING, long_options, &option_index);
-
-		if (c == -1)
-			break;
-
+	while ((c = getopt_long(argc, argv, OPTSTRING, long_options, &option_index)) != -1) {
 		switch (c) {
-		case 0 :
-			//printf("LONG OPTION! flag: %s\n", long_options[option_index].name);
-			if (long_options[option_index].flag != 0) {
-				printf("Skipping argument?!?!\n");
-				break;
-			}
-			break;
 		case 's':
 			src_ip = optarg;
 			break;
@@ -300,7 +304,7 @@ void parse_cmd_args(int argc, char *argv[]) {
 			recvfn = optarg;
 			GlobOpts::withRecv = true;
 			break;
-		case 'l':
+		case 'L':
 			GlobOpts::withLoss = true;
 			if (optarg) {
 				char *sptr = NULL;
@@ -336,12 +340,12 @@ void parse_cmd_args(int argc, char *argv[]) {
 		case 't':
 			GlobOpts::transport = true;
 			break;
-		case 'u': {
+		case 'l':
 			GlobOpts::genAckLatencyFiles = true;
-			if (optarg) {
-				GlobOpts::prefix = optarg;
-			}
-		} break;
+			break;
+		case 'u': 
+			GlobOpts::prefix = optarg;
+			break;
 		case 'o':
 			GlobOpts::RFiles_dir = optarg;
 			break;
@@ -381,9 +385,9 @@ void parse_cmd_args(int argc, char *argv[]) {
 			GlobOpts::transport = true;
 			break;
 		case 'h':
-			usage(argv[0]);
+			usage(argv[0], 0);
 		case '?' :
-			printf("Unknown option: '%c'\n", c);
+			printf("Unknown option: -%c\n", c);
 			usage(argv[0]);
 		default:
 			break;
@@ -401,7 +405,7 @@ void parse_cmd_args(int argc, char *argv[]) {
 	}
 
 	if (GlobOpts::oneway_delay_variance) {
-		printf("Option --queueuing-delay is set, setting --transport\n");
+		printf("Option --queueuing-delay is set, setting --transport-layer\n");
 		GlobOpts::transport = true;
 	}
 
@@ -480,7 +484,7 @@ int main(int argc, char *argv[]){
 		senderDump->genAckLatencyFiles();
 
 	if (GlobOpts::withSentTimes)
-		senderDump->writeSentTimesGroupedByInterval();
+		senderDump->writeRangeCountGroupedByInterval();
 
 	if (GlobOpts::withLoss)
 		senderDump->write_loss_to_file();

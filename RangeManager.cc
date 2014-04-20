@@ -4,6 +4,7 @@
 #include "analyseTCP.h"
 #include "color_print.h"
 #include "util.h"
+#include <memory>
 
 map<const long, int> GlobStats::byteLatencyVariationCDFValues;
 
@@ -1545,52 +1546,104 @@ void RangeManager::writePacketLatencyVariationValues(ofstream *stream) {
 }
 */
 
-void RangeManager::writeLossGroupedByInterval(const uint64_t first, vector< pair<uint64_t,uint64_t> >& loss, ofstream& stream) {
+
+/*
+ * Output a loss interval value to an output file stream
+ */
+ofstream& operator<<(ofstream& stream, const LossInterval& value) {
+	stream << value.abs_count << ", ";
+    stream << value.abs_bytes << ", ";
+	stream << value.rel_count << ", ";
+	stream << value.rel_bytes;
+	return stream;
+}
+
+/*
+ * Sum two loss interval values together
+ */
+LossInterval& LossInterval::operator+=(const LossInterval& rhs) {
+	abs_count += rhs.abs_count;
+	rel_count += rhs.rel_count;
+	abs_bytes += rhs.abs_bytes;
+	rel_bytes += rhs.rel_bytes;
+	return *this;
+}
+
+void RangeManager::writeLossGroupedByInterval(const uint64_t first, vector<LossInterval>& all_loss, ofstream& stream) {
+	assert(GlobOpts::withRecv && "Writing loss grouped by interval requires receiver trace");
+
 	vector< pair<uint32_t, timeval> >::iterator lossIt, lossEnd;
+	vector<timeval>::iterator sentIt, sentEnd;
 	map<ulong, ByteRange*>::iterator range;
 
-	vector<uint64_t>* loss_count = new vector<uint64_t>();
-	vector<uint64_t>* loss_bytes = new vector<uint64_t>();
+	// Extract total values from ranges
+	typedef vector<double> lossvec;
+	auto_ptr<lossvec> total_count( new lossvec() );
+	auto_ptr<lossvec> total_bytes( new lossvec() );
+	lossvec& tc = *total_count.get();
+	lossvec& tb = *total_bytes.get();
+
+	for (range = analyse_range_start; range != analyse_range_end; ++range) {
+		sentIt = range->second->sent_tstamp_pcap.begin();
+		sentEnd = range->second->sent_tstamp_pcap.end();
+
+		// Place sent counts and byte counts in the right bucket
+		for (; sentIt != sentEnd; ++sentIt)
+		{
+			uint64_t relative_ts = TV_TO_MS(*sentIt) - first;
+			uint64_t bucket_idx = relative_ts / GlobOpts::lossAggrMs;
+
+			while (bucket_idx >= tc.size()) {
+				tc.push_back(0);
+				tb.push_back(0);
+			}
+
+			tc[bucket_idx] += 1;
+			tb[bucket_idx] += range->second->byte_count;
+		}
+	}
+
+	// Calculate loss values
+	auto_ptr< vector<LossInterval> > flow_loss( new vector<LossInterval>() );
+	vector<LossInterval>& loss = *flow_loss.get();
 
 	for (range = analyse_range_start; range != analyse_range_end; ++range) {
 		lossIt = range->second->lost_tstamps_tcp.begin();
 		lossEnd = range->second->lost_tstamps_tcp.end();
 
+		// Place loss values in the right bucket
 		for (; lossIt != lossEnd; ++lossIt) {
 			uint64_t relative_ts = TV_TO_MS(lossIt->second) - first;
 			uint64_t bucket_idx = relative_ts / GlobOpts::lossAggrMs;
 
-			vector<uint64_t>& c_loss = *loss_count;
-			vector<uint64_t>& b_loss = *loss_bytes;
-
-			while (bucket_idx >= c_loss.size()) {
-				c_loss.push_back(0);
-				b_loss.push_back(0);
+			while (bucket_idx >= loss.size()) {
+				loss.push_back(LossInterval( ));
 			}
 
-			c_loss[bucket_idx] += 1;
-			b_loss[bucket_idx] += range->second->byte_count;		
+			LossInterval value(1.0, 1.0 / tc[bucket_idx], range->second->byte_count, range->second->byte_count / tb[bucket_idx]);
+			loss[bucket_idx] += value;
 		}
 	}
 
-	const uint64_t num_buckets = loss_count->size();
-
-	while (num_buckets >= loss.size()) {
-		loss.push_back(pair<uint64_t, uint64_t>(0, 0));
+	// Output loss values
+	const uint64_t num_buckets = loss.size();
+	while (num_buckets >= all_loss.size()) {
+		all_loss.push_back(LossInterval( ));
 	}
 
+	stream << "abs-ranges, abs-bytes, rel-ival-ranges, rel-ival-bytes, rel-total-ranges, rel-total-bytes" << endl;
 	for (uint64_t idx = 0; idx < num_buckets; ++idx) {
-		pair<uint64_t, uint64_t> p(
-				loss[idx].first + loss_count->at(idx),
-				loss[idx].second + loss_bytes->at(idx)
-				);
-		
-		loss[idx] = p;
-		stream << idx << ", " << loss_count->at(idx) << ", " << loss_bytes->at(idx) << endl;
-	}
+		all_loss[idx] += loss[idx];
 
-	delete loss_count;
-	delete loss_bytes;
+		// lost ranges&bytes relative to total ranges&bytes
+		const double rel_count = loss[idx].abs_count / (double) analysed_sent_ranges_count;
+		const double rel_bytes = loss[idx].abs_bytes / (double) analysed_bytes_sent;
+
+		// output to stream
+		stream << idx << ", ";
+	   	stream << loss[idx] << ", "; 
+		stream << rel_count << ", " << rel_bytes << endl;
+	}
 }
 
 /*

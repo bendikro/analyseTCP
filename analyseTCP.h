@@ -58,6 +58,28 @@ using namespace std;
 
 typedef unsigned char uint8;
 
+// A loss value object, used for aggregating loss over intervals
+struct LossInterval {
+	double abs_count; // total number of ranges lost within interval
+	double abs_bytes;	// total number of bytes lost within interval
+	double rel_count; // number of ranges lost relative to ranges sent in interval
+	double rel_bytes;	// number of bytes lost relative to bytes sent in interval
+
+	LossInterval(double absolute_ranges, double relative_ranges, double absolute_bytes, double relative_bytes)
+		: abs_count(absolute_ranges), abs_bytes(absolute_bytes)
+		, rel_count(relative_ranges), rel_bytes(relative_bytes)
+	{ }
+
+	LossInterval( )
+		: abs_count(0), abs_bytes(0)
+		, rel_count(0), rel_bytes(0)
+	{ }
+
+	LossInterval& operator+=(const LossInterval& rhs);
+};
+ofstream& operator<<(ofstream& ouput_stream, const LossInterval& value);
+
+
 struct LatencyItem {
 	long time_ms;
 	int latency;
@@ -70,7 +92,7 @@ struct LatencyItem {
 
 ofstream& operator<<(ofstream& os, const LatencyItem& lat);
 
-#define TV_TO_MS(tv) ((int64_t)(tv.tv_sec * 1000L + (tv.tv_usec / 1000L)))
+#define TV_TO_MS(tv) ((int64_t)((tv).tv_sec * 1000L + ((tv).tv_usec / 1000L)))
 
 /* Class to keep global options */
 class GlobOpts {

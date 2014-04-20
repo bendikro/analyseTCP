@@ -1,6 +1,7 @@
 #include "Dump.h"
 #include "analyseTCP.h"
 #include "color_print.h"
+#include <memory>
 
 extern GlobStats *globStats;
 int GlobStats::totNumBytes;
@@ -955,13 +956,14 @@ void Dump::printConns() {
 		   (csAggregated.ranges_lost / (double) csAggregated.ranges_sent) * 100);
 }
 
-void Dump::writeSentTimesGroupedByInterval() {
+void Dump::writeRangeCountGroupedByInterval() {
 	vector< vector<timeval> >::iterator slice;
 	uint64_t bucket;
 
 	ofstream stream;
-	stream.open((GlobOpts::prefix + "sent-times-all.dat").c_str(), ios::out);
+	stream.open((GlobOpts::prefix + "range-count-all.dat").c_str(), ios::out);
 
+	stream << "ranges" << endl;
 	for (bucket = 0, slice = sentTimes.begin(); slice != sentTimes.end(); ++slice, ++bucket) {
 		stream << bucket << ", " << slice->size() << endl;
 	}
@@ -971,9 +973,11 @@ void Dump::writeSentTimesGroupedByInterval() {
 
 void Dump::write_loss_to_file() {
 	assert(GlobOpts::withRecv && "Calculating loss is only possible with receiver dump");
+	auto_ptr< vector<LossInterval> > loss( new vector<LossInterval>() );
 
-	vector< pair<uint64_t,uint64_t> >* all_loss = new vector< pair<uint64_t,uint64_t> >();
+	double total_count = 0, total_bytes = 0;
 
+	// Extract (and print) loss values for each connection
 	map<ConnectionMapKey*, Connection*>::iterator conn;
 	for (conn = conns.begin(); conn != conns.end(); ++conn) {
 		string filename;
@@ -982,23 +986,31 @@ void Dump::write_loss_to_file() {
 		ofstream stream;
 		stream.open(filename.c_str(), ios::out);
 
-		conn->second->rm->writeLossGroupedByInterval(TV_TO_MS(first_sent_time), *all_loss, stream);
+		conn->second->rm->writeLossGroupedByInterval(TV_TO_MS(first_sent_time), *loss, stream);
 
 		stream.close();
+
+		total_count += conn->second->rm->analysed_sent_ranges_count;
+		total_bytes += conn->second->rm->analysed_bytes_sent;
 	}
 
-
+	// Print values for all connections
 	ofstream stream;
 	stream.open((GlobOpts::prefix + "loss-all.dat").c_str(), ios::out);
 
-	uint64_t idx;
-	vector< pair<uint64_t,uint64_t> >::iterator it;
-	for (it = all_loss->begin(), idx = 0; it != all_loss->end(); ++it, ++idx) {
-		stream << idx << ", " << it->first << ", " << it->second << endl;
+	stream << "abs-ranges, abs-bytes, rel-ival-ranges, rel-ival-bytes, rel-total-ranges, rel-total-bytes" << endl;
+	for (uint64_t idx = 0, num = loss->size(); idx < num; ++idx) {
+		// lost ranges&bytes relative to total ranges&bytes
+		const double rel_count = loss->at(idx).abs_count / total_count;
+		const double rel_bytes = loss->at(idx).abs_bytes / total_bytes;
+
+		// output to stream
+		stream << idx << ", ";
+		stream << loss->at(idx) << ", ";
+		stream << rel_count << ", " << rel_bytes << endl;
 	}
 
 	stream.close();
-	delete all_loss;
 }
 
 /*

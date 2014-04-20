@@ -24,7 +24,7 @@ public:
 	uint64_t startSeq;                 // The relative sequence number of the first byte in this range
 	uint64_t endSeq;                   // The relative sequence number of the last byte in this range
 	uint8_t received_count;            // Count number of times this byte range has been received
-	uint8_t sent_count;                // Count number of times this byte range has been sent
+	uint8_t sent_count;                // Count number of times this byte range has been sent (incl. retransmissions)
 	uint16_t byte_count;               // The number of bytes in this range
 	uint16_t original_payload_size;
 	uint8_t packet_sent_count;         // Count number of packet transmissions. This value is not copied when splitting a byte range!
