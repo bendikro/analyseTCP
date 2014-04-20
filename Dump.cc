@@ -963,9 +963,9 @@ void Dump::writeRangeCountGroupedByInterval() {
 	ofstream stream;
 	stream.open((GlobOpts::prefix + "range-count-all.dat").c_str(), ios::out);
 
-	stream << "ranges" << endl;
+	//stream << "ranges" << endl;
 	for (bucket = 0, slice = sentTimes.begin(); slice != sentTimes.end(); ++slice, ++bucket) {
-		stream << bucket << ", " << slice->size() << endl;
+		stream << bucket << "," << slice->size() << endl;
 	}
 
 	stream.close();
@@ -998,16 +998,16 @@ void Dump::write_loss_to_file() {
 	ofstream stream;
 	stream.open((GlobOpts::prefix + "loss-all.dat").c_str(), ios::out);
 
-	stream << "abs-ranges, abs-bytes, rel-ival-ranges, rel-ival-bytes, rel-total-ranges, rel-total-bytes" << endl;
+	//stream << "abs-ranges, abs-bytes, rel-ival-ranges, rel-ival-bytes, rel-total-ranges, rel-total-bytes" << endl;
 	for (uint64_t idx = 0, num = loss->size(); idx < num; ++idx) {
 		// lost ranges&bytes relative to total ranges&bytes
 		const double rel_count = loss->at(idx).abs_count / total_count;
 		const double rel_bytes = loss->at(idx).abs_bytes / total_bytes;
 
 		// output to stream
-		stream << idx << ", ";
-		stream << loss->at(idx) << ", ";
-		stream << rel_count << ", " << rel_bytes << endl;
+		stream << idx << ",";
+		stream << loss->at(idx) << ",";
+		stream << rel_count << "," << rel_bytes << endl;
 	}
 
 	stream.close();

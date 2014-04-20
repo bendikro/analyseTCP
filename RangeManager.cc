@@ -1551,9 +1551,9 @@ void RangeManager::writePacketLatencyVariationValues(ofstream *stream) {
  * Output a loss interval value to an output file stream
  */
 ofstream& operator<<(ofstream& stream, const LossInterval& value) {
-	stream << value.abs_count << ", ";
-    stream << value.abs_bytes << ", ";
-	stream << value.rel_count << ", ";
+	stream << value.abs_count << ",";
+    stream << value.abs_bytes << ",";
+	stream << value.rel_count << ",";
 	stream << value.rel_bytes;
 	return stream;
 }
@@ -1631,7 +1631,7 @@ void RangeManager::writeLossGroupedByInterval(const uint64_t first, vector<LossI
 		all_loss.push_back(LossInterval( ));
 	}
 
-	stream << "abs-ranges, abs-bytes, rel-ival-ranges, rel-ival-bytes, rel-total-ranges, rel-total-bytes" << endl;
+	//stream << "abs-ranges, abs-bytes, rel-ival-ranges, rel-ival-bytes, rel-total-ranges, rel-total-bytes" << endl;
 	for (uint64_t idx = 0; idx < num_buckets; ++idx) {
 		all_loss[idx] += loss[idx];
 
@@ -1640,9 +1640,9 @@ void RangeManager::writeLossGroupedByInterval(const uint64_t first, vector<LossI
 		const double rel_bytes = loss[idx].abs_bytes / (double) analysed_bytes_sent;
 
 		// output to stream
-		stream << idx << ", ";
-	   	stream << loss[idx] << ", "; 
-		stream << rel_count << ", " << rel_bytes << endl;
+		stream << idx << ",";
+	   	stream << loss[idx] << ","; 
+		stream << rel_count << "," << rel_bytes << endl;
 	}
 }
 
