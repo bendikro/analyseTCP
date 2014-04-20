@@ -484,7 +484,7 @@ int main(int argc, char *argv[]){
 		senderDump->genAckLatencyFiles();
 
 	if (GlobOpts::withSentTimes)
-		senderDump->writeRangeCountGroupedByInterval();
+		senderDump->writePacketCountGroupedByInterval();
 
 	if (GlobOpts::withLoss)
 		senderDump->write_loss_to_file();

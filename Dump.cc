@@ -956,14 +956,13 @@ void Dump::printConns() {
 		   (csAggregated.ranges_lost / (double) csAggregated.ranges_sent) * 100);
 }
 
-void Dump::writeRangeCountGroupedByInterval() {
+void Dump::writePacketCountGroupedByInterval() {
 	vector< vector<timeval> >::iterator slice;
 	uint64_t bucket;
 
 	ofstream stream;
-	stream.open((GlobOpts::prefix + "range-count-all.dat").c_str(), ios::out);
+	stream.open((GlobOpts::prefix + "packet-count-all.dat").c_str(), ios::out);
 
-	//stream << "ranges" << endl;
 	for (bucket = 0, slice = sentTimes.begin(); slice != sentTimes.end(); ++slice, ++bucket) {
 		stream << bucket << "," << slice->size() << endl;
 	}
@@ -971,46 +970,87 @@ void Dump::writeRangeCountGroupedByInterval() {
 	stream.close();
 }
 
+
+/*
+ * Output a loss interval value to an output file stream
+ */
+ofstream& operator<<(ofstream& stream, const LossInterval& value) {
+	stream << value.total_count << ",";
+	stream << value.total_bytes << ",";
+	stream << value.count << ",";
+    stream << value.bytes << ",";
+	
+	if (value.total_count != 0)
+		stream << (value.count / value.total_count) << ",";
+	else
+		stream << 0 << ",";
+
+	if (value.total_bytes != 0)
+		stream << (value.bytes / value.total_bytes);
+	else
+		stream << "0";
+
+	return stream;
+}
+
 void Dump::write_loss_to_file() {
 	assert(GlobOpts::withRecv && "Calculating loss is only possible with receiver dump");
-	auto_ptr< vector<LossInterval> > loss( new vector<LossInterval>() );
 
+	auto_ptr< vector<LossInterval> > aggr( new vector<LossInterval>() );
 	double total_count = 0, total_bytes = 0;
 
 	// Extract (and print) loss values for each connection
 	map<ConnectionMapKey*, Connection*>::iterator conn;
 	for (conn = conns.begin(); conn != conns.end(); ++conn) {
-		string filename;
-		filename = GlobOpts::prefix + "loss-" + conn->second->getConnKey() + ".dat";
 
-		ofstream stream;
-		stream.open(filename.c_str(), ios::out);
+		auto_ptr< vector<LossInterval> > loss( new vector<LossInterval>() );
 
-		conn->second->rm->writeLossGroupedByInterval(TV_TO_MS(first_sent_time), *loss, stream);
-
-		stream.close();
-
+		conn->second->rm->calculateLossGroupedByInterval(TV_TO_MS(first_sent_time), *aggr, *loss);
 		total_count += conn->second->rm->analysed_sent_ranges_count;
 		total_bytes += conn->second->rm->analysed_bytes_sent;
+
+		// output to stream
+		if (!GlobOpts::aggOnly) {
+			string filename;
+			filename = GlobOpts::prefix + "loss-" + conn->second->getConnKey() + ".dat";
+
+			ofstream stream;
+			stream.open(filename.c_str(), ios::out);
+
+			for (uint64_t idx = 0, num = loss->size(); idx < num; ++idx) {
+
+				// lost ranges&bytes relative to total ranges&bytes
+				const double rel_count = loss->at(idx).count / (double) conn->second->rm->analysed_sent_ranges_count;
+				const double rel_bytes = loss->at(idx).bytes / (double) conn->second->rm->analysed_bytes_sent;
+
+				stream << idx << ",";
+				stream << loss->at(idx) << ",";
+				stream << rel_count << "," << rel_bytes << endl;
+			}
+
+			stream.close();
+		}
 	}
 
 	// Print values for all connections
-	ofstream stream;
-	stream.open((GlobOpts::prefix + "loss-all.dat").c_str(), ios::out);
+	if (GlobOpts::aggregate) {
+		ofstream stream;
+		stream.open((GlobOpts::prefix + "loss-aggr.dat").c_str(), ios::out);
 
-	//stream << "abs-ranges, abs-bytes, rel-ival-ranges, rel-ival-bytes, rel-total-ranges, rel-total-bytes" << endl;
-	for (uint64_t idx = 0, num = loss->size(); idx < num; ++idx) {
-		// lost ranges&bytes relative to total ranges&bytes
-		const double rel_count = loss->at(idx).abs_count / total_count;
-		const double rel_bytes = loss->at(idx).abs_bytes / total_bytes;
+		for (uint64_t idx = 0, num = aggr->size(); idx < num; ++idx) {
 
-		// output to stream
-		stream << idx << ",";
-		stream << loss->at(idx) << ",";
-		stream << rel_count << "," << rel_bytes << endl;
+			// lost ranges&bytes relative to total ranges&bytes
+			const double rel_count = aggr->at(idx).count / total_count;
+			const double rel_bytes = aggr->at(idx).bytes / total_bytes;
+
+			// output to stream
+			stream << idx << ",";
+			stream << aggr->at(idx) << ",";
+			stream << rel_count << "," << rel_bytes << endl;
+		}
+
+		stream.close();
 	}
-
-	stream.close();
 }
 
 /*

@@ -170,11 +170,20 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 	brIt_end = ranges.end();
 	brIt = brIt_end;
 
-#ifdef DEBUG
-	int debug_print = GlobOpts::debugLevel == 6;
-	debug_print = 1;
 
-	//	if (start_seq >= 21647733)
+#ifdef DEBUG
+	int debug_print = 0;//GlobOpts::debugLevel == 6;
+	if (TV_TO_MS(data_seg->tstamp_pcap) == 1396710194676) {
+		printf("\n\nHEEEEEEI sent:%d level:%d\n\n", sent, level);
+		printf("%s\n", conn->getConnKey().c_str());
+		debug_print = 1;
+	}
+	//debug_print = 1;
+
+
+	if (start_seq < 500) {
+		debug_print = 1;
+	}
 	//if (start_seq >= 21643733)
 	//	debug_print = 1;
 	//
@@ -1547,29 +1556,25 @@ void RangeManager::writePacketLatencyVariationValues(ofstream *stream) {
 */
 
 
-/*
- * Output a loss interval value to an output file stream
- */
-ofstream& operator<<(ofstream& stream, const LossInterval& value) {
-	stream << value.abs_count << ",";
-    stream << value.abs_bytes << ",";
-	stream << value.rel_count << ",";
-	stream << value.rel_bytes;
-	return stream;
-}
 
 /*
  * Sum two loss interval values together
  */
 LossInterval& LossInterval::operator+=(const LossInterval& rhs) {
-	abs_count += rhs.abs_count;
-	rel_count += rhs.rel_count;
-	abs_bytes += rhs.abs_bytes;
-	rel_bytes += rhs.rel_bytes;
+	count += rhs.count;
+	bytes += rhs.bytes;
 	return *this;
 }
 
-void RangeManager::writeLossGroupedByInterval(const uint64_t first, vector<LossInterval>& all_loss, ofstream& stream) {
+/*
+ * Set total values for the loss interval
+ */
+void LossInterval::add_total(double count, double bytes) {
+	total_count += count;
+	total_bytes += bytes;
+}
+
+void RangeManager::calculateLossGroupedByInterval(const uint64_t first, vector<LossInterval>& all_loss, vector<LossInterval>& loss) {
 	assert(GlobOpts::withRecv && "Writing loss grouped by interval requires receiver trace");
 
 	vector< pair<uint32_t, timeval> >::iterator lossIt, lossEnd;
@@ -1598,15 +1603,21 @@ void RangeManager::writeLossGroupedByInterval(const uint64_t first, vector<LossI
 				tb.push_back(0);
 			}
 
+			if (bucket_idx == 62) {
+				printf("\ntimestamp: %ld\n", TV_TO_MS(*sentIt));
+				printf("%s wut pcap ts: %lu tcp ts: %lu rdb ts: %lu\n", conn->getConnKey().c_str(), 
+						range->second->sent_tstamp_pcap.size(), 
+						range->second->tstamps_tcp.size(),
+						range->second->rdb_tstamps_tcp.size()
+						); 
+			 }
+
 			tc[bucket_idx] += 1;
 			tb[bucket_idx] += range->second->byte_count;
 		}
 	}
 
 	// Calculate loss values
-	auto_ptr< vector<LossInterval> > flow_loss( new vector<LossInterval>() );
-	vector<LossInterval>& loss = *flow_loss.get();
-
 	for (range = analyse_range_start; range != analyse_range_end; ++range) {
 		lossIt = range->second->lost_tstamps_tcp.begin();
 		lossEnd = range->second->lost_tstamps_tcp.end();
@@ -1617,32 +1628,27 @@ void RangeManager::writeLossGroupedByInterval(const uint64_t first, vector<LossI
 			uint64_t bucket_idx = relative_ts / GlobOpts::lossAggrMs;
 
 			while (bucket_idx >= loss.size()) {
-				loss.push_back(LossInterval( ));
+				loss.push_back(LossInterval(0, 0));
 			}
 
-			LossInterval value(1.0, 1.0 / tc[bucket_idx], range->second->byte_count, range->second->byte_count / tb[bucket_idx]);
-			loss[bucket_idx] += value;
+			loss[bucket_idx] += LossInterval(1, range->second->byte_count);
 		}
 	}
 
-	// Output loss values
 	const uint64_t num_buckets = loss.size();
 	while (num_buckets >= all_loss.size()) {
-		all_loss.push_back(LossInterval( ));
+		all_loss.push_back(LossInterval(0, 0));
 	}
 
-	//stream << "abs-ranges, abs-bytes, rel-ival-ranges, rel-ival-bytes, rel-total-ranges, rel-total-bytes" << endl;
+	// Set total values
 	for (uint64_t idx = 0; idx < num_buckets; ++idx) {
+		/*if (idx == 62//71) {
+			printf("\n\n%s WAT\ntc: %g, tb: %g\n\n", conn->getConnKey().c_str(), tc[idx], tb[idx]);
+		}*/
+
 		all_loss[idx] += loss[idx];
-
-		// lost ranges&bytes relative to total ranges&bytes
-		const double rel_count = loss[idx].abs_count / (double) analysed_sent_ranges_count;
-		const double rel_bytes = loss[idx].abs_bytes / (double) analysed_bytes_sent;
-
-		// output to stream
-		stream << idx << ",";
-	   	stream << loss[idx] << ","; 
-		stream << rel_count << "," << rel_bytes << endl;
+		all_loss[idx].add_total(tc[idx], tb[idx]);
+		loss[idx].add_total(tc[idx], tb[idx]);
 	}
 }
 

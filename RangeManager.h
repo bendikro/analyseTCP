@@ -120,7 +120,7 @@ public:
 	void analyseReceiverSideData();
 	void calculateRetransAndRDBStats();
 	//void write_loss_over_time(unsigned slice_interval, unsigned timeslice_count, FILE *loss_retrans_out, FILE *loss_loss_out);
-	void writeLossGroupedByInterval(const uint64_t first_ts, vector<LossInterval>& loss, ofstream& stream);
+	void calculateLossGroupedByInterval(const uint64_t first_ts, vector<LossInterval>& aggr_loss, vector<LossInterval>& loss);
 	void printPacketDetails();
 };
 

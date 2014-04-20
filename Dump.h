@@ -105,7 +105,7 @@ public:
 	Connection* getConn(const struct in_addr *srcIp, const struct in_addr *dstIp, const uint16_t *srcPort, const uint16_t *dstPort, const uint32_t *seq);
 	void fillWithSortedConns(map<ConnectionMapKey*, Connection*, SortedConnectionKeyComparator> &sortedConns);
 	void writeSentTimesAndQueueingDelayVariance();
-	void writeRangeCountGroupedByInterval();
+	void writePacketCountGroupedByInterval();
 };
 
 #endif /* DUMP_H */
