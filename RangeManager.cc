@@ -1603,15 +1603,6 @@ void RangeManager::calculateLossGroupedByInterval(const uint64_t first, vector<L
 				tb.push_back(0);
 			}
 
-			if (bucket_idx == 62) {
-				printf("\ntimestamp: %ld\n", TV_TO_MS(*sentIt));
-				printf("%s wut pcap ts: %lu tcp ts: %lu rdb ts: %lu\n", conn->getConnKey().c_str(), 
-						range->second->sent_tstamp_pcap.size(), 
-						range->second->tstamps_tcp.size(),
-						range->second->rdb_tstamps_tcp.size()
-						); 
-			 }
-
 			tc[bucket_idx] += 1;
 			tb[bucket_idx] += range->second->byte_count;
 		}
@@ -1642,10 +1633,6 @@ void RangeManager::calculateLossGroupedByInterval(const uint64_t first, vector<L
 
 	// Set total values
 	for (uint64_t idx = 0; idx < num_buckets; ++idx) {
-		/*if (idx == 62//71) {
-			printf("\n\n%s WAT\ntc: %g, tb: %g\n\n", conn->getConnKey().c_str(), tc[idx], tb[idx]);
-		}*/
-
 		all_loss[idx] += loss[idx];
 		all_loss[idx].add_total(tc[idx], tb[idx]);
 		loss[idx].add_total(tc[idx], tb[idx]);
