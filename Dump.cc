@@ -978,47 +978,74 @@ void Dump::writePacketCountGroupedByInterval() {
 /*
  * Output a loss interval value to an output file stream
  */
-ofstream& operator<<(ofstream& stream, const LossInterval& value) {
-	stream << value.tot_cnt_bytes << ",";
-	stream << value.tot_all_bytes << ",";
-	stream << value.tot_new_bytes << ",";
-	stream << value.cnt_bytes << ",";
-    stream << value.all_bytes << ",";
-	stream << value.new_bytes << ",";
+ofstream& operator<<(ofstream& s, const LossInterval& v) {
+	// total sent during interval
+	s << v.tot_cnt_bytes << ",";
+	s << v.tot_all_bytes << ",";
+	s << (v.tot_all_bytes - v.tot_new_bytes) << ",";
+	s << v.tot_new_bytes << ",";
+
+	// total lost during interval
+	s << v.cnt_bytes << ",";
+    s << v.all_bytes << ",";
+	s << (v.all_bytes - v.new_bytes) << ",";
+	s << v.new_bytes << ",";
 	
-	if (value.tot_cnt_bytes != 0)
-		stream << (value.cnt_bytes / value.tot_cnt_bytes) << ",";
+	// total lost relative to sent within interval
+	if (v.tot_cnt_bytes != 0)
+		s << (v.cnt_bytes / v.tot_cnt_bytes) << ",";
 	else
-		stream << 0 << ",";
+		s << 0 << ",";
 
-	if (value.tot_all_bytes != 0)
-		stream << (value.all_bytes / value.tot_all_bytes) << ",";
+	if (v.tot_all_bytes != 0)
+		s << (v.all_bytes / v.tot_all_bytes) << ",";
 	else
-		stream << 0 << ",";
+		s << 0 << ",";
 
-	if (value.tot_new_bytes != 0)
-		stream << (value.new_bytes / value.tot_new_bytes);
+	if ((v.tot_all_bytes - v.tot_new_bytes) != 0)
+		s << ((v.all_bytes - v.new_bytes) / (v.tot_all_bytes - v.tot_new_bytes)) << ",";
 	else
-		stream << 0;
+		s << 0 << ",";
 
-	return stream;
+	if (v.tot_new_bytes != 0)
+		s << (v.new_bytes / v.tot_new_bytes) << ",";
+	else
+		s << 0 << ",";
+
+	// total lost relative to lost within interval
+	if (v.all_bytes != 0)
+		s << ((v.all_bytes - v.new_bytes) / v.all_bytes) << ",";
+	else
+		s << 0 << ",";
+
+	if (v.all_bytes != 0)
+		s << (v.new_bytes / v.all_bytes);
+	else
+		s << 0;
+
+	return s;
 }
 
 /*
  * Writes loss to file
  * The columns are ordered as follows:
- * 1  interval index
- * 2  byte ranges sent within interval
- * 3  all bytes sent (incl. retrans) within interval
+ * 0  interval index
+ * 1  byte ranges sent within interval
+ * 2  all bytes sent (incl. retrans) within interval
+ * 3  old bytes sent (retrans only) within interval
  * 4  new bytes sent (new data) within interval
  * 5  ranges lost within interval
  * 6  all bytes lost (incl. retrans) within interval
- * 7  new bytes lost (new data) within interval
- * 8  ranges lost relative to ranges sent within interval
- * 9  all bytes lost relative to bytes sent within interval
- * 10 new bytes lost relative to new bytes sent within interval
- * 11 ranges lost relative to total ranges sent
- * 12 bytes lost relative to total bytes sent
+ * 7  old bytes lost (retrans) within interval
+ * 8  new bytes lost (new data) within interval
+ * 9  ranges lost relative to ranges sent within interval
+ * 10 all bytes lost relative to all bytes sent within interval
+ * 11 old bytes lost relative to old bytes sent within interval
+ * 12 new bytes lost relative to new bytes sent within interval
+ * 13 old bytes lost relative to all bytes lost within interval
+ * 14 new bytes lost relative to all bytes lost within interval
+ * 15 ranges lost relative to total ranges sent
+ * 16 bytes lost relative to total bytes sent
  */
 void Dump::write_loss_to_file() {
 	assert(GlobOpts::withRecv && "Calculating loss is only possible with receiver dump");
@@ -1028,9 +1055,10 @@ void Dump::write_loss_to_file() {
 
 	const char* headers[] = {
 		"interval", 
-		"ranges_sent", "all_bytes_sent", "new_bytes_sent",
-		"ranges_lost", "all_bytes_lost", "new_bytes_lost",
-		"ranges_lost_relative_to_interval", "all_bytes_lost_relative_to_interval", "new_bytes_lost_relative_to_interval",
+		"ranges_sent", "all_bytes_sent", "old_bytes_sent", "new_bytes_sent",
+		"ranges_lost", "all_bytes_lost", "old_bytes_lost", "new_bytes_lost",
+		"ranges_lost_relative_to_interval", "all_bytes_lost_relative_to_interval", "old_bytes_lost_relative_to_interval", "new_bytes_lost_relative_to_interval",
+		"old_bytes_lost_relative_to_all_bytes_lost", "new_bytes_lost_relative_to_all_bytes_lost", 
 		"ranges lost_relative_to_total", "all_bytes_lost_relative_to_total"
 	};
 

@@ -168,7 +168,7 @@ void test(Dump *d) {
 
 #define OPTSTRING "f:s:g:r:q:p:m:n:o:u:lctL::G::QaAeji::yvkd:h"
 
-void usage (char* argv, int exit_status=1){
+void usage (char* argv, int exit_status=1, int help_level=1){
 	string s(OPTSTRING);
 	string::iterator c = s.begin();
 
@@ -199,23 +199,32 @@ void usage (char* argv, int exit_status=1){
 	printf(" -t                  : Use transport-layer delays instead of application-layer (affects -c and -Q)\n");
 	printf(" -L<interval>        : Write loss over time to file, aggregated by interval in milliseconds (default is 1000).\n");
 	printf("                       This requires a receiver-side dumpfile (option -g).\n");
-	printf("                       Columns in output file:\n");
-	printf("                         0  interval (time slice)\n");
-	printf("                         1  total ranges sent within interval\n");
-	printf("                         2  total bytes sent within interval\n");
-	printf("                         3  total bytes of new data sent within interval\n");
-	printf("                         4  ranges lost within interval\n");
-	printf("                         5  bytes lost within interval\n");
-	printf("                         6  bytes of new data lost within interval\n");
-	printf("                         7  ranges lost relative to ranges sent within interval\n");
-	printf("                         8  bytes lost relative to bytes sent within interval\n");
-	printf("                         9  bytes of new data lost relative to bytes sent within interval\n");
-	printf("                         10 ranges lost within interval relative to ranges sent in total\n");
-	printf("                         11 bytes lost within interval relative to bytes sent in total\n");
+	if (help_level > 1) {
+		printf("                       Columns in output file:\n");
+		printf("                         0  interval (time slice)\n");
+		printf("                         1  total ranges sent during interval\n");
+		printf("                         2  total bytes sent during interval (retransmitted and new data)\n");
+		printf("                         3  total bytes of old data sent during interval (retransmitted only)\n");
+		printf("                         4  total bytes of new data sent during interval (new data only)\n");
+		printf("                         5  ranges lost within interval\n");
+		printf("                         6  all bytes lost within interval\n");
+		printf("                         7  old bytes lost within interval\n");
+		printf("                         8  new bytes lost within interval\n");
+		printf("                         9  ranges lost relative to ranges sent within interval\n");
+		printf("                         10  all bytes lost relative to all bytes sent within interval\n");
+		printf("                         11 old bytes lost relative to all bytes sent within interval\n");
+		printf("                         12 new bytes lost relative to all bytes sent within interval\n");
+		printf("                         13 old bytes lost relative to all bytes lost within interval\n");
+		printf("                         14 new bytes lost relative to all bytes lost within interval\n");
+		printf("                         15 ranges lost within interval relative to ranges sent in total\n");
+		printf("                         16 all bytes lost within interval relative to bytes sent in total\n");
+	}
 	printf(" -G<interval>        : Write packet count over time to file, aggregated by interval in milliseconds (default is 1000).\n");
 	printf("                       Columns in output file:\n");
-	printf("                         0  interval (time slice)\n");
-	printf("                         1  total packets sent within interval\n");
+	if (help_level > 1) {
+		printf("                         0  interval (time slice)\n");
+		printf("                         1  total packets sent within interval\n");
+	}
 	printf(" -Q                  : Write sent-times and one-way delay variation (queueing delay) to file.\n");
 	printf("                       This will implicitly set option -t.\n");
 	printf("                       Optional argument <prefix> assigns an output filename prefix (No space between option and argument).\n");
@@ -224,21 +233,50 @@ void usage (char* argv, int exit_status=1){
 	printf(" -e                  : List the connections found in the dumpfile.\n");
 	printf(" -j                  : Use relative sequence numbers in output.\n");
 	printf(" -i<percentiles>     : Calculate the specified percentiles for latency and packet size.\n");
-	printf("                       Optional comma separated list of percentiles, default is 1,25,50,75,99.\n");
+	printf("                       Comma separated list of percentiles, default is 1,25,50,75,99\n");
+	if (help_level > 1) {
+		printf("                       Example for 90th, 99th and 99.9th: -i90,99,99.9\n");
+	}
 	printf(" -y                  : Print details for each packet.\n");
 	printf("                       This requires a receiver-side dumpfile (option -g).\n");
-	printf(" -v                  : Be verbose, print more statistics details\n");
-	printf(" -k                  : Use colors when printing\n");
-	printf(" -d                  : Indicate debug level\n");
-	printf("                       1 = Only output on reading sender side dump first pass.\n");
-	printf("                       2 = Only output on reading sender side second pass.\n");
-	printf("                       3 = Only output on reading receiver side.\n");
-	printf("                       4 = Only output when comparing sender and receiver.\n");
-	printf("                       5 = Print all debug messages.\n");
+	printf(" -v                  : Be verbose, print more statistics details. The more v's the more verbose.\n");
+	if (help_level > 1) {
+		printf("                         v   = Be verbose and print some details.\n");
+		printf("                         vv  = Be more verbose and print some more details.\n");
+		printf("                         vvv = Be even more verbose and print even more details.\n");
+	}
+	printf(" -k                  : Use colors when printing.\n");
+	printf(" -d<level>           : Indicate debug level (1-5).\n");
+	if (help_level > 1) {
+		printf("                         1 = Only output on reading sender side dump first pass.\n");
+		printf("                         2 = Only output on reading sender side second pass.\n");
+		printf("                         3 = Only output on reading receiver side.\n");
+		printf("                         4 = Only output when comparing sender and receiver.\n");
+		printf("                         5 = Print all debug messages.\n");
+	}
+	printf(" -h                  : Print this help and quit. More h's means more help.\n");
 	printf("\n");
 	printf(" --analyse-start=<start>       : Start analysing <start> seconds into the stream(s)\n");
 	printf(" --analyse-end=<end>           : Stop analysing <end> seconds before the end of the stream(s)\n");
 	printf(" --analyse-duration=<duration> : Stop analysing after <duration> seconds after the start\n");
+
+	if (help_level > 2) {
+		printf("\n");
+		if (help_level < 4)
+			printf("That's all!\n");
+		else if (help_level < 5)
+			printf("Stop nagging, I've already said what I can.\n");
+		else if (help_level < 6)
+			printf("I've already been helpful enough, don't you think?\n");
+		else if (help_level < 7)
+			printf("Come on, dude! Leave me alone.\n");
+		else if (help_level < 8)
+			printf("Stop!\n");
+		else if (help_level <= 9)
+			printf("Stop it!\n");
+		else if (help_level >= 10)
+			printf("...\n");
+	}
 
 #ifdef DEBUG
 	printf("\nCompiled in DEBUG mode\n");
@@ -291,6 +329,7 @@ string recvfn = ""; /* Receiver dump filename */
 void parse_cmd_args(int argc, char *argv[]) {
 	int option_index = 0;
 	int c;
+	int help_level = 0;
 
 	// Default to disable color prints
 	disable_colors = true;
@@ -406,13 +445,18 @@ void parse_cmd_args(int argc, char *argv[]) {
 			GlobOpts::transport = true;
 			break;
 		case 'h':
-			usage(argv[0], 0);
+			help_level++;
+			break;
 		case '?' :
 			printf("Unknown option: -%c\n", c);
 			usage(argv[0]);
 		default:
 			break;
 		}
+	}
+
+	if (help_level > 0) {
+		usage(argv[0], 0, help_level);
 	}
 
 	if (GlobOpts::analyse_end && GlobOpts::analyse_duration) {
