@@ -966,7 +966,7 @@ void Dump::writePacketCountGroupedByInterval() {
 
 	ofstream stream;
 	stream.open((GlobOpts::prefix + "packet-count-all.dat").c_str(), ios::out);
-
+	stream << "interval" << "," << "pktcount" << endl;
 	for (bucket = 0, slice = sentTimes.begin(); slice != sentTimes.end(); ++slice, ++bucket) {
 		stream << bucket << "," << slice->size() << endl;
 	}
@@ -979,20 +979,27 @@ void Dump::writePacketCountGroupedByInterval() {
  * Output a loss interval value to an output file stream
  */
 ofstream& operator<<(ofstream& stream, const LossInterval& value) {
-	stream << value.total_count << ",";
-	stream << value.total_bytes << ",";
-	stream << value.count << ",";
-    stream << value.bytes << ",";
+	stream << value.tot_cnt_bytes << ",";
+	stream << value.tot_all_bytes << ",";
+	stream << value.tot_new_bytes << ",";
+	stream << value.cnt_bytes << ",";
+    stream << value.all_bytes << ",";
+	stream << value.new_bytes << ",";
 	
-	if (value.total_count != 0)
-		stream << (value.count / value.total_count) << ",";
+	if (value.tot_cnt_bytes != 0)
+		stream << (value.cnt_bytes / value.tot_cnt_bytes) << ",";
 	else
 		stream << 0 << ",";
 
-	if (value.total_bytes != 0)
-		stream << (value.bytes / value.total_bytes);
+	if (value.tot_all_bytes != 0)
+		stream << (value.all_bytes / value.tot_all_bytes) << ",";
 	else
-		stream << "0";
+		stream << 0 << ",";
+
+	if (value.tot_new_bytes != 0)
+		stream << (value.new_bytes / value.tot_new_bytes);
+	else
+		stream << 0;
 
 	return stream;
 }
@@ -1000,21 +1007,32 @@ ofstream& operator<<(ofstream& stream, const LossInterval& value) {
 /*
  * Writes loss to file
  * The columns are ordered as follows:
- * 1 time slice index
- * 2 ranges sent
- * 3 bytes sent
- * 4 ranges lost
- * 5 bytes lost
- * 6 ranges lost relative to ranges sent within time slice
- * 7 bytes lost relative to bytes sent within time slice
- * 8 ranges lost relative to total ranges sent
- * 9 bytes lost relative to total bytes sent
+ * 1  interval index
+ * 2  byte ranges sent within interval
+ * 3  all bytes sent (incl. retrans) within interval
+ * 4  new bytes sent (new data) within interval
+ * 5  ranges lost within interval
+ * 6  all bytes lost (incl. retrans) within interval
+ * 7  new bytes lost (new data) within interval
+ * 8  ranges lost relative to ranges sent within interval
+ * 9  all bytes lost relative to bytes sent within interval
+ * 10 new bytes lost relative to new bytes sent within interval
+ * 11 ranges lost relative to total ranges sent
+ * 12 bytes lost relative to total bytes sent
  */
 void Dump::write_loss_to_file() {
 	assert(GlobOpts::withRecv && "Calculating loss is only possible with receiver dump");
 
 	auto_ptr< vector<LossInterval> > aggr( new vector<LossInterval>() );
 	double total_count = 0, total_bytes = 0;
+
+	const char* headers[] = {
+		"interval", 
+		"ranges sent", "all bytes sent", "new bytes sent",
+		"ranges lost", "all bytes lost", "new bytes lost",
+		"ranges lost (rel to ival)", "all bytes lost (rel to ival)", "new bytes lost (rel to ival)",
+		"ranges lost (rel to total)", "all bytes lost (rel to total)"
+	};
 
 	// Extract (and print) loss values for each connection
 	map<ConnectionMapKey*, Connection*>::iterator conn;
@@ -1034,11 +1052,17 @@ void Dump::write_loss_to_file() {
 			ofstream stream;
 			stream.open(filename.c_str(), ios::out);
 
+			stream << headers[0];
+			for (uint64_t idx = 1; idx < sizeof(headers) / sizeof(headers[0]); ++idx) {
+				stream << "," << headers[idx];
+			}
+			stream << endl;
+
 			for (uint64_t idx = 0, num = loss->size(); idx < num; ++idx) {
 
 				// lost ranges&bytes relative to total ranges&bytes
-				const double rel_count = loss->at(idx).count / (double) conn->second->rm->analysed_sent_ranges_count;
-				const double rel_bytes = loss->at(idx).bytes / (double) conn->second->rm->analysed_bytes_sent;
+				const double rel_count = loss->at(idx).cnt_bytes / (double) conn->second->rm->analysed_sent_ranges_count;
+				const double rel_bytes = loss->at(idx).all_bytes / (double) conn->second->rm->analysed_bytes_sent;
 
 				stream << idx << ",";
 				stream << loss->at(idx) << ",";
@@ -1054,11 +1078,17 @@ void Dump::write_loss_to_file() {
 		ofstream stream;
 		stream.open((GlobOpts::prefix + "loss-aggr.dat").c_str(), ios::out);
 
+		stream << headers[0];
+		for (uint64_t idx = 1; idx < sizeof(headers) / sizeof(headers[0]); ++idx) {
+			stream << "," << headers[idx];
+		}
+		stream << endl;
+
 		for (uint64_t idx = 0, num = aggr->size(); idx < num; ++idx) {
 
 			// lost ranges&bytes relative to total ranges&bytes
-			const double rel_count = aggr->at(idx).count / total_count;
-			const double rel_bytes = aggr->at(idx).bytes / total_bytes;
+			const double rel_count = aggr->at(idx).cnt_bytes / total_count;
+			const double rel_bytes = aggr->at(idx).all_bytes / total_bytes;
 
 			// output to stream
 			stream << idx << ",";

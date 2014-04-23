@@ -1561,17 +1561,24 @@ void RangeManager::writePacketLatencyVariationValues(ofstream *stream) {
  * Sum two loss interval values together
  */
 LossInterval& LossInterval::operator+=(const LossInterval& rhs) {
-	count += rhs.count;
-	bytes += rhs.bytes;
+	cnt_bytes += rhs.cnt_bytes;
+	all_bytes += rhs.all_bytes;
+	new_bytes += rhs.new_bytes;
 	return *this;
 }
 
 /*
  * Set total values for the loss interval
  */
-void LossInterval::add_total(double count, double bytes) {
-	total_count += count;
-	total_bytes += bytes;
+void LossInterval::add_total(double ranges, double all_bytes, double new_bytes) {
+	tot_cnt_bytes += ranges;
+	tot_all_bytes += all_bytes;
+	tot_new_bytes += new_bytes;
+}
+
+static inline uint64_t interval_idx(const timeval& ts, uint64_t first) {
+	uint64_t relative_ts = TV_TO_MS(ts) - first;
+	return relative_ts / GlobOpts::lossAggrMs;
 }
 
 void RangeManager::calculateLossGroupedByInterval(const uint64_t first, vector<LossInterval>& all_loss, vector<LossInterval>& loss) {
@@ -1585,22 +1592,36 @@ void RangeManager::calculateLossGroupedByInterval(const uint64_t first, vector<L
 	typedef vector<double> lossvec;
 	auto_ptr<lossvec> total_count( new lossvec() );
 	auto_ptr<lossvec> total_bytes( new lossvec() );
+	auto_ptr<lossvec> total_new_bytes( new lossvec() );
 	lossvec& tc = *total_count.get();
 	lossvec& tb = *total_bytes.get();
+	lossvec& tn = *total_new_bytes.get();
 
 	for (range = analyse_range_start; range != analyse_range_end; ++range) {
 		sentIt = range->second->sent_tstamp_pcap.begin();
 		sentEnd = range->second->sent_tstamp_pcap.end();
 
-		// Place sent counts and byte counts in the right bucket
-		for (; sentIt != sentEnd; ++sentIt)
-		{
-			uint64_t relative_ts = TV_TO_MS(*sentIt) - first;
-			uint64_t bucket_idx = relative_ts / GlobOpts::lossAggrMs;
+		if (sentIt != sentEnd && range->second->packet_sent_count > 0) {
+			uint64_t bucket_idx = interval_idx(*sentIt, first);
 
 			while (bucket_idx >= tc.size()) {
 				tc.push_back(0);
 				tb.push_back(0);
+				tn.push_back(0);
+			}
+
+			tn[bucket_idx] += range->second->original_payload_size;
+		}
+
+		// Place sent counts and byte counts in the right bucket
+		for (; sentIt != sentEnd; ++sentIt)
+		{
+			uint64_t bucket_idx = interval_idx(*sentIt, first);
+
+			while (bucket_idx >= tc.size()) {
+				tc.push_back(0);
+				tb.push_back(0);
+				tn.push_back(0);
 			}
 
 			tc[bucket_idx] += 1;
@@ -1613,29 +1634,40 @@ void RangeManager::calculateLossGroupedByInterval(const uint64_t first, vector<L
 		lossIt = range->second->lost_tstamps_tcp.begin();
 		lossEnd = range->second->lost_tstamps_tcp.end();
 
-		// Place loss values in the right bucket
-		for (; lossIt != lossEnd; ++lossIt) {
-			uint64_t relative_ts = TV_TO_MS(lossIt->second) - first;
-			uint64_t bucket_idx = relative_ts / GlobOpts::lossAggrMs;
+		if (lossIt != lossEnd && 
+				range->second->packet_sent_count > 0 &&
+				lossIt->second == range->second->sent_tstamp_pcap[0]) {
+			uint64_t bucket_idx = interval_idx(range->second->sent_tstamp_pcap[0], first);
 
 			while (bucket_idx >= loss.size()) {
-				loss.push_back(LossInterval(0, 0));
+				loss.push_back(LossInterval(0, 0, 0));
 			}
 
-			loss[bucket_idx] += LossInterval(1, range->second->byte_count);
+			loss[bucket_idx] += LossInterval(0, 0, range->second->original_payload_size);
+		}
+
+		// Place loss values in the right bucket
+		for (; lossIt != lossEnd; ++lossIt) {
+			uint64_t bucket_idx = interval_idx(lossIt->second, first);
+
+			while (bucket_idx >= loss.size()) {
+				loss.push_back(LossInterval(0, 0, 0));
+			}
+
+			loss[bucket_idx] += LossInterval(1, range->second->byte_count, 0);
 		}
 	}
 
 	const uint64_t num_buckets = loss.size();
 	while (num_buckets >= all_loss.size()) {
-		all_loss.push_back(LossInterval(0, 0));
+		all_loss.push_back(LossInterval(0, 0, 0));
 	}
 
 	// Set total values
 	for (uint64_t idx = 0; idx < num_buckets; ++idx) {
 		all_loss[idx] += loss[idx];
-		all_loss[idx].add_total(tc[idx], tb[idx]);
-		loss[idx].add_total(tc[idx], tb[idx]);
+		all_loss[idx].add_total(tc[idx], tb[idx], tn[idx]);
+		loss[idx].add_total(tc[idx], tb[idx], tn[idx]);
 	}
 }
 

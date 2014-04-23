@@ -1,11 +1,12 @@
 /*************************************************************************************
 **************************************************************************************
 **                                                                                  **
-**  analyseRdb - Tool for analysing sender side tcpdump                             **
-**               files with regard to latency.                                      **
+**  analyseTCP - Tool for analysing tcpdump files with regard to latency.           **
 **                                                                                  **
-**  Copyright (C) 2007     Andreas Petlund  - andreas@petlund.no                    **
-**                     and Kristian Evensen - kristrev@ifi.uio.no                   **
+**  Copyright (C) 2007       Andreas Petlund        - andreas@petlund.no            **
+**                           Kristian Evensen       - kristrev@ifi.uio.no           **
+**                2012-2014  Bendik Rønning Opstad  - bendikro@gmail.com            **
+**                           Jonas Sæther Markussen - jonassm@ifi.uio.no            **
 **                                                                                  **
 **     This program is free software; you can redistribute it and/or modify         **
 **     it under the terms of the GNU General Public License as published by         **
@@ -60,21 +61,22 @@ typedef unsigned char uint8;
 
 // A loss value object, used for aggregating loss over intervals
 struct LossInterval {
-	double count;		// number of ranges lost within interval
-	double bytes;		// number of bytes lost within interval
-	double total_count;	// total number of ranges sent within interval
-	double total_bytes;	// total number of bytes sent within interval
+	double cnt_bytes;		// number of ranges lost within interval
+	double all_bytes;		// number of bytes (incl. retrans) lost within interval
+	double new_bytes;		// number of bytes with new data lost within interval
+	double tot_cnt_bytes;	// total number of ranges sent within interval
+	double tot_all_bytes;	// total number of bytes sent within interval
+	double tot_new_bytes;	// total number of bytes sent with new data within interval
 
-	LossInterval(double ranges, double bytes)
-		: count(ranges), bytes(bytes)
-		, total_count(0), total_bytes(0)
+	LossInterval(double ranges, double all_bytes, double new_bytes)
+		: cnt_bytes(ranges), all_bytes(all_bytes), new_bytes(new_bytes)
+		, tot_cnt_bytes(0), tot_all_bytes(0), tot_new_bytes(0)
 	{ }
 
 	LossInterval& operator+=(const LossInterval& rhs);
-	void add_total(double count, double bytes);
+	void add_total(double ranges, double all_bytes, double new_bytes);
 };
 ofstream& operator<<(ofstream& ouput_stream, const LossInterval& value);
-
 
 struct LatencyItem {
 	long time_ms;
@@ -88,7 +90,11 @@ struct LatencyItem {
 
 ofstream& operator<<(ofstream& os, const LatencyItem& lat);
 
+/* Convert a timeval to milliseconds */
 #define TV_TO_MS(tv) ((int64_t)((tv).tv_sec * 1000L + ((tv).tv_usec / 1000L)))
+
+/* Compare two timevals */
+bool operator==(const timeval& lhs, const timeval& rhs);
 
 /* Class to keep global options */
 class GlobOpts {

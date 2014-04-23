@@ -74,6 +74,10 @@ ofstream& operator<<(ofstream& stream, const LatencyItem& lat) {
 	return stream;
 }
 
+bool operator==(const timeval& lhs, const timeval& rhs) {
+	return lhs.tv_sec == rhs.tv_sec && lhs.tv_usec == rhs.tv_usec;
+}
+
 void warn_with_file_and_linenum(string file, int linenum) {
 	cout << "Error at ";
 	cout << "File: " << file << " Line: " << linenum  << endl;
@@ -196,16 +200,22 @@ void usage (char* argv, int exit_status=1){
 	printf(" -L<interval>        : Write loss over time to file, aggregated by interval in milliseconds (default is 1000).\n");
 	printf("                       This requires a receiver-side dumpfile (option -g).\n");
 	printf("                       Columns in output file:\n");
-	printf("                         * time slice index\n");
-	printf("                         * total ranges sent within time slice\n");
-	printf("                         * total bytes sent within time slice\n");
-	printf("                         * ranges lost within time slice\n");
-	printf("                         * bytes lost within time slice\n");
-	printf("                         * ranges lost relative to ranges sent within time slice\n");
-	printf("                         * bytes lost relative to bytes sent within time slice\n");
-	printf("                         * ranges lost within time slice relative to ranges sent in total\n");
-	printf("                         * bytes lost within time slice relative to bytes sent in total\n");
+	printf("                         0  interval (time slice)\n");
+	printf("                         1  total ranges sent within interval\n");
+	printf("                         2  total bytes sent within interval\n");
+	printf("                         3  total bytes of new data sent within interval\n");
+	printf("                         4  ranges lost within interval\n");
+	printf("                         5  bytes lost within interval\n");
+	printf("                         6  bytes of new data lost within interval\n");
+	printf("                         7  ranges lost relative to ranges sent within interval\n");
+	printf("                         8  bytes lost relative to bytes sent within interval\n");
+	printf("                         9  bytes of new data lost relative to bytes sent within interval\n");
+	printf("                         10 ranges lost within interval relative to ranges sent in total\n");
+	printf("                         11 bytes lost within interval relative to bytes sent in total\n");
 	printf(" -G<interval>        : Write packet count over time to file, aggregated by interval in milliseconds (default is 1000).\n");
+	printf("                       Columns in output file:\n");
+	printf("                         0  interval (time slice)\n");
+	printf("                         1  total packets sent within interval\n");
 	printf(" -Q                  : Write sent-times and one-way delay variation (queueing delay) to file.\n");
 	printf("                       This will implicitly set option -t.\n");
 	printf("                       Optional argument <prefix> assigns an output filename prefix (No space between option and argument).\n");
