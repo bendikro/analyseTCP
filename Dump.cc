@@ -966,7 +966,7 @@ void Dump::writePacketCountGroupedByInterval() {
 
 	ofstream stream;
 	stream.open((GlobOpts::prefix + "packet-count-all.dat").c_str(), ios::out);
-	stream << "interval" << "," << "pktcount" << endl;
+	stream << "interval" << "," << "packet_count" << endl;
 	for (bucket = 0, slice = sentTimes.begin(); slice != sentTimes.end(); ++slice, ++bucket) {
 		stream << bucket << "," << slice->size() << endl;
 	}
@@ -1028,10 +1028,10 @@ void Dump::write_loss_to_file() {
 
 	const char* headers[] = {
 		"interval", 
-		"ranges sent", "all bytes sent", "new bytes sent",
-		"ranges lost", "all bytes lost", "new bytes lost",
-		"ranges lost (rel to ival)", "all bytes lost (rel to ival)", "new bytes lost (rel to ival)",
-		"ranges lost (rel to total)", "all bytes lost (rel to total)"
+		"ranges_sent", "all_bytes_sent", "new_bytes_sent",
+		"ranges_lost", "all_bytes_lost", "new_bytes_lost",
+		"ranges_lost_relative_to_interval", "all_bytes_lost_relative_to_interval", "new_bytes_lost_relative_to_interval",
+		"ranges lost_relative_to_total", "all_bytes_lost_relative_to_total"
 	};
 
 	// Extract (and print) loss values for each connection
