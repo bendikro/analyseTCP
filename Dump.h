@@ -76,7 +76,6 @@ private:
 	uint64_t ackCount;
 	uint32_t max_payload_size;
 	map<ConnectionMapKey*, Connection*, ConnectionKeyComparator> conns;
-	vector< vector<timeval> > sentTimes;
 
 	void processSent(const struct pcap_pkthdr* header, const u_char *data);
 	void processRecvd(const struct pcap_pkthdr* header, const u_char *data);
@@ -105,7 +104,7 @@ public:
 	Connection* getConn(const struct in_addr *srcIp, const struct in_addr *dstIp, const uint16_t *srcPort, const uint16_t *dstPort, const uint32_t *seq);
 	void fillWithSortedConns(map<ConnectionMapKey*, Connection*, SortedConnectionKeyComparator> &sortedConns);
 	void writeSentTimesAndQueueingDelayVariance();
-	void writePacketCountGroupedByInterval();
+	void writeByteCountGroupedByInterval(); // throughput
 };
 
 #endif /* DUMP_H */

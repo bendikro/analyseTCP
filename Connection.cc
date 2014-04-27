@@ -414,3 +414,15 @@ string Connection::getDstIp() {
 	dip << dst_ip;
 	return dip.str();
 }
+
+void Connection::registerPacketSize(const timeval& first, const timeval& ts, const uint64_t ps) {
+	const uint64_t relative_ts = TV_TO_MS(ts) - TV_TO_MS(first);
+	const uint64_t sent_time_bucket_idx = relative_ts / GlobOpts::throughputAggrMs;
+
+	while (sent_time_bucket_idx >= packetSizes.size()) {
+		vector< pair<timeval, uint64_t> > empty;
+		packetSizes.push_back(empty);
+	}
+
+	packetSizes[sent_time_bucket_idx].push_back(pair<timeval,uint64_t>(ts, ps));
+}

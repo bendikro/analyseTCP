@@ -622,15 +622,8 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 	if (tmpConn->registerSent(&sd))
 		tmpConn->registerRange(&sd);
 
-	if (GlobOpts::withSentTimes) {
-		uint64_t relative_ts = TV_TO_MS(header->ts) - TV_TO_MS(first_sent_time);
-		uint64_t sent_time_bucket_idx = relative_ts / GlobOpts::sentAggrMs;
-
-		while (sent_time_bucket_idx >= sentTimes.size()) {
-			sentTimes.push_back(vector<timeval>( ));
-		}
-
-		sentTimes[sent_time_bucket_idx].push_back(header->ts);
+	if (GlobOpts::withThroughput) {
+		tmpConn->registerPacketSize(first_sent_time, header->ts, header->len);
 	}
 }
 
@@ -958,20 +951,79 @@ void Dump::printConns() {
 
 
 /*
- * Writes number of packets sent aggregated over time slices to file
+ * Writes number of bytes and packets sent aggregated over time slices to file (throughput)
  */
-void Dump::writePacketCountGroupedByInterval() {
-	vector< vector<timeval> >::iterator slice;
-	uint64_t bucket;
+void Dump::writeByteCountGroupedByInterval() {
+	map<ConnectionMapKey*, Connection*>::iterator conn;
 
-	ofstream stream;
-	stream.open((GlobOpts::prefix + "packet-count-all.dat").c_str(), ios::out);
-	stream << "interval" << "," << "packet_count" << endl;
-	for (bucket = 0, slice = sentTimes.begin(); slice != sentTimes.end(); ++slice, ++bucket) {
-		stream << bucket << "," << slice->size() << endl;
+	if (GlobOpts::aggregate) {
+		auto_ptr< vector< pair<uint64_t,uint64_t> > > all_sizes(new vector< pair<uint64_t,uint64_t> >);
+
+		uint64_t idx, num;
+		for (conn = conns.begin(); conn != conns.end(); conn++) {
+			for (idx = 0, num = conn->second->packetSizes.size(); idx < num; ++idx) {
+
+				vector< pair<uint64_t,uint64_t> >& all = *all_sizes.get();
+				while (idx >= all.size()) {
+					all.push_back(pair<uint64_t, uint64_t>(0, 0));
+				}
+
+				const uint64_t count = conn->second->packetSizes[idx].size();
+				uint64_t bytes = 0;
+
+				vector<pair<timeval, uint64_t> >::iterator it, end;
+				it = conn->second->packetSizes[idx].begin();
+				end = conn->second->packetSizes[idx].end();
+
+				for (; it != end; ++it) {
+					bytes += it->second;
+				}
+
+				const pair<uint64_t,uint64_t>& old = all[idx];
+				all[idx] = pair<uint64_t, uint64_t>(old.first + count, old.second + bytes);
+			}
+		}
+
+		ofstream stream;
+		stream.open((GlobOpts::prefix + "throughput-aggr.dat").c_str(), ios::out);
+		stream << "interval" << "," << "packet_count" << "," << "byte_count" << "," << "throughput" << endl;
+
+		for (idx = 0, num = all_sizes->size(); idx < num; ++idx) {
+			const pair<uint64_t, uint64_t>& value = all_sizes->at(idx);
+			stream << idx << "," << value.first << "," << value.second << ",";
+			stream << (value.second * 8.0) / (GlobOpts::throughputAggrMs / 1000.0) << endl;
+		}
+
+		stream.close();
 	}
 
-	stream.close();
+	if (!GlobOpts::aggOnly) {
+		for (conn = conns.begin(); conn != conns.end(); conn++) {
+			ofstream stream;
+			stream.open((GlobOpts::prefix + "throughput-" + conn->second->getConnKey() + ".dat").c_str(), ios::out);
+			stream << "interval" << "," << "packet_count" << "," << "byte_count" << "," << "throughput" << endl;
+
+			uint64_t idx, num;
+			for (idx = 0, num = conn->second->packetSizes.size(); idx < num; ++idx) {
+
+				const uint64_t count = conn->second->packetSizes[idx].size();
+				uint64_t bytes = 0;
+
+				vector<pair<timeval, uint64_t> >::iterator it, end;
+				it = conn->second->packetSizes[idx].begin();
+				end = conn->second->packetSizes[idx].end();
+
+				for (; it != end; ++it) {
+					bytes += it->second;
+				}
+
+				stream << idx << "," << count << "," << bytes << ",";
+				stream << (bytes * 8.0) / (GlobOpts::throughputAggrMs / 1000.0) << endl;
+			}
+
+			stream.close();
+		}
+	}
 }
 
 
@@ -1059,7 +1111,7 @@ void Dump::write_loss_to_file() {
 		"ranges_lost", "all_bytes_lost", "old_bytes_lost", "new_bytes_lost",
 		"ranges_lost_relative_to_interval", "all_bytes_lost_relative_to_interval", "old_bytes_lost_relative_to_interval", "new_bytes_lost_relative_to_interval",
 		"old_bytes_lost_relative_to_all_bytes_lost", "new_bytes_lost_relative_to_all_bytes_lost", 
-		"ranges lost_relative_to_total", "all_bytes_lost_relative_to_total"
+		"ranges_lost_relative_to_total", "all_bytes_lost_relative_to_total"
 	};
 
 	// Extract (and print) loss values for each connection

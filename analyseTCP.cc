@@ -43,12 +43,12 @@ bool GlobOpts::withLoss           		= false;
 bool GlobOpts::withCDF            		= false;
 bool GlobOpts::transport          		= false;
 bool GlobOpts::genAckLatencyFiles 		= false;
-bool GlobOpts::withSentTimes			= false;
+bool GlobOpts::withThroughput			= false;
 string GlobOpts::prefix           		= "";
 string GlobOpts::RFiles_dir       		= "";
 int GlobOpts::debugLevel          		= 0;
 uint64_t GlobOpts::lossAggrMs     		= 1000;
-uint64_t GlobOpts::sentAggrMs     		= 1000;
+uint64_t GlobOpts::throughputAggrMs 	= 1000;
 bool GlobOpts::relative_seq       		= false;
 bool GlobOpts::print_packets      		= false;
 string GlobOpts::sendNatIP        		= "";
@@ -166,7 +166,7 @@ void test(Dump *d) {
 }
 #endif
 
-#define OPTSTRING "f:s:g:r:q:p:m:n:o:u:lctL::G::QaAeji::yvkd:h"
+#define OPTSTRING "f:s:g:r:q:p:m:n:o:u:lctL::T::QaAeji::yvkd:h"
 
 void usage (char* argv, int exit_status=1, int help_level=1){
 	string s(OPTSTRING);
@@ -219,11 +219,13 @@ void usage (char* argv, int exit_status=1, int help_level=1){
 		printf("                         15 ranges lost within interval relative to ranges sent in total\n");
 		printf("                         16 all bytes lost within interval relative to bytes sent in total\n");
 	}
-	printf(" -G<interval>        : Write packet count over time to file, aggregated by interval in milliseconds (default is 1000).\n");
-	printf("                       Columns in output file:\n");
+	printf(" -T<interval>        : Write packet count and byte count over time to file, aggregated by interval in milliseconds (default is 1000).\n");
 	if (help_level > 1) {
+	printf("                       Columns in output file:\n");
 		printf("                         0  interval (time slice)\n");
 		printf("                         1  total packets sent within interval\n");
+		printf("                         2  bytes sent within interval\n");
+		printf("                         3  throughput in bits per second\n");
 	}
 	printf(" -Q                  : Write sent-times and one-way delay variation (queueing delay) to file.\n");
 	printf("                       This will implicitly set option -t.\n");
@@ -301,7 +303,7 @@ static struct option long_options[] = {
 	{"latency-variation",        	no_argument,       0, 'c'},
 	{"latency-values",           	no_argument,       0, 'l'},
 	{"queueing-delay",			 	no_argument,       0, 'Q'},
-	{"sent-interval",			 	optional_argument, 0, 'G'},
+	{"throughput-interval",         optional_argument, 0, 'T'},
 	{"loss-interval",            	optional_argument, 0, 'L'},
 	{"percentiles",              	optional_argument, 0, 'i'},
 	{"connection-list",          	no_argument,       0, 'e'},
@@ -376,8 +378,8 @@ void parse_cmd_args(int argc, char *argv[]) {
 				GlobOpts::lossAggrMs = ret;
 			}
 			break;
-		case 'G':
-			GlobOpts::withSentTimes = true;
+		case 'T':
+			GlobOpts::withThroughput = true;
 			if (optarg) {
 				char *sptr = NULL;
 				uint64_t ret = strtoul(optarg, &sptr, 10);
@@ -385,7 +387,7 @@ void parse_cmd_args(int argc, char *argv[]) {
 					colored_printf(RED, "Option -%c requires a valid integer: '%s'\n", c, optarg);
 					usage(argv[0]);
 				}
-				GlobOpts::sentAggrMs = ret;
+				GlobOpts::throughputAggrMs = ret;
 			}
 			break;
 		case 'i':
@@ -548,8 +550,8 @@ int main(int argc, char *argv[]){
 	if (GlobOpts::genAckLatencyFiles)
 		senderDump->genAckLatencyFiles();
 
-	if (GlobOpts::withSentTimes)
-		senderDump->writePacketCountGroupedByInterval();
+	if (GlobOpts::withThroughput)
+		senderDump->writeByteCountGroupedByInterval();
 
 	if (GlobOpts::withLoss)
 		senderDump->write_loss_to_file();

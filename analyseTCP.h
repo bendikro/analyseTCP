@@ -109,8 +109,8 @@ public:
 	static bool withRecv;
 	static bool withLoss;
 	static uint64_t lossAggrMs;
-	static bool withSentTimes;
-	static uint64_t sentAggrMs;
+	static bool withThroughput;
+	static uint64_t throughputAggrMs;
 	static bool withCDF;
 	static bool relative_seq;
 	static bool print_packets;

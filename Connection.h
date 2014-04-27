@@ -31,6 +31,9 @@ public:
 	uint64_t lastLargestAckSeq;
 	uint32_t lastLargestAckSeqAbsolute;
 
+	vector< vector< pair<timeval,uint64_t> > > packetSizes;
+
+
 	timeval firstSendTime;
 	timeval endTime;
 	RangeManager *rm;
@@ -79,5 +82,7 @@ public:
 	void set_analyse_range_interval();
 	void calculateRetransAndRDBStats();
 	uint32_t getDuration(bool analyse_range_duration);
+
+	void registerPacketSize(const timeval& first_tstamp_in_dump, const timeval& pkt_tstamp, const uint64_t pkt_size);
 };
 #endif /* CONNECTION_H */
