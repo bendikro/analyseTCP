@@ -179,7 +179,6 @@ void usage (char* argv, int exit_status=1, int help_level=1){
 		}
 	}
 	printf("]\n");
-	
 
 	printf("Required options:\n");
 	printf(" -f <pcap-file>      : Sender-side dumpfile.\n");
@@ -192,7 +191,7 @@ void usage (char* argv, int exit_status=1, int help_level=1){
 	printf(" -m <IP>             : Sender side external NAT address as seen on receiver-side dump\n");
 	printf(" -n <IP>             : Receiver side local address as seen on receiver-side dump\n");
 	printf(" -o <output-dir>     : Output directory to write the result files in.\n");
-	printf(" -u<prefix>          : Use <prefix> as filename prefix for output files.\n");
+	printf(" -u <prefix>         : Use <prefix> as filename prefix for output files.\n");
 	printf(" -l                  : Write ACK-based latency values to file.\n");
 	printf(" -c                  : Write byte-based latency variation CDF to file.\n");
 	printf("                       If -t is not set, application-layer latency variation will be used.\n");
@@ -229,7 +228,6 @@ void usage (char* argv, int exit_status=1, int help_level=1){
 	}
 	printf(" -Q                  : Write sent-times and one-way delay variation (queueing delay) to file.\n");
 	printf("                       This will implicitly set option -t.\n");
-	printf("                       Optional argument <prefix> assigns an output filename prefix (No space between option and argument).\n");
 	printf(" -a                  : Produce aggregated statistics (off by default, optional)\n");
 	printf(" -A                  : Only print aggregated statistics.\n");
 	printf(" -e                  : List the connections found in the dumpfile.\n");
@@ -405,7 +403,7 @@ void parse_cmd_args(int argc, char *argv[]) {
 		case 'l':
 			GlobOpts::genAckLatencyFiles = true;
 			break;
-		case 'u': 
+		case 'u':
 			GlobOpts::prefix = optarg;
 			break;
 		case 'o':
@@ -523,9 +521,9 @@ int main(int argc, char *argv[]){
 	   place timestamp diffs in buckets */
 	senderDump->calculateRetransAndRDBStats();
 
-	if (GlobOpts::withRecv && (GlobOpts::withCDF || GlobOpts::oneway_delay_variance)) {
+	if (GlobOpts::withRecv && (GlobOpts::withCDF || GlobOpts::oneway_delay_variance || GlobOpts::print_packets)) {
 
-		assert((!GlobOpts::oneway_delay_variance || (GlobOpts::oneway_delay_variance && GlobOpts::transport)) 
+		assert((!GlobOpts::oneway_delay_variance || (GlobOpts::oneway_delay_variance && GlobOpts::transport))
 				&& "One-way delay variance was chosen, but delay is set to application layer");
 
 		senderDump->calculateLatencyVariation();
