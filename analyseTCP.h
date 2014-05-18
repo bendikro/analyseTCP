@@ -185,6 +185,7 @@ struct connStats {
 	int nrPacketsSent;
 	int nrPacketsSentFoundInDump; // This is the number of packets saved in the trace dump.
 	                              // This might differ from actual packets on the wire because TCP segmentation offloading
+	int nrPacketsReceivedFoundInDump;
 	int nrRetrans;
 	int bundleCount;
 	int ackCount;

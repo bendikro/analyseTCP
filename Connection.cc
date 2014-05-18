@@ -274,6 +274,7 @@ void Connection::addPacketStats(struct connStats* cs) {
 	cs->totRetransBytesSent += rm->analysed_bytes_retransmitted;
 	cs->nrPacketsSent += rm->analysed_packet_count;
 	cs->nrPacketsSentFoundInDump += rm->analysed_packet_sent_count;
+	cs->nrPacketsReceivedFoundInDump += rm->analysed_packet_received_count;
 	cs->nrDataPacketsSent += rm->analysed_data_packet_count;
 	cs->nrRetrans += rm->analysed_retr_packet_count;
 	cs->bundleCount += rm->analysed_rdb_packet_count;

@@ -424,6 +424,10 @@ void Dump::printPacketStats(struct connStats *cs, struct byteStats *bs, bool agg
 	if (GlobOpts::withRecv && cs->ranges_sent) {
 		print_stats_separator(false);
 		printf("Receiver side loss stats:\n");
+		printf("  Number of packets received                    : %10d\n", cs->nrPacketsReceivedFoundInDump);
+		printf("  Packets lost                                  : %10d\n", (cs->nrPacketsSentFoundInDump - cs->nrPacketsReceivedFoundInDump));
+		printf("  Packet loss                                   : %10.2f %%\n",  ((double) ((cs->nrPacketsSentFoundInDump - cs->nrPacketsReceivedFoundInDump)) / cs->nrPacketsSentFoundInDump) * 100);
+
 		printf("  Bytes Lost (actual loss on receiver side)     : %10lu\n", cs->bytes_lost);
 		printf("  Bytes Loss                                    : %10.2f %%\n", ((double) (cs->bytes_lost) / cs->totBytesSent) * 100);
 		printf("  Ranges Lost (actual loss on receiver side)    : %10lu\n", cs->ranges_lost);
@@ -934,19 +938,33 @@ void Dump::printConns() {
 	struct connStats csAggregated;
 	memset(&csAggregated, 0, sizeof(struct connStats));
 
+	if (!GlobOpts::withRecv) {
+		colored_printf(RED, "Loss statistics require reciver dump!\n");
+	}
+
 	printf("\nConnections in sender dump: %lu\n\n", conns.size());
-	printf("        %-30s   %-17s %-12s   %12s   %12s\n", "Conn key", "Duration (sec)", "Packets sent", "Bytes loss", "Ranges loss");
+	printf("        %-30s   %-17s %-12s   %12s   %12s   %12s   %12s\n", "Conn key", "Duration (sec)", "Packets sent", "Packets recv", "Packet loss", "Byte loss", "Range loss");
 	for (cIt = sortedConns.begin(); cIt != sortedConns.end(); cIt++) {
 		memset(&cs, 0, sizeof(struct connStats));
 		cIt->second->addPacketStats(&cs);
 		cIt->second->addPacketStats(&csAggregated);
-		printf("   %-40s   %-17d   %-11d   %4.1f %%        %4.1f %%\n", cIt->second->getConnKey().c_str(), cs.duration,
-		       cs.nrPacketsSent, (cs.bytes_lost / (double) cs.totBytesSent) * 100,
+		printf("   %-40s   %-17d  %-11d   %-11d %8.2f %%    %8.2f %%    %8.2f %%\n", cIt->second->getConnKey().c_str(), cs.duration,
+		       cs.nrPacketsSentFoundInDump, cs.nrPacketsReceivedFoundInDump,
+			   (((double) ((cs.nrPacketsSentFoundInDump - cs.nrPacketsReceivedFoundInDump)) / cs.nrPacketsSentFoundInDump) * 100),
+			   (cs.bytes_lost / (double) cs.totBytesSent) * 100,
 			   (cs.ranges_lost / (double) cs.ranges_sent) * 100);
 	}
-	printf("\n   %-40s   %-17d   %-11d   %4.1f %%        %4.1f %%\n", "Average", 0,
-		   csAggregated.nrPacketsSent/(int)sortedConns.size(), (csAggregated.bytes_lost / (double) csAggregated.totBytesSent) * 100,
-		   (csAggregated.ranges_lost / (double) csAggregated.ranges_sent) * 100);
+	if (GlobOpts::verbose >= 3) {
+		printf("\n   %-40s   %-17d   %-11d   %4.1f %%        %4.1f %%\n", "Average", 0,
+			   csAggregated.nrPacketsSentFoundInDump/(int)sortedConns.size(), (csAggregated.bytes_lost / (double) csAggregated.totBytesSent) * 100,
+			   (csAggregated.ranges_lost / (double) csAggregated.ranges_sent) * 100);
+	}
+
+	if (csAggregated.nrPacketsSentFoundInDump != csAggregated.nrPacketsSent) {
+		colored_printf(YELLOW, "Note: Packets in trace dumps may differ from actual packets due to offloading\n");
+	}
+
+	printf("\n");
 }
 
 
@@ -1356,7 +1374,6 @@ void Dump::genAckLatencyFiles() {
 		long ts = TV_TO_MS(cIt->second->firstSendTime);
 		first_ts = (ts < first_ts) ? ts : first_ts;
 	}
-	
 
 	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
 		cIt->second->genAckLatencyFiles(first_ts);

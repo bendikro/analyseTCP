@@ -29,6 +29,7 @@ public:
 	uint16_t original_payload_size;
 	uint8_t packet_sent_count;         // Count number of packet transmissions. This value is not copied when splitting a byte range!
 	uint8_t packet_retrans_count;      // Count number of packet retransmissions. This value is not copied when splitting a byte range!
+	uint8_t packet_received_count;
 	uint8_t data_retrans_count;        // Count number of times this byte range has been retransmitted
 	uint8_t rdb_count;                 // Count number of times this byte range has been transmitted as redundant (rdb) data
 	uint8_t rdb_byte_miss;
@@ -71,6 +72,7 @@ public:
 		update_byte_count();
 		original_payload_size = byte_count;
 		packet_sent_count = 1;
+		packet_received_count = 0;
 		packet_retrans_count = 0;
 		data_retrans_count = 0;
 		rdb_count = 0;
