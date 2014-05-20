@@ -2,9 +2,8 @@ PROJECT (analyseTCP CXX)
 ENABLE_LANGUAGE(C)
 
 CMAKE_MINIMUM_REQUIRED(VERSION 2.0)
-SET (INCLUDE_DIRS /work/include)
-
-SET (LIB_DIRS /work/lib)
+#SET (INCLUDE_DIRS /work/include)
+#SET (LIB_DIRS /work/lib)
 
 # Put executable files in custom dir
 #SET(EXECUTABLE_OUTPUT_PATH dir)
@@ -49,30 +48,16 @@ SET (INCLUDE_FILES arpa/inet.h netinet/in.h sys/socket.h getopt.h)
 TARGET_LINK_LIBRARIES (analyseTCP pcap)
 
 # Set compiler flags for all configurations
-SET (CMAKE_CXX_FLAGS "-O3 -g3 -lm -Wall") # -Werror?
+SET (CMAKE_CXX_FLAGS "-O3 -lm -Wall -Wno-long-long -Wno-variadic-macros") # -Werror?
 
 # Add NDEBUG only for release version
 # To activate: cmake -DCMAKE_BUILD_TYPE=Release .
 SET (CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG")
 
-# Platform specific debug flags
-IF (APPLE)
-   SET (CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -Wno-long-double")
-ENDIF (APPLE)
-
 # Set debug compiler flags
 # To activate: cmake -DCMAKE_BUILD_TYPE=Debug ..
-SET (CMAKE_C_FLAGS_DEBUG "-g3 -Wall")
-SET (CMAKE_CXX_FLAGS_DEBUG "-g3 -Wall -DDEBUG")
+SET (CMAKE_CXX_FLAGS_DEBUG "-g3 -Wall -DDEBUG -Wextra -pedantic")
 # Platform specific debug flags
-IF (UNIX)
-   SET (CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -gdwarf-2")
-ENDIF (UNIX)
-
-# -gstabs+ removed.
-IF (APPLE)
-   SET (CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -Wno-long-double")
-ENDIF (APPLE)
 
 
 # Distclean functionality (Remove cmake generated files)

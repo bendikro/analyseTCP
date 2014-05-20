@@ -69,9 +69,9 @@ private:
 	string filename;
 	string srcPort;
 	string dstPort;
-	uint64_t sentPacketCount;
+	int64_t sentPacketCount;
 	uint64_t sentBytesCount;
-	uint64_t recvPacketCount;
+	int64_t recvPacketCount;
 	uint64_t recvBytesCount;
 	uint64_t ackCount;
 	uint32_t max_payload_size;

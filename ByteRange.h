@@ -48,7 +48,7 @@ public:
 	uint8_t acked : 1,
 		original_packet_is_rdb : 1,
 		recv_type : 2,                 // DEF, DATA, RDB, RETR
-		app_layer_latency_tstamp;      // If application layer latency should use the receiver time stamp (1), or the stampt of previous range (0).
+		app_layer_latency_tstamp : 1;  // If application layer latency should use the receiver time stamp (1), or the stampt of previous range (0).
 	uint8_t recv_type_num;             // Which packet of the specific type was first received
 	uint8_t fin;
 	uint8_t syn;

@@ -1370,7 +1370,6 @@ void RangeManager::registerRecvDiffs() {
 		if (!GlobOpts::transport) {
 			if (it->second->app_layer_latency_tstamp)
 				last_app_layer_tstamp = &it->second->received_tstamp_pcap;
-			assert(last_app_layer_tstamp != NULL && "last_app_layer_tstamp is invalid!");
 		}
 
 		/* Calculate diff and check for lowest value */
@@ -1762,8 +1761,6 @@ void RangeManager::genAckLatencyFiles(long first_tstamp, const string& connKey) 
 	ulong num_retr_tmp;
 	int diff_tmp;
 	ulong send_time_ms;
-
-	//long first_tstamp = TV_TO_MS(ranges[0]->sent_tstamp_pcap[0]);
 
 	for (; it != it_end; it++) {
 		diff_tmp = it->second->getSendAckTimeDiff(this);

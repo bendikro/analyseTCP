@@ -1359,7 +1359,7 @@ void Dump::printDumpStats() {
 			colored_printf(YELLOW, "Negative loss values is probably caused by GSO/TSO on sender side (see readme)\n");
 		}
 		cout << "  Packets Lost          : " << (sentPacketCount - recvPacketCount) << endl;
-		cout << "  Packet Loss           : " << ((double) (sentPacketCount - recvPacketCount) / sentPacketCount) * 100 <<  " \%" << endl;
+		cout << "  Packet Loss           : " << ((double) (sentPacketCount - recvPacketCount) / sentPacketCount) * 100 <<  " %" << endl;
 		cout << "  Ranges Count          : " << (ranges_count) << endl;
 		cout << "  Ranges Sent           : " << (ranges_sent) << endl;
 		cout << "  Ranges Lost           : " << (ranges_lost) << endl;
@@ -1369,11 +1369,7 @@ void Dump::printDumpStats() {
 void Dump::genAckLatencyFiles() {
 	map<ConnectionMapKey*, Connection*>::iterator cIt = conns.begin();
 
-	long first_ts = TV_TO_MS(cIt->second->firstSendTime);
-	for (; cIt != conns.end(); cIt++) {
-		long ts = TV_TO_MS(cIt->second->firstSendTime);
-		first_ts = (ts < first_ts) ? ts : first_ts;
-	}
+	const long first_ts = TV_TO_MS(first_sent_time);
 
 	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
 		cIt->second->genAckLatencyFiles(first_ts);

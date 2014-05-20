@@ -42,7 +42,6 @@ using namespace std;
 #include <sstream>
 #include <string>
 #include <map>
-#include <pcap.h>
 #include <iostream>
 #include <sstream>
 #include <limits>
