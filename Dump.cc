@@ -154,16 +154,18 @@ void Dump::analyseSender() {
 
 	pcap_close(fd);
 
-	/* DEBUG: Validate range */
-	if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
-		cerr << "---------------Begin first validation--------------" << endl;
+	if (GlobOpts::validate_ranges) {
+		/* DEBUG: Validate range */
+		if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
+			cerr << "---------------Begin first validation--------------" << endl;
 
-	it_end = conns.end();
-	for (it = conns.begin(); it != it_end; it++) {
-		it->second->validateRanges();
+		it_end = conns.end();
+		for (it = conns.begin(); it != it_end; it++) {
+			it->second->validateRanges();
+		}
+		if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5 )
+			cerr << "---------------End of first validation--------------" << endl;
 	}
-	if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5 )
-		cerr << "---------------End of first validation--------------" << endl;
 
 	pcap_t *fd2 = pcap_open_offline(filename.c_str(), errbuf);
 	if (fd2 == NULL) {
@@ -224,17 +226,22 @@ void Dump::analyseSender() {
 	pcap_close(fd2);
 
 	printf("Finished processing acknowledgements...\n");
+	printf("GlobOpts::validate_ranges: %d\n", GlobOpts::validate_ranges);
 
-	/* DEBUG: Validate ranges */
-	if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
-		cerr << "---------------Begin second validation--------------" << endl;
-	it_end = conns.end();
-	for (it = conns.begin(); it != it_end; it++) {
-		it->second->validateRanges();
+
+
+	if (GlobOpts::validate_ranges) {
+		/* DEBUG: Validate ranges */
+		if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
+			cerr << "---------------Begin second validation--------------" << endl;
+		it_end = conns.end();
+		for (it = conns.begin(); it != it_end; it++) {
+			it->second->validateRanges();
+		}
+
+		if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
+			cerr << "---------------End of second validation--------------" << endl;
 	}
-
-	if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
-		cerr << "---------------End of second validation--------------" << endl;
 }
 
 /* Traverse the pcap dump and call methods for processing the packets
@@ -596,12 +603,17 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 	sd.data.payloadSize  = ipSize - (ipHdrLen + tcpHdrLen);
 	sd.data.tstamp_pcap  = header->ts;
 	sd.data.seq_absolute = ntohl(tcp->th_seq);
-	sd.data.seq          = get_relative_sequence_number(sd.data.seq_absolute, tmpConn->rm->firstSeq, tmpConn->lastLargestEndSeq, tmpConn->lastLargestSeqAbsolute);
+	sd.data.seq          = get_relative_sequence_number(sd.data.seq_absolute, tmpConn->rm->firstSeq, tmpConn->lastLargestEndSeq, tmpConn->lastLargestSeqAbsolute, tmpConn);
 	sd.data.endSeq       = sd.data.seq + sd.data.payloadSize;
 	sd.data.retrans      = false;
 	sd.data.is_rdb       = false;
 	sd.data.rdb_end_seq  = 0;
 	sd.data.flags        = tcp->th_flags;
+
+	if (sd.data.seq == ULONG_MAX) {
+		printf("Found invalid sequence numbers in beginning of sender dump. Probably the sender dump has retransmissions of packets before the first packet in dump\n");
+		return;
+	}
 
 	if (sd.data.payloadSize > 0) {
 		sd.data.endSeq -= 1;
@@ -655,7 +667,7 @@ static inline bool after_or_equal(uint32_t seq1, uint32_t seq2) {
  *
  * Returns the relative sequence number or ULONG_MAX if it failed.
  **/
-uint64_t Dump::get_relative_sequence_number(uint32_t seq, uint32_t firstSeq, ulong largestSeq, uint32_t largestSeqAbsolute) {
+uint64_t Dump::get_relative_sequence_number(uint32_t seq, uint32_t firstSeq, ulong largestSeq, uint32_t largestSeqAbsolute, Connection *conn) {
 	uint64_t wrap_index;
 	uint64_t seq_relative;
 	wrap_index = firstSeq + largestSeq;
@@ -666,6 +678,10 @@ uint64_t Dump::get_relative_sequence_number(uint32_t seq, uint32_t firstSeq, ulo
 	if (seq < largestSeqAbsolute) {
 		// This is an earlier sequence number
 		if (before(seq, largestSeqAbsolute)) {
+			if (before(seq, firstSeq)) {
+				return ULONG_MAX;
+				//printf("Before first!\n");
+			}
 			wrap_index -= (largestSeqAbsolute - seq);
 		}
 		// Sequence number has wrapped
@@ -696,6 +712,7 @@ uint64_t Dump::get_relative_sequence_number(uint32_t seq, uint32_t firstSeq, ulo
 		printf("wrap_index: %lu\n", wrap_index);
 		printf("\nget_relative_sequence_number: seq: %u, firstSeq: %u, largestSeq: %lu, largestSeqAbsolute: %u\n", seq, firstSeq, largestSeq, largestSeqAbsolute);
 		printf("seq_relative: %lu\n", seq_relative);
+		printf("Conn: %s\n", conn->getConnKey().c_str());
 		assert(0 && "Incorrect sequence number calculation!\n");
 	}
 	//printf("RETURN seq_relative: %lu\n", seq_relative);
@@ -731,7 +748,7 @@ void Dump::processAcks(const struct pcap_pkthdr* header, const u_char *data) {
 
 	DataSeg seg;
 	memset(&seg, 0, sizeof(struct DataSeg));
-	seg.ack         = get_relative_sequence_number(ack, tmpConn->rm->firstSeq, tmpConn->lastLargestAckSeq, tmpConn->lastLargestAckSeqAbsolute);
+	seg.ack         = get_relative_sequence_number(ack, tmpConn->rm->firstSeq, tmpConn->lastLargestAckSeq, tmpConn->lastLargestAckSeqAbsolute, tmpConn);
 	seg.tstamp_pcap = header->ts;
 	seg.window = ntohs(tcp->th_win);
 	seg.flags  = tcp->th_flags;
@@ -741,7 +758,9 @@ void Dump::processAcks(const struct pcap_pkthdr* header, const u_char *data) {
 
 	ret = tmpConn->registerAck(&seg);
 	if (!ret) {
-		printf("DUMP - failed to register ACK!\n");
+		if (GlobOpts::validate_ranges) {
+			printf("DUMP - failed to register ACK!\n");
+		}
 	}
 	else {
 		tmpConn->lastLargestAckSeqAbsolute = ack;
@@ -877,7 +896,7 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data) {
 	sd.tcpOptionLen      = tcpHdrLen - 20;
 	sd.data.payloadSize  = ipSize - (ipHdrLen + tcpHdrLen);
 	sd.data.seq_absolute = ntohl(tcp->th_seq);
-	sd.data.seq          = get_relative_sequence_number(sd.data.seq_absolute, tmpConn->rm->firstSeq, tmpConn->lastLargestRecvEndSeq, tmpConn->lastLargestRecvSeqAbsolute);
+	sd.data.seq          = get_relative_sequence_number(sd.data.seq_absolute, tmpConn->rm->firstSeq, tmpConn->lastLargestRecvEndSeq, tmpConn->lastLargestRecvSeqAbsolute, tmpConn);
 	sd.data.endSeq       = sd.data.seq + sd.data.payloadSize;
 	sd.data.tstamp_pcap  = header->ts;
 	sd.data.is_rdb       = false;

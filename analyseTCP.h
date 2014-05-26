@@ -120,6 +120,7 @@ public:
 	static string RFiles_dir;
 	static bool connDetails;
 	static int verbose;
+	static bool validate_ranges;
 	static int max_retrans_stats;
 	static string percentiles;
 	static int analyse_start;

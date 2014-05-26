@@ -76,12 +76,14 @@ void RangeManager::insertSentRange(struct sendData *sd) {
 	else if (startSeq > lastSeq) {
 		// This is most probably the ack on the FIN ack from receiver, so ignore
 		if (sd->data.payloadSize != 0) {
-			printf("RangeManager::insertRange: Missing byte in send range in conn '%s''\n", conn->getConnKey().c_str());
-			printf("Expected seq: %lu but got %lu\n", lastSeq, startSeq);
-			printf("Absolute: lastSeq: %lu, startSeq: %lu. Relative: lastSeq: %lu, startSeq: %lu\n",
-				   lastSeq, startSeq, relative_seq(lastSeq), relative_seq(startSeq));
-			printf("This is an indication that tcpdump has dropped packets while collecting the trace.\n");
-			warn_with_file_and_linenum(__FILE__, __LINE__);
+			if (GlobOpts::validate_ranges) {
+				printf("RangeManager::insertRange: Missing byte in send range in conn '%s''\n", conn->getConnKey().c_str());
+				printf("Expected seq: %lu but got %lu\n", lastSeq, startSeq);
+				printf("Absolute: lastSeq: %lu, startSeq: %lu. Relative: lastSeq: %lu, startSeq: %lu\n",
+					   lastSeq, startSeq, relative_seq(lastSeq), relative_seq(startSeq));
+				printf("This is an indication that tcpdump has dropped packets while collecting the trace.\n");
+				warn_with_file_and_linenum(__FILE__, __LINE__);
+			}
 		}
 	}
 	else if (startSeq > lastSeq) {
@@ -492,8 +494,17 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 				last_br->fin = 1;
 			}
 #ifdef DEBUG
-			assert(data_seg->retrans == 0 && "Shouldn't be retrans!\n");
-			assert(this_is_rdb_data == 0 && "Shouldn't be RDB?!\n");
+			if (data_seg->retrans || this_is_rdb_data) {
+				printf("data_seg->retrans: %d\n", data_seg->retrans);
+				printf("this_is_rdb_data: %d\n", this_is_rdb_data);
+				indent_print("insert_byte_range1 (%lu): (%lu - %lu) (%lu - %lu), sent: %d, retrans: %d, is_rdb: %d, SYN: %d, FIN: %d, RST: %d\n",
+							 end_seq == start_seq ? 0 : end_seq - start_seq +1,
+							 relative_seq(start_seq), relative_seq(end_seq), start_seq, end_seq, sent, data_seg->retrans, data_seg->is_rdb,
+							 !!(data_seg->flags & TH_SYN), !!(data_seg->flags & TH_FIN), !!(data_seg->flags & TH_RST));
+
+				//assert(data_seg->retrans == 0 && "Shouldn't be retrans!\n");
+				assert(this_is_rdb_data == 0 && "Shouldn't be RDB?!\n");
+			}
 
 			if ((new_end_seq - start_seq) > 100) {
 				if (debug_print) {
@@ -875,12 +886,28 @@ bool RangeManager::processAck(struct DataSeg *seg) {
 			} while (true);
 		}
 
+		// ACK on old data, just ignore
+		if (ack < tmpRange->getEndSeq()) {
+			return false;
+		}
+
 		/* If we get here, something's gone wrong */
+
+		if (ack == tmpRange->getStartSeq()) {
+			// This happens only if the dump does not contain the previous data range.
+			// Probably caused by starting tcpdump in the middle of a stream
+			return false;
+		}
+
 		fprintf(stderr, "Conn: %s\n", conn->getConnKey().c_str());
 		fprintf(stderr, "RangeManager::processAck: Possible error when processing ack: %lu (%lu)\n", relative_seq(ack), ack);
 		fprintf(stderr, "Range(%lu, %lu) (%lu, %lu)\n", relative_seq(tmpRange->getStartSeq()), relative_seq(tmpRange->getEndSeq()), tmpRange->getStartSeq(), tmpRange->getEndSeq());
+		ByteRange *tmp = ranges.begin()->second;
+		fprintf(stderr, "First Range(%lu, %lu) (%lu, %lu)\n", relative_seq(tmp->getStartSeq()), relative_seq(tmp->getEndSeq()), tmp->getStartSeq(), tmp->getEndSeq());
+
 		printf("tmpRange FIN: %d\n", prev->second->fin);
 		warn_with_file_and_linenum(__FILE__, __LINE__);
+		break;
 	}
 	if (!ret)
 		printf("ByteRange - Failed to find packet for ack: %lu\n", ack);

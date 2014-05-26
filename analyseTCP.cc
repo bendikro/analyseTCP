@@ -55,6 +55,7 @@ string GlobOpts::sendNatIP        		= "";
 string GlobOpts::recvNatIP        		= "";
 bool GlobOpts::connDetails        		= false;
 int GlobOpts::verbose             		= 0;
+bool GlobOpts::validate_ranges    		= true;
 int GlobOpts::max_retrans_stats   		= 6;
 string GlobOpts::percentiles      		= "";
 int GlobOpts::analyse_start       		= 0;
@@ -101,7 +102,7 @@ void test(Dump *d) {
 
 	// TEST 1
 	printf("\n\nTEST1:\n");
-	printf("SEQ 1: %lu\n", d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute));
+	printf("SEQ 1: %lu\n", d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute, NULL));
 
 	// TEST 2
 	first_seq = 4294967000;
@@ -111,7 +112,7 @@ void test(Dump *d) {
 	printf("\n\nTEST2:\n");
 	//printf("seq: %u\n", seq);
 	printf("first_seq: %u\n", first_seq);
-	printf("SEQ 2: %lu\n", d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute));
+	printf("SEQ 2: %lu\n", d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute, NULL));
 
 	//lastLargestSeqAbsolute
 
@@ -123,7 +124,7 @@ void test(Dump *d) {
 	printf("\n\nTEST3:\n");
 	printf("seq: %u\n", seq);
 	printf("first_seq: %u\n", first_seq);
-	printf("SEQ 3: %lu\n", d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute));
+	printf("SEQ 3: %lu\n", d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute, NULL));
 
 	// TEST 4
 	first_seq = 4294967000;
@@ -134,7 +135,7 @@ void test(Dump *d) {
 	printf("seq: %u\n", seq);
 	printf("first_seq: %u\n", first_seq);
 	printf("largestSeqAbsolute: %u\n", largestSeqAbsolute);
-	printf("SEQ 4: %lu\n", d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute));
+	printf("SEQ 4: %lu\n", d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute, NULL));
 
 	int i;
 	for (i = 0; i < 10; i++) {
@@ -147,7 +148,7 @@ void test(Dump *d) {
 		printf("seq      : %u\n", seq);
 		printf("largestSeqAbsolute: %u\n", largestSeqAbsolute);
 		printf("lastLargestEndSeq: %lu\n", lastLargestEndSeq);
-		printf("SEQ %d: %lu\n", i + 5, d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute));
+		printf("SEQ %d: %lu\n", i + 5, d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute, NULL));
 	}
 
 	// Seq just wrapped, but received out of order (or older packet with unwrapped seq number)
@@ -160,13 +161,13 @@ void test(Dump *d) {
 	printf("seq      : %u\n", seq);
 	printf("largestSeqAbsolute: %u\n", largestSeqAbsolute);
 	printf("lastLargestEndSeq: %lu\n", lastLargestEndSeq);
-	printf("SEQ %d: %lu\n", i + 5, d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute));
+	printf("SEQ %d: %lu\n", i + 5, d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute, NULL));
 
 	exit(1);
 }
 #endif
 
-#define OPTSTRING "f:s:g:r:q:p:m:n:o:u:lctL::T::QaAeji::yvkd:h"
+#define OPTSTRING "f:s:g:r:q:p:m:n:o:u:lctL::T::QaAeji::yvkVd:h"
 
 void usage (char* argv, int exit_status=1, int help_level=1){
 	string s(OPTSTRING);
@@ -246,6 +247,7 @@ void usage (char* argv, int exit_status=1, int help_level=1){
 		printf("                         vvv = Be even more verbose and print even more details.\n");
 	}
 	printf(" -k                  : Use colors when printing.\n");
+	printf(" -V                  : Disable validation of the data in the ranges.\n");
 	printf(" -d<level>           : Indicate debug level (1-5).\n");
 	if (help_level > 1) {
 		printf("                         1 = Only output on reading sender side dump first pass.\n");
@@ -311,6 +313,7 @@ static struct option long_options[] = {
 	{"packet-details",             	no_argument,       0, 'y'},
 	{"colored-print",              	no_argument,       0, 'k'},
 	{"help",                     	no_argument,       0, 'h'},
+	{"validate-ranges",            	no_argument,       0, 'V'},
 	{"verbose",                  	optional_argument, 0, 'v'},
 	{"debug",                    	required_argument, 0, 'd'},
 	{"analyse-start",            	required_argument, 0, 'S'},
@@ -424,6 +427,9 @@ void parse_cmd_args(int argc, char *argv[]) {
 			break;
 		case 'd':
 			GlobOpts::debugLevel = atoi(optarg);
+			break;
+		case 'V':
+			GlobOpts::validate_ranges = false;
 			break;
 		case 'v':
 			GlobOpts::verbose++;
