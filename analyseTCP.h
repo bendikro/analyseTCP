@@ -242,28 +242,44 @@ struct Percentiles {
 	}
 };
 
+struct BaseStats {
+	int64_t min;
+	double avg;
+	int64_t max;
+	int64_t cum;
+	BaseStats() : min(0), avg(0), max(0), cum(0) {}
+
+	BaseStats& operator+=(const BaseStats &rhs) {
+		min += rhs.min;
+		avg += rhs.avg;
+		max += rhs.max;
+		cum += rhs.cum;
+		return *this;
+	}
+};
+
 /* Struct used to keep track of bytewise latency stats */
 struct byteStats {
-	int maxLat;     /* Maximum Latency */
-	int minLat;     /* Minimum Latency */
-	long long int cumLat;     /* Cumulative latency */
-	Percentiles percentiles_latencies;
-	double stdevLat;
 	int nrRanges;   /* Number of ranges in conn */
-	long long int avgLat;   /* Average latency */
-	vector<int> retrans;
-	vector<int> dupacks;
-	long long int maxLength;
-	long long int minLength;
-	long long int cumLength;
-	long long int avgLength;
+
+	struct BaseStats latency;
+	struct BaseStats packet_length;
+	struct BaseStats itt;
+
+	double stdevLat;
 	double stdevLength;
+
+	Percentiles percentiles_latencies;
 	Percentiles percentiles_lengths;
+	Percentiles percentiles_itt;
+
 	vector<double> latencies;
 	vector<double> payload_lengths;
 	vector<double> intertransmission_times;
-	byteStats() : maxLat(0), minLat(0), cumLat(0), stdevLat(0), nrRanges(0), avgLat(0),
-				  maxLength(0), minLength(0), cumLength(0), avgLength(0), stdevLength(0) {
+
+	vector<int> retrans;
+	vector<int> dupacks;
+	byteStats() : nrRanges(0), stdevLength(0) {
 	}
 };
 

@@ -554,8 +554,10 @@ int main(int argc, char *argv[]){
 	if (GlobOpts::genAckLatencyFiles)
 		senderDump->genAckLatencyFiles();
 
-	if (GlobOpts::withThroughput)
+	if (GlobOpts::withThroughput) {
 		senderDump->writeByteCountGroupedByInterval();
+		senderDump->writePacketByteCountAndITT();
+	}
 
 	if (GlobOpts::withLoss)
 		senderDump->write_loss_to_file();
@@ -570,7 +572,6 @@ int main(int argc, char *argv[]){
 	}
 
 	senderDump->printStatistics();
-
 	senderDump->printDumpStats();
 	senderDump->free_resources();
 

@@ -81,8 +81,11 @@ private:
 	void processRecvd(const struct pcap_pkthdr* header, const u_char *data);
 	void processAcks(const struct pcap_pkthdr* header, const u_char *data);
 	void registerRecvd(const struct pcap_pkthdr* header, const u_char *data);
+	void printAggStats(string prefix, string unit, struct connStats *cs, struct BaseStats& bs, struct BaseStats& aggregatedMin, struct BaseStats& aggregatedMax);
+	void printStats(string prefix, string unit, struct BaseStats& bs);
 	void printPacketStats(struct connStats *cs, struct byteStats *bs, bool aggregated, struct byteStats* aggregatedMin, struct byteStats* aggregatedMax);
 	void printBytesLatencyStats(struct connStats *cs, struct byteStats* bs, bool aggregated, struct byteStats* aggregatedMin, struct byteStats* aggregatedMax);
+	void printPacketITTStats(struct connStats *cs, struct byteStats* bs, bool aggregated, struct byteStats* aggregatedMin, struct byteStats* aggregatedMax);
 public:
 	Dump(string src_ip, string dst_ip, string src_port, string dst_port, string fn);
 	uint64_t get_relative_sequence_number(uint32_t ack, uint32_t firstSeq, ulong largestAckSeq, uint32_t largestAckSeqAbsolute, Connection *conn);
@@ -94,6 +97,7 @@ public:
 	void printConns();
 	void printStatistics();
 	void genAckLatencyFiles();
+	void writePacketByteCountAndITT();
 	void write_loss_to_file();
 	void calculateLatencyVariation();
 	void makeByteLatencyVariationCDF();

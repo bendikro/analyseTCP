@@ -51,7 +51,7 @@ TARGET_LINK_LIBRARIES (analyseTCP pcap)
 SET (CMAKE_CXX_FLAGS "-O3 -lm -Wall -Wno-long-long -Wno-variadic-macros") # -Werror?
 
 # Add NDEBUG only for release version
-# To activate: cmake -DCMAKE_BUILD_TYPE=Release .
+# To activate: cmake -DCMAKE_BUILD_TYPE=Release ..
 SET (CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG")
 
 # Set debug compiler flags

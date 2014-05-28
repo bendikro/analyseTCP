@@ -75,14 +75,14 @@ void ByteRange::print_tstamps_pcap() {
 	timeval tmp;
 	ulong ms = 0;
 	for (ulong i = 0; i < sent_tstamp_pcap.size(); i++) {
-		timersub(&ackTime, &sent_tstamp_pcap[i], &tmp);
+		timersub(&ackTime, &sent_tstamp_pcap[i].first, &tmp);
 		ms = (tmp.tv_sec * 1000) + (tmp.tv_usec / 1000);
 
 		ulong ts = 0;
-		if (sent_tstamp_pcap[i].tv_sec > 0) {
-			ts += sent_tstamp_pcap[i].tv_sec * 1000000;
+		if (sent_tstamp_pcap[i].first.tv_sec > 0) {
+			ts += sent_tstamp_pcap[i].first.tv_sec * 1000000;
 		}
-		ts += (sent_tstamp_pcap[i].tv_usec);
+		ts += (sent_tstamp_pcap[i].first.tv_usec);
 		printf("     timestamp: %lu, diff: %lu\n", ts, ms);
 	}
 }
@@ -93,7 +93,7 @@ int ByteRange::getSendAckTimeDiff(RangeManager *rm) {
 	struct timeval tv;
 	int ms = 0;
 
-	if (sent_tstamp_pcap.empty() || (sent_tstamp_pcap[0].tv_sec == 0 && sent_tstamp_pcap[0].tv_usec == 0)) {
+	if (sent_tstamp_pcap.empty() || (sent_tstamp_pcap[0].first.tv_sec == 0 && sent_tstamp_pcap[0].first.tv_usec == 0)) {
 #ifdef DEBUG
 		cerr << "Range without a send time. Skipping: " << endl;
 #endif
@@ -127,7 +127,7 @@ int ByteRange::getSendAckTimeDiff(RangeManager *rm) {
 
 	/* since ackTime will always be bigger than sent_tstamp_pcap,
 	   (directly comparable timers) timerSub can be used here */
-	timersub(&ackTime, &sent_tstamp_pcap[0], &tv);
+	timersub(&ackTime, &sent_tstamp_pcap[0].first, &tv);
 
 	if (tv.tv_sec > 0) {
 		ms += tv.tv_sec * 1000;
@@ -146,8 +146,8 @@ int ByteRange::getSendAckTimeDiff(RangeManager *rm) {
 			cerr << "Strange latency: " << ms << "ms." << endl;
 			//cerr << "Start seq: " << rm->relative_seq(startSeq) << " End seq: " << rm->relative_seq(endSeq) << endl;
 			cerr << "Size of range: " << endSeq - startSeq << endl;
-			cerr << "sent_tstamp_pcap.tv_sec: " << sent_tstamp_pcap[0].tv_sec << " - sent_tstamp_pcap.tv_usec: "
-				 << sent_tstamp_pcap[0].tv_usec << endl;
+			cerr << "sent_tstamp_pcap.tv_sec: " << sent_tstamp_pcap[0].first.tv_sec << " - sent_tstamp_pcap.tv_usec: "
+				 << sent_tstamp_pcap[0].first.tv_usec << endl;
 			cerr << "ackTime.tv_sec : " << ackTime.tv_sec << "  - ackTime.tv_usec : "
 				 << ackTime.tv_usec << endl;
 			cerr << "Number of retransmissions: " << packet_retrans_count << endl;
@@ -164,7 +164,7 @@ void ByteRange::calculateRecvDiff(timeval *recv_tstamp) {
 		recv_tstamp = &received_tstamp_pcap;
 	}
 	/* Use own macro in order to handle negative diffs */
-	negtimersub(recv_tstamp, &sent_tstamp_pcap[send_tcp_stamp_recv_index], &tv);
+	negtimersub(recv_tstamp, &sent_tstamp_pcap[send_tcp_stamp_recv_index].first, &tv);
 
 	ms += tv.tv_sec * 1000;
 	if(ms >= 0)
@@ -191,10 +191,10 @@ void ByteRange::printValues() {
 }
 
 timeval* ByteRange::getSendTime() {
-	if (sent_tstamp_pcap[0].tv_sec == 0 && sent_tstamp_pcap[0].tv_usec == 0)
+	if (sent_tstamp_pcap[0].first.tv_sec == 0 && sent_tstamp_pcap[0].first.tv_usec == 0)
 		return NULL;
 	else
-		return &sent_tstamp_pcap[0];
+		return &sent_tstamp_pcap[0].first;
 }
 
 timeval* ByteRange::getAckTime() {

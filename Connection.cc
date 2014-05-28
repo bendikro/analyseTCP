@@ -192,16 +192,16 @@ void Connection::set_analyse_range_interval() {
 	rm->analyse_time_sec_start = GlobOpts::analyse_start;
 
 	struct timeval tv;
-	timersub(&(rm->ranges.rbegin()->second->sent_tstamp_pcap[0]), &rm->analyse_range_start->second->sent_tstamp_pcap[0], &tv);
+	timersub(&(rm->ranges.rbegin()->second->sent_tstamp_pcap[0].first), &rm->analyse_range_start->second->sent_tstamp_pcap[0].first, &tv);
 	rm->analyse_time_sec_end = tv.tv_sec;
 
 	if (GlobOpts::analyse_start) {
 		map<ulong, ByteRange*>::iterator it, it_end;
 		it = rm->ranges.begin();
-		timeval first_pcap_tstamp = it->second->sent_tstamp_pcap[0];
+		timeval first_pcap_tstamp = it->second->sent_tstamp_pcap[0].first;
 		it_end = rm->ranges.end();
 		for (; it != it_end; it++) {
-			timersub(&(it->second->sent_tstamp_pcap[0]), &first_pcap_tstamp, &tv);
+			timersub(&(it->second->sent_tstamp_pcap[0].first), &first_pcap_tstamp, &tv);
 			if (tv.tv_sec >= GlobOpts::analyse_start) {
 				rm->analyse_range_start = it;
 				rm->analyse_time_sec_start = tv.tv_sec;
@@ -214,14 +214,14 @@ void Connection::set_analyse_range_interval() {
 	if (GlobOpts::analyse_end) {
 		multimap<ulong, ByteRange*>::reverse_iterator rit, rit_end = rm->ranges.rend();
 		rit = rm->ranges.rbegin();
-		timeval last_pcap_tstamp = rit->second->sent_tstamp_pcap[0];
+		timeval last_pcap_tstamp = rit->second->sent_tstamp_pcap[0].first;
 		rit_end = rm->ranges.rend();
 		for (; rit != rit_end; rit++) {
-			timersub(&last_pcap_tstamp, &(rit->second->sent_tstamp_pcap[0]), &tv);
+			timersub(&last_pcap_tstamp, &(rit->second->sent_tstamp_pcap[0].first), &tv);
 			if (tv.tv_sec >= GlobOpts::analyse_end) {
 				rm->analyse_range_last = rm->analyse_range_end = rit.base();
 				rm->analyse_range_end++;
-				timersub(&(rit->second->sent_tstamp_pcap[0]), &rm->ranges.begin()->second->sent_tstamp_pcap[0], &tv);
+				timersub(&(rit->second->sent_tstamp_pcap[0].first), &rm->ranges.begin()->second->sent_tstamp_pcap[0].first, &tv);
 				rm->analyse_time_sec_end = tv.tv_sec;
 				break;
 			}
@@ -229,7 +229,7 @@ void Connection::set_analyse_range_interval() {
 	}
 	else if (GlobOpts::analyse_duration) {
 		ulong end_index = rm->ranges.size();
-		timeval begin_tv = rm->analyse_range_start->second->sent_tstamp_pcap[0];
+		timeval begin_tv = rm->analyse_range_start->second->sent_tstamp_pcap[0].first;
 		map<ulong, ByteRange*>::iterator begin_it, end_it, tmp_it;
 		begin_it = rm->analyse_range_start;
 		end_it = rm->ranges.end();
@@ -239,7 +239,7 @@ void Connection::set_analyse_range_interval() {
 			if (!advance) {
 				rm->analyse_range_end = rm->analyse_range_last = begin_it;
 				rm->analyse_range_end++;
-				timersub(&(begin_it->second->sent_tstamp_pcap[0]), &begin_tv, &tv);
+				timersub(&(begin_it->second->sent_tstamp_pcap[0].first), &begin_tv, &tv);
 				rm->analyse_time_sec_end = rm->analyse_time_sec_start + GlobOpts::analyse_duration;
 				break;
 			}
@@ -247,7 +247,7 @@ void Connection::set_analyse_range_interval() {
 			tmp_it = begin_it;
 			std::advance(tmp_it, advance);
 
-			timersub(&(tmp_it->second->sent_tstamp_pcap[0]), &begin_tv, &tv);
+			timersub(&(tmp_it->second->sent_tstamp_pcap[0].first), &begin_tv, &tv);
 			// Compares seconds, does not take into account milliseconds
 			// Shorter than the requested length
 			if (tv.tv_sec <= GlobOpts::analyse_duration) {
@@ -317,8 +317,6 @@ void Connection::addPacketStats(struct connStats* cs) {
 void Connection::genBytesLatencyStats(struct byteStats* bs){
 	/* Iterate through vector and gather data */
 	rm->genStats(bs);
-	if (bs->nrRanges > 0)
-		bs->avgLat = bs->cumLat / bs->nrRanges;
 }
 
 
@@ -427,3 +425,36 @@ void Connection::registerPacketSize(const timeval& first, const timeval& ts, con
 
 	packetSizes[sent_time_bucket_idx].push_back(pair<timeval,uint64_t>(ts, ps));
 }
+
+void Connection::writePacketByteCountAndITT(ofstream* all_stream, ofstream* conn_stream) {
+	vector<vector<pair<timeval,uint64_t> > >::iterator i;
+	vector<pair<timeval,uint64_t> >::iterator j;
+
+	if (conn_stream) {
+		*conn_stream << "itt,packet_size" << endl;
+	}
+
+	uint64_t k = 0;
+	while (packetSizes[k].empty()) k++;
+
+	uint64_t prev = TV_TO_MS(packetSizes[k][0].first);
+	uint64_t itt, tmp;
+	for (i = packetSizes.begin(); i != packetSizes.end(); ++i) {
+		for (j = i->begin(); j != i->end(); ++j) {
+			if (!j->second)
+				continue;
+
+			tmp = TV_TO_MS(j->first);
+			itt = tmp - prev;
+			prev = tmp;
+
+			if (all_stream) {
+				*all_stream << itt << "," << j->second << endl;
+			}
+			if (conn_stream) {
+				*conn_stream << itt << "," << j->second << endl;
+			}
+		}
+	}
+}
+

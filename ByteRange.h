@@ -36,7 +36,8 @@ public:
 	uint8_t rdb_byte_hits;
 
 	timeval received_tstamp_pcap;
-	vector<timeval> sent_tstamp_pcap;  // pcap tstamp for regular packet and retrans
+	//vector<timeval> sent_tstamp_pcap;  // pcap tstamp for regular packet and retrans
+	vector< pair<timeval, uint8_t> > sent_tstamp_pcap;
 
 	uint8_t send_tcp_stamp_recv_index; // The index of the element in the tstamps_tcp vector that matches the received tcp time stamp
 	uint32_t received_tstamp_tcp;
@@ -71,7 +72,7 @@ public:
 		send_tcp_stamp_recv_index = 0;
 		update_byte_count();
 		original_payload_size = byte_count;
-		packet_sent_count = 1;
+		packet_sent_count = 0;
 		packet_received_count = 0;
 		packet_retrans_count = 0;
 		data_retrans_count = 0;
@@ -112,15 +113,18 @@ public:
 		}
 	}
 
-	inline void increase_sent(uint32_t tstamp_tcp, timeval tstamp_pcap, bool rdb) {
+	inline void increase_sent(uint32_t tstamp_tcp, timeval tstamp_pcap, bool rdb, bool packet_sent=true) {
 		if (rdb) {
 			rdb_tstamps_tcp.push_back(tstamp_tcp);
 		}
 		else {
 			tstamps_tcp.push_back(tstamp_tcp);
 		}
+		if (packet_sent)
+			packet_sent_count++;
+
 		sent_count++;
-		sent_tstamp_pcap.push_back(tstamp_pcap);
+		sent_tstamp_pcap.push_back(pair<timeval, uint8_t>(tstamp_pcap, packet_sent));
 		lost_tstamps_tcp.push_back(pair<uint32_t,timeval>(tstamp_tcp, tstamp_pcap));
 	}
 

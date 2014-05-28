@@ -84,5 +84,6 @@ public:
 	uint32_t getDuration(bool analyse_range_duration);
 
 	void registerPacketSize(const timeval& first_tstamp_in_dump, const timeval& pkt_tstamp, const uint64_t pkt_size);
+	void writePacketByteCountAndITT(ofstream* all_stream, ofstream* conn_stream);
 };
 #endif /* CONNECTION_H */
