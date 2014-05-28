@@ -1174,7 +1174,10 @@ void RangeManager::printPacketDetails() {
 			   it->second->data_retrans_count, it->second->rdb_count, received_type_str[it->second->recv_type],
 			   it->second->rdb_byte_miss, it->second->rdb_byte_hits);
 		printf(" ACKtime: %4d ", it->second->getSendAckTimeDiff(this));
-		printf(" RecvDiff: %4ld ", (it->second->getRecvDiff() - lowestRecvDiff));
+
+		if (GlobOpts::withRecv) {
+			printf(" RecvDiff: %4ld ", (it->second->getRecvDiff() - lowestRecvDiff));
+		}
 
 		if (GlobOpts::verbose) {
 			printf(" (%4ld) ", it->second->getSendAckTimeDiff(this) - (it->second->getRecvDiff() - lowestRecvDiff));

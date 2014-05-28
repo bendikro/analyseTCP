@@ -38,7 +38,7 @@ struct ConnectionKeyComparator {
 	}
 };
 
-// Sort by convering ports with ntohs
+// Sort by converting ports with ntohs
 struct SortedConnectionKeyComparator {
 	bool operator()(const ConnectionMapKey*  left, const ConnectionMapKey* right) const {
 		//printf("Compare left  (%15p) : src ip: %ul, dst ip: %ul, src port: %us, dst port: %us\n", left, left->ip_src.s_addr, left->ip_dst.s_addr, left->src_port, left->dst_port);
@@ -81,7 +81,7 @@ private:
 	void processRecvd(const struct pcap_pkthdr* header, const u_char *data);
 	void processAcks(const struct pcap_pkthdr* header, const u_char *data);
 	void registerRecvd(const struct pcap_pkthdr* header, const u_char *data);
-	void printPacketStats(struct connStats *cs, struct byteStats *bs, bool aggregated);
+	void printPacketStats(struct connStats *cs, struct byteStats *bs, bool aggregated, struct byteStats* aggregatedMin, struct byteStats* aggregatedMax);
 	void printBytesLatencyStats(struct connStats *cs, struct byteStats* bs, bool aggregated, struct byteStats* aggregatedMin, struct byteStats* aggregatedMax);
 public:
 	Dump(string src_ip, string dst_ip, string src_port, string dst_port, string fn);

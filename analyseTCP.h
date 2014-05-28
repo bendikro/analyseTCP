@@ -261,6 +261,7 @@ struct byteStats {
 	Percentiles percentiles_lengths;
 	vector<double> latencies;
 	vector<double> payload_lengths;
+	vector<double> intertransmission_times;
 	byteStats() : maxLat(0), minLat(0), cumLat(0), stdevLat(0), nrRanges(0), avgLat(0),
 				  maxLength(0), minLength(0), cumLength(0), avgLength(0), stdevLength(0) {
 	}

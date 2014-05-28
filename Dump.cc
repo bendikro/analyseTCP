@@ -95,10 +95,6 @@ void Dump::analyseSender() {
 	/* Set up pcap filter to include only outgoing tcp
 	   packets with correct ip and port numbers.
 	*/
-
-	/* TODO: Add options to crop dumpfiles from front or back with n
-	   minutes */
-
 	bool src_port_range = !isNumeric(srcPort.c_str(), 10);
 	bool dst_port_range = !isNumeric(dstPort.c_str(), 10);
 
@@ -226,9 +222,6 @@ void Dump::analyseSender() {
 	pcap_close(fd2);
 
 	printf("Finished processing acknowledgements...\n");
-	printf("GlobOpts::validate_ranges: %d\n", GlobOpts::validate_ranges);
-
-
 
 	if (GlobOpts::validate_ranges) {
 		/* DEBUG: Validate ranges */
@@ -254,12 +247,14 @@ void Dump::printStatistics() {
 	memset(&csAggregated, 0, sizeof(struct connStats));
 
 	struct byteStats bsAggregated, bsAggregatedMin, bsAggregatedMax;
-	bsAggregatedMin.minLat = bsAggregatedMin.minLength = bsAggregatedMin.avgLat = bsAggregatedMin.maxLat = (numeric_limits<int>::max)();
-	bsAggregatedMax.maxLength = (numeric_limits<int>::max)();
+	bsAggregatedMin.minLat = bsAggregatedMin.avgLat = bsAggregatedMin.maxLat = (numeric_limits<int>::max)();
+	bsAggregatedMin.minLength = bsAggregatedMin.avgLength = bsAggregatedMin.maxLength = (numeric_limits<int>::max)();
 
 	csAggregated.rdb_byte_hits = 0;
 	csAggregated.rdb_byte_misses = 0;
 	csAggregated.rdb_bytes_sent = 0;
+
+	int max_value = (numeric_limits<int>::max)();
 
 	// Print stats for each connection or aggregated
 	map<ConnectionMapKey*, Connection*, SortedConnectionKeyComparator> sortedConns;
@@ -288,7 +283,7 @@ void Dump::printStatistics() {
 				colored_printf(YELLOW, " (Interval alalysed (sec): %d-%d)", cIt->second->rm->analyse_time_sec_start, cIt->second->rm->analyse_time_sec_end);
 			}
 			printf("\n");
-			printPacketStats(&cs, &bs, false);
+			printPacketStats(&cs, &bs, false, NULL, NULL);
 		}
 
 		if (!(GlobOpts::aggOnly)) {
@@ -296,14 +291,64 @@ void Dump::printStatistics() {
 		}
 
 		if (GlobOpts::aggregate) {
+
 			bsAggregated.minLat += bs.minLat;
 			bsAggregated.maxLat += bs.maxLat;
-			bsAggregated.minLength += bs.minLength;
-			bsAggregated.maxLength += bs.maxLength;
 			bsAggregated.avgLat += bs.avgLat;
 			bsAggregated.cumLat += bs.cumLat;
-			bsAggregated.avgLength += bs.avgLength;
-			bsAggregated.cumLength += bs.cumLength;
+
+			// Get minimum values
+			if (bs.minLat && bs.minLat < bsAggregatedMin.minLat) {
+				bsAggregatedMin.minLat = bs.minLat;
+			}
+			if (bs.maxLat && bs.maxLat < bsAggregatedMin.maxLat) {
+				bsAggregatedMin.maxLat = bs.maxLat;
+			}
+			if (bs.avgLat && bs.avgLat < bsAggregatedMin.avgLat) {
+				bsAggregatedMin.avgLat = bs.avgLat;
+			}
+
+			// Get maximum values
+			if (bs.minLat && bs.minLat > bsAggregatedMax.minLat) {
+				bsAggregatedMax.minLat = bs.minLat;
+			}
+			if (bs.maxLat && bs.maxLat > bsAggregatedMax.maxLat)
+				bsAggregatedMax.maxLat = bs.maxLat;
+			if (bs.avgLat && bs.avgLat > bsAggregatedMax.avgLat)
+				bsAggregatedMax.avgLat = bs.avgLat;
+
+			if (bs.maxLat < 10) {
+				printf("bs.maxLat: %d\n", bs.maxLat);
+			}
+
+			// Add the latency values
+			bsAggregated.latencies.insert(bsAggregated.latencies.end(), bs.latencies.begin(), bs.latencies.end());
+
+			if (bs.minLength != max_value) {
+				bsAggregated.minLength += bs.minLength;
+				bsAggregated.maxLength += bs.maxLength;
+				bsAggregated.avgLength += bs.avgLength;
+				bsAggregated.cumLength += bs.cumLength;
+
+				// Get minimum values
+				if (bsAggregatedMin.minLength > bs.minLength && bs.minLength > 0)
+					bsAggregatedMin.minLength = bs.minLength;
+				if (bsAggregatedMin.maxLength > bs.maxLength && bs.maxLength > 0)
+					bsAggregatedMin.maxLength = bs.maxLength;
+				if (bsAggregatedMin.avgLength > bs.avgLength && bs.avgLength > 0)
+					bsAggregatedMin.avgLength = bs.avgLength;
+
+				// Get maximum values
+				if (bsAggregatedMax.minLength < bs.minLength && bs.minLength > 0)
+					bsAggregatedMax.minLength = bs.minLength;
+				if (bsAggregatedMax.maxLength < bs.maxLength && bs.maxLength > 0)
+					bsAggregatedMax.maxLength = bs.maxLength;
+				if (bsAggregatedMax.avgLength < bs.avgLength && bs.avgLength > 0)
+					bsAggregatedMax.avgLength = bs.avgLength;
+
+				// Add the payload values
+				bsAggregated.payload_lengths.insert(bsAggregated.payload_lengths.end(), bs.payload_lengths.begin(), bs.payload_lengths.end());
+			}
 
 			// Add retrans stats
 			if ((ulong) bs.retrans.size() > bsAggregated.retrans.size()) {
@@ -326,27 +371,6 @@ void Dump::printStatistics() {
 			for (ulong i = 0; i < bs.dupacks.size(); i++) {
 				bsAggregated.dupacks[i] += bs.dupacks[i];
 			}
-
-			// Get minimum values
-			if (bsAggregatedMin.minLat > bs.minLat && bs.minLat > 0)
-				bsAggregatedMin.minLat = bs.minLat;
-			if (bsAggregatedMin.maxLat > bs.maxLat && bs.maxLat > 0)
-				bsAggregatedMin.maxLat = bs.maxLat;
-			if (bsAggregatedMin.avgLat > bs.avgLat && bs.avgLat > 0) {
-				bsAggregatedMin.avgLat = bs.avgLat;
-			}
-
-			// Get maximum values
-			if (bsAggregatedMax.minLat < bs.minLat)
-				bsAggregatedMax.minLat = bs.minLat;
-			if (bsAggregatedMax.maxLat < bs.maxLat)
-				bsAggregatedMax.maxLat = bs.maxLat;
-			if (bsAggregatedMax.avgLat < bs.avgLat)
-				bsAggregatedMax.avgLat = bs.avgLat;
-
-			// Add the latency and payload values
-			bsAggregated.latencies.insert(bsAggregated.latencies.end(), bs.latencies.begin(), bs.latencies.end());
-			bsAggregated.payload_lengths.insert(bsAggregated.payload_lengths.end(), bs.payload_lengths.begin(), bs.payload_lengths.end());
 		}
 	}
 
@@ -368,7 +392,7 @@ void Dump::printStatistics() {
 			percentiles(&bsAggregated.payload_lengths, &bsAggregated.percentiles_lengths);
 
 			cout << "\nAggregated Statistics for " << sortedConns.size() << " connections:" << endl;
-			printPacketStats(&csAggregated, &bsAggregated, true);
+			printPacketStats(&csAggregated, &bsAggregated, true, &bsAggregatedMin, &bsAggregatedMax);
 
 			/* Print Aggregate bytewise latency */
 			printBytesLatencyStats(&csAggregated, &bsAggregated, true, &bsAggregatedMin, &bsAggregatedMax);
@@ -385,7 +409,7 @@ void print_stats_separator(bool final) {
 
 /* Generate statistics for each connection.
    update aggregate stats if requested */
-void Dump::printPacketStats(struct connStats *cs, struct byteStats *bs, bool aggregated) {
+void Dump::printPacketStats(struct connStats *cs, struct byteStats *bs, bool aggregated, struct byteStats* aggregatedMin, struct byteStats* aggregatedMax) {
 	printf("  Duration: %u seconds (%f hours)\n", cs->duration, ((double) cs->duration / 60 / 60));
 
 	if (cs->nrPacketsSent != cs->nrPacketsSentFoundInDump) {
@@ -455,9 +479,10 @@ void Dump::printPacketStats(struct connStats *cs, struct byteStats *bs, bool agg
 
 	if (bs != NULL) {
 		if (aggregated) {
-			printf("  Minimum (average for all connections)         : %10lld\n" \
-			       "  Maximum (average for all connections)         : %10lld\n",
-			       bs->minLength, bs->maxLength);
+			printf("  Minimum payload (min, avg, max)               :    %7lld, %7lld, %7lld bytes\n", aggregatedMin->minLength, bs->minLength, aggregatedMax->minLength);
+			printf("  Average payload (min, avg, max)               :    %7lld, %7lld, %7lld bytes\n", aggregatedMin->avgLength, bs->avgLength, aggregatedMax->avgLength);
+			printf("  Maximum payload (min, avg, max)               :    %7lld, %7lld, %7lld bytes\n", aggregatedMin->maxLength, bs->maxLength, aggregatedMax->maxLength);
+			printf("  Average for all packets in all all conns      : %10lld bytes\n", bs->cumLength / cs->nrPacketsSent);
 		}
 		else {
 			printf("  Minimum                                       : %10lld\n" \
@@ -505,6 +530,19 @@ void Dump::printBytesLatencyStats(struct connStats *cs, struct byteStats* bs, bo
 		printf("  Maximum latencies (min, avg, max)             :    %7d, %7d, %7d ms\n", aggregatedMin->maxLat, bs->maxLat, aggregatedMax->maxLat);
 		printf("  Average for all packets in all all conns      : %10lld ms\n", bs->cumLat / cs->nrPacketsSent);
 
+		if (GlobOpts::verbose) {
+			printf("\nAggregated latency values explained:\n"
+				   "Minimum min: The smallest value of all the minimum latencies for each connection\n"
+				   "Minimum avg: The average of all the minimum latency values for all connections\n"
+				   "Minimum max: The biggest value of all the minimum latencies for each connection\n"
+				   "Average min: Calculate the average latency for each connection. This is the smallest calculated average\n"
+				   "Average avg: Calculate the average latency for each connection. This is the average of all the calculated averages\n"
+				   "Average max: Calculate the average latency for each connection. This is the biggest calculated average\n"
+				   "Maximum min: The smallest value of all the maximum latencies for each connection\n"
+				   "Maximum avg: The average of all the maximum latency values for all connections\n"
+				   "Maximum max: The biggest value of all the maximum latencies for each connection\n"
+				);
+		}
 	}
 	else {
 		printf("  Minimum                                       : %7d ms\n", bs->minLat);
@@ -743,6 +781,7 @@ void Dump::processAcks(const struct pcap_pkthdr* header, const u_char *data) {
 	if (tmpConn == NULL) {
 		cerr << "Ack for unregistered connection found. Ignoring. Conn: " << getConnKey(&ip->ip_src, &ip->ip_dst, &tcp->th_sport, &tcp->th_dport) << endl;
 		//exit_with_file_and_linenum(1, __FILE__, __LINE__);
+		return;
 	}
 	ack = ntohl(tcp->th_ack);
 
