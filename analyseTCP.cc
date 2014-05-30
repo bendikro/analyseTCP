@@ -493,6 +493,9 @@ int main(int argc, char *argv[]){
 
 	parse_cmd_args(argc, argv);
 
+//	cout.sync_with_stdio(false);
+	//setvbuf(stdout, NULL, _IOFBF, 20000);
+
 	if(GlobOpts::debugLevel < 0)
 		cerr << "debugLevel = " << GlobOpts::debugLevel << endl;
 

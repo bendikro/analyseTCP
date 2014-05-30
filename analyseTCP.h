@@ -194,6 +194,7 @@ struct connStats {
 	int rstCount;
 	int pureAcksCount;
 	uint64_t totUniqueBytes;
+	uint64_t totUniqueBytesSent;
 	uint64_t redundantBytes;
 	int rdb_packet_hits;
 	int rdb_packet_misses;
@@ -258,6 +259,19 @@ struct BaseStats {
 	}
 };
 
+
+struct SentTime {
+	uint64_t time;
+	uint16_t size;
+	uint16_t itt;
+	SentTime(uint64_t t, uint16_t s) : time(t), size(s), itt(0) {}
+
+	bool operator < (const SentTime& other) const {
+        return (time < other.time);
+    }
+};
+
+
 /* Struct used to keep track of bytewise latency stats */
 struct byteStats {
 	int nrRanges;   /* Number of ranges in conn */
@@ -276,7 +290,7 @@ struct byteStats {
 	vector<double> latencies;
 	vector<double> payload_lengths;
 	vector<double> intertransmission_times;
-
+	vector<struct SentTime> sent_times;
 	vector<int> retrans;
 	vector<int> dupacks;
 	byteStats() : nrRanges(0), stdevLength(0) {

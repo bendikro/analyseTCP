@@ -238,10 +238,16 @@ void Dump::analyseSender() {
 }
 
 void print_stats_separator(bool final) {
+	char c = '-';
 	if (final)
-		cout << "===============================================================" << endl << endl;
-	else
-		cout << "---------------------------------------------------------------" << endl;
+		c = '=';
+
+	for (int i = 0; i < 63; i++)
+		printf("%c", c);
+
+	printf("\n");
+	if (final)
+		printf("\n");
 }
 
 // Update minimum values
@@ -264,6 +270,17 @@ void updateMaxStats(struct BaseStats& aggStats, struct BaseStats& stats) {
 		aggStats.avg = stats.avg;
 }
 
+void Dump::writeITT(ofstream& stream, vector<struct SentTime>& sent_times) {
+	//ofstream cdf_f;
+	//cdf_f.open((char*)(((GlobOpts::prefix + "itt-range-all.dat").str()).c_str()), ios::out);
+	const uint64_t first_tstamp = TV_TO_MS(first_sent_time);
+	printf("2 first_tstamp: %lu\n", first_tstamp);
+
+	for (size_t i = 0; i < sent_times.size(); i++) {
+		stream << (sent_times[i].time) << "," << sent_times[i].itt << "," << sent_times[i].size << endl;
+	}
+}
+
 
 /* Traverse the pcap dump and call methods for processing the packets
    This generates initial one-pass statistics from sender-side dump. */
@@ -284,6 +301,13 @@ void Dump::printStatistics() {
 
 	int64_t max_value = (numeric_limits<int64_t>::max)();
 
+	vector<string> itt_fnames;
+	itt_fnames.push_back("itt-all.dat");
+	globStats->prefix_filenames(itt_fnames);
+	ofstream itt_stream;
+	itt_stream.open(itt_fnames[0].c_str(), ios::out);
+	itt_stream << "time,itt,payload_size" << endl;
+
 	// Print stats for each connection or aggregated
 	map<ConnectionMapKey*, Connection*, SortedConnectionKeyComparator> sortedConns;
 	fillWithSortedConns(sortedConns);
@@ -303,6 +327,10 @@ void Dump::printStatistics() {
 		}
 
 		cIt->second->genBytesLatencyStats(&bs);
+
+		//printf("cs->nrPacketsSent: %d\n", cs.nrPacketsSent);
+
+		writeITT(itt_stream, bs.sent_times);
 
 		if (!(GlobOpts::aggOnly)) {
 			colored_printf(YELLOW, "STATS FOR CONN: %s:%u -> %s:%u", cIt->second->getSrcIp().c_str(), cIt->second->srcPort,
@@ -368,6 +396,7 @@ void Dump::printStatistics() {
 				bsAggregated.dupacks[i] += bs.dupacks[i];
 			}
 		}
+		print_stats_separator(true);
 	}
 
 	if (GlobOpts::aggregate) {
@@ -412,16 +441,14 @@ void Dump::printStatistics() {
 }
 
 
-/* Generate statistics for each connection.
-   update aggregate stats if requested */
-void Dump::printPacketStats(struct connStats *cs, struct byteStats *bs, bool aggregated, struct byteStats* aggregatedMin, struct byteStats* aggregatedMax) {
+void Dump::printPacketStats(connStats *cs, byteStats *bs, bool aggregated, byteStats* aggregatedMin, byteStats* aggregatedMax) {
 	printf("  Duration: %u seconds (%f hours)\n", cs->duration, ((double) cs->duration / 60 / 60));
 
 	if (cs->nrPacketsSent != cs->nrPacketsSentFoundInDump) {
 		printf("  Total packets sent (adj. for fragmentation)   : %10d\n", cs->nrPacketsSent);
 		printf("  Total packets sent (found in dump)            : %10d\n", cs->nrPacketsSentFoundInDump);
 		printf("  Total data packets sent (adj.)                : %10d\n", cs->nrDataPacketsSent);
-		printf("  Total data packets sent (found)               : %10d\n", cs->nrDataPacketsSent- (cs->nrPacketsSent - cs->nrPacketsSentFoundInDump));
+		printf("  Total data packets sent (found)               : %10d\n", cs->nrDataPacketsSent - (cs->nrPacketsSent - cs->nrPacketsSentFoundInDump));
 	}
 	else {
 		printf("  Total packets sent                            : %10d\n", cs->nrPacketsSent);
@@ -434,15 +461,19 @@ void Dump::printPacketStats(struct connStats *cs, struct byteStats *bs, bool agg
 	       "  SYN/FIN/RST packets sent                      : %10s\n"	\
 	       "  Number of retransmissions                     : %10d\n"	\
 	       "  Number of packets with bundled segments       : %10d\n"	\
-		   "  Number of received acks                       : %10d\n"    \
+		   "  Number of received acks                       : %10d\n"   \
 	       "  Total bytes sent (payload)                    : %10lu\n"	\
-	       "  Number of unique bytes                        : %10lu\n"	\
+	       "  Number of unique bytes                        : %10lu\n"   \
 	       "  Number of retransmitted bytes                 : %10d\n"	\
 		   "  Redundant bytes (bytes already sent)          : %10lu (%.2f %%)\n",
 		   cs->pureAcksCount, syn_fin_rst,
 		   cs->nrRetrans, cs->bundleCount, cs->ackCount, cs->totBytesSent,
-	       cs->totUniqueBytes, cs->totRetransBytesSent, cs->totBytesSent - cs->totUniqueBytes,
-	       ((double) (cs->totBytesSent - cs->totUniqueBytes) / cs->totBytesSent) * 100);
+	       cs->totUniqueBytesSent, cs->totRetransBytesSent, cs->totBytesSent - cs->totUniqueBytesSent,
+	       ((double) (cs->totBytesSent - cs->totUniqueBytesSent) / cs->totBytesSent) * 100);
+
+	if (cs->totUniqueBytesSent != cs->totUniqueBytes) {
+		colored_printf(RED, "  Trace is missing segments. Bytes missing      : %10d\n", cs->totUniqueBytes - cs->totUniqueBytesSent);
+	}
 
 	if (cs->nrPacketsSent != cs->nrPacketsSentFoundInDump) {
 		printf("  Estimated loss rate based on retransmission\n");
@@ -538,9 +569,9 @@ void Dump::printPacketITTStats(struct connStats *cs, struct byteStats* bs, bool 
 
 
 void Dump::printStats(string prefix, string unit, struct BaseStats& bs) {
-	printf("  Minimum %s                                      : %7lu %s\n", prefix.c_str(), bs.min, unit.c_str());
-	printf("  Average %s                                      : %7.1f %s\n", prefix.c_str(), bs.avg, unit.c_str());
-	printf("  Maximum %s                                      : %7lu %s\n", prefix.c_str(), bs.max, unit.c_str());
+	printf("  Minimum %10s                            : %7lu %s\n", prefix.c_str(), bs.min, unit.c_str());
+	printf("  Average %10s                            : %7.0f %s\n", prefix.c_str(), bs.avg, unit.c_str());
+	printf("  Maximum %10s                            : %7lu %s\n", prefix.c_str(), bs.max, unit.c_str());
 }
 
 void Dump::printAggStats(string prefix, string unit, struct connStats *cs, struct BaseStats& bs, struct BaseStats& aggregatedMin, struct BaseStats& aggregatedMax) {
@@ -709,7 +740,7 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 		tmpConn->registerRange(&sd);
 
 	if (GlobOpts::withThroughput) {
-		tmpConn->registerPacketSize(first_sent_time, header->ts, header->len);
+		tmpConn->registerPacketSize(first_sent_time, header->ts, header->len, sd.data.payloadSize);
 	}
 }
 
@@ -1100,12 +1131,12 @@ void Dump::writeByteCountGroupedByInterval() {
 				const uint64_t count = conn->second->packetSizes[idx].size();
 				uint64_t bytes = 0;
 
-				vector<pair<timeval, uint64_t> >::iterator it, end;
+				vector<struct PacketSize>::iterator it, end;
 				it = conn->second->packetSizes[idx].begin();
 				end = conn->second->packetSizes[idx].end();
 
 				for (; it != end; ++it) {
-					bytes += it->second;
+					bytes += it->packet_size;
 				}
 
 				const pair<uint64_t,uint64_t>& old = all[idx];
@@ -1138,12 +1169,12 @@ void Dump::writeByteCountGroupedByInterval() {
 				const uint64_t count = conn->second->packetSizes[idx].size();
 				uint64_t bytes = 0;
 
-				vector<pair<timeval, uint64_t> >::iterator it, end;
+				vector<struct PacketSize>::iterator it, end;
 				it = conn->second->packetSizes[idx].begin();
 				end = conn->second->packetSizes[idx].end();
 
 				for (; it != end; ++it) {
-					bytes += it->second;
+					bytes += it->packet_size;
 				}
 
 				stream << idx << "," << count << "," << bytes << ",";
@@ -1326,7 +1357,7 @@ void Dump::makeByteLatencyVariationCDF() {
 
 void Dump::writeSentTimesAndQueueingDelayVariance() {
 	map<ConnectionMapKey*, Connection*>::iterator it;
-	const uint64_t first_tstamp = (uint64_t) TV_TO_MS(first_sent_time);
+	const uint64_t first_tstamp = TV_TO_MS(first_sent_time);
 
 	ofstream all_stream;
 	all_stream.open((GlobOpts::prefix + "queueing-delay-all.dat").c_str(), ios::out);
@@ -1466,11 +1497,12 @@ void Dump::writePacketByteCountAndITT() {
 
 	ofstream* all_stream = NULL;
 	ofstream* conn_stream = NULL;
+	string header("timestamp,itt,payload_size,packet_size");
 
 	if (GlobOpts::aggregate) {
 		all_stream = new ofstream;
 		all_stream->open((GlobOpts::prefix + "packet-byte-count-and-itt-all.dat").c_str(), ios::out);
-		*all_stream << "itt,packet_size" << endl;
+		*all_stream << header << endl;
 	}
 
 	for (it = conns.begin(); it != conns.end(); ++it) {
@@ -1479,6 +1511,7 @@ void Dump::writePacketByteCountAndITT() {
 			string filename (GlobOpts::prefix + "packet-byte-count-and-itt-" + it->second->getConnKey() + ".dat");
 			conn_stream = new ofstream;
 			conn_stream->open(filename.c_str(), ios::out);
+			*conn_stream << header << endl;
 		}
 
 		it->second->writePacketByteCountAndITT(all_stream, conn_stream);

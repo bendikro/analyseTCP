@@ -36,8 +36,7 @@ public:
 	uint8_t rdb_byte_hits;
 
 	timeval received_tstamp_pcap;
-	//vector<timeval> sent_tstamp_pcap;  // pcap tstamp for regular packet and retrans
-	vector< pair<timeval, uint8_t> > sent_tstamp_pcap;
+	vector< pair<timeval, uint8_t> > sent_tstamp_pcap; // pcap tstamp for when packet was sent, sent_type {ST_NONE, ST_PKT, ST_RTR, ST_PURE_ACK};
 
 	uint8_t send_tcp_stamp_recv_index; // The index of the element in the tstamps_tcp vector that matches the received tcp time stamp
 	uint32_t received_tstamp_tcp;
@@ -113,18 +112,26 @@ public:
 		}
 	}
 
-	inline void increase_sent(uint32_t tstamp_tcp, timeval tstamp_pcap, bool rdb, bool packet_sent=true) {
+	inline void increase_sent(uint32_t tstamp_tcp, timeval tstamp_pcap, bool rdb, sent_type sent_t=ST_PKT) {
 		if (rdb) {
 			rdb_tstamps_tcp.push_back(tstamp_tcp);
 		}
 		else {
 			tstamps_tcp.push_back(tstamp_tcp);
 		}
-		if (packet_sent)
+
+		if (sent_t == ST_PKT)
 			packet_sent_count++;
 
-		sent_count++;
-		sent_tstamp_pcap.push_back(pair<timeval, uint8_t>(tstamp_pcap, packet_sent));
+		if (sent_t == ST_RTR)
+			packet_retrans_count++;
+
+		if (sent_t == ST_PURE_ACK)
+			acked_sent++;
+		else
+			sent_count++;
+
+		sent_tstamp_pcap.push_back(pair<timeval, uint8_t>(tstamp_pcap, sent_t));
 		lost_tstamps_tcp.push_back(pair<uint32_t,timeval>(tstamp_tcp, tstamp_pcap));
 	}
 
@@ -140,13 +147,6 @@ public:
 		return split(start, end);
 	}
 
-/*
-	// Split and make a new range at the beginning
-	ByteRange* split_start(uint64_t start, uint64_t end) {
-		startSeq = end + 1;
-		return split(start, end);
-	}
-*/
 	ByteRange* split(uint64_t start, uint64_t end) {
 		ByteRange *new_br = new ByteRange(start, end);
 		new_br->packet_sent_count = 0;

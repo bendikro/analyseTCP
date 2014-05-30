@@ -5,6 +5,14 @@
 #include <math.h>
 #include <netinet/in.h>
 
+struct PacketSize {
+	timeval time;
+	uint16_t packet_size;
+	uint16_t payload_size;
+	PacketSize(timeval t, uint16_t ps, uint16_t pls) : time(t), packet_size(ps), payload_size(pls) {
+	}
+};
+
 /* Represents one connection (srcport/dstport pair) */
 class Connection {
 
@@ -31,8 +39,7 @@ public:
 	uint64_t lastLargestAckSeq;
 	uint32_t lastLargestAckSeqAbsolute;
 
-	vector< vector< pair<timeval,uint64_t> > > packetSizes;
-
+	vector< vector<struct PacketSize> > packetSizes;
 
 	timeval firstSendTime;
 	timeval endTime;
@@ -83,7 +90,7 @@ public:
 	void calculateRetransAndRDBStats();
 	uint32_t getDuration(bool analyse_range_duration);
 
-	void registerPacketSize(const timeval& first_tstamp_in_dump, const timeval& pkt_tstamp, const uint64_t pkt_size);
+	void registerPacketSize(const timeval& first_tstamp_in_dump, const timeval& pkt_tstamp, const uint64_t pkt_size, const uint16_t payloadSize);
 	void writePacketByteCountAndITT(ofstream* all_stream, ofstream* conn_stream);
 };
 #endif /* CONNECTION_H */

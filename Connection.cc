@@ -272,13 +272,14 @@ void Connection::addPacketStats(struct connStats* cs) {
 	cs->analysed_end_sec += rm->analyse_time_sec_end;
 	cs->totBytesSent += rm->analysed_bytes_sent;
 	cs->totRetransBytesSent += rm->analysed_bytes_retransmitted;
-	cs->nrPacketsSent += rm->analysed_packet_count;
-	cs->nrPacketsSentFoundInDump += rm->analysed_packet_sent_count;
+	cs->nrPacketsSent += rm->analysed_packet_sent_count;
+	cs->nrPacketsSentFoundInDump += rm->analysed_packet_sent_count_in_dump;
 	cs->nrPacketsReceivedFoundInDump += rm->analysed_packet_received_count;
 	cs->nrDataPacketsSent += rm->analysed_data_packet_count;
 	cs->nrRetrans += rm->analysed_retr_packet_count;
 	cs->bundleCount += rm->analysed_rdb_packet_count;
 	cs->totUniqueBytes += getNumUniqueBytes();
+	cs->totUniqueBytesSent += rm->analysed_bytes_sent_unique;
 	cs->redundantBytes += rm->getRedundantBytes();
 	cs->rdb_bytes_sent += rm->rdb_byte_miss + rm->rdb_byte_hits;
 	cs->ackCount += rm->analysed_ack_count;
@@ -414,45 +415,36 @@ string Connection::getDstIp() {
 	return dip.str();
 }
 
-void Connection::registerPacketSize(const timeval& first, const timeval& ts, const uint64_t ps) {
+void Connection::registerPacketSize(const timeval& first, const timeval& ts, const uint64_t ps, const uint16_t payloadSize) {
 	const uint64_t relative_ts = TV_TO_MS(ts) - TV_TO_MS(first);
 	const uint64_t sent_time_bucket_idx = relative_ts / GlobOpts::throughputAggrMs;
 
 	while (sent_time_bucket_idx >= packetSizes.size()) {
-		vector< pair<timeval, uint64_t> > empty;
+		vector< PacketSize> empty;
 		packetSizes.push_back(empty);
 	}
-
-	packetSizes[sent_time_bucket_idx].push_back(pair<timeval,uint64_t>(ts, ps));
+	packetSizes[sent_time_bucket_idx].push_back(PacketSize(ts, ps, payloadSize));
 }
 
 void Connection::writePacketByteCountAndITT(ofstream* all_stream, ofstream* conn_stream) {
-	vector<vector<pair<timeval,uint64_t> > >::iterator i;
-	vector<pair<timeval,uint64_t> >::iterator j;
-
-	if (conn_stream) {
-		*conn_stream << "itt,packet_size" << endl;
-	}
+	size_t i, j;
 
 	uint64_t k = 0;
 	while (packetSizes[k].empty()) k++;
 
-	uint64_t prev = TV_TO_MS(packetSizes[k][0].first);
+	uint64_t prev = TV_TO_MS(packetSizes[k][0].time);
 	uint64_t itt, tmp;
-	for (i = packetSizes.begin(); i != packetSizes.end(); ++i) {
-		for (j = i->begin(); j != i->end(); ++j) {
-			if (!j->second)
-				continue;
-
-			tmp = TV_TO_MS(j->first);
+	for (i = 0; i < packetSizes.size(); ++i) {
+		for (j = 0; j < packetSizes[i].size(); ++j) {
+			tmp = TV_TO_MS(packetSizes[i][j].time);
 			itt = tmp - prev;
 			prev = tmp;
 
 			if (all_stream) {
-				*all_stream << itt << "," << j->second << endl;
+				*all_stream << tmp << "," << itt << "," << packetSizes[i][j].payload_size << "," << packetSizes[i][j].packet_size << endl;
 			}
 			if (conn_stream) {
-				*conn_stream << itt << "," << j->second << endl;
+				*conn_stream << tmp << "," << itt << "," << packetSizes[i][j].payload_size << "," << packetSizes[i][j].packet_size << endl;
 			}
 		}
 	}

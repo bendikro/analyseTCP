@@ -111,7 +111,7 @@ The Ranges Loss does not correspond directly to packets, as the packets may be s
 Total bytes sent (payload) and Number of retransmitted bytes might differ slightly (2 bytes) from tcptrace, but according to tshark analysetcp is correct:
 
 ####Example of how to calculate total sum of tcp payload bytes and retransmitted bytes
-    shark -r trace.dump -qz io,stat,0,"ip.addr==10.0.0.10 && tcp.srcport ==\
+    tshark -r trace.dump -qz io,stat,0,"ip.addr==10.0.0.10 && tcp.srcport ==\
     15103","COUNT(tcp.analysis.retransmission)ip.addr==10.0.0.10 && tcp.srcport == 15102 &&\
     tcp.analysis.retransmission","SUM(tcp.len)tcp.len && ip.addr==10.0.0.10 && tcp.srcport ==\
     15102","SUM(tcp.len)tcp.len && ip.addr==10.0.0.10 && tcp.srcport == 15102 && tcp.analysis.retransmission"

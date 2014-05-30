@@ -135,9 +135,7 @@ void RangeManager::insertSentRange(struct sendData *sd) {
 }
 
 void RangeManager::insertReceivedRange(struct sendData *sd) {
-
 	DataSeg tmpSeg;
-
 	tmpSeg.seq = sd->data.seq;
 	tmpSeg.endSeq = sd->data.endSeq;
 	tmpSeg.tstamp_pcap = (sd->data.tstamp_pcap);
@@ -192,7 +190,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 	//if (start_seq >= 21660765)
 	//	exit(0);
 
-	//if (start_seq >= 801 && start_seq <= 1101)
+	//if (start_seq >= 170779 && start_seq <= 170904)
 	//	debug_print = 1;
 	//fprintf(stderr, "level: %d\n", level);
 
@@ -287,13 +285,10 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 				indent_print2("Create range with 0 len\n");
 			}
 #endif
-
 			last_br = new ByteRange(start_seq, end_seq);
-			last_br->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_pcap, this_is_rdb_data);
 			last_br->packet_retrans_count += data_seg->retrans;
 			last_br->rdb_count += data_seg->is_rdb;
 			if (data_seg->flags & TH_SYN) {
-				//				printf("SYN 1\n");
 				last_br->syn = 1;
 #ifdef DEBUG
 				if (debug_print) {
@@ -318,9 +313,9 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 #endif
 			}
 			else {
-				last_br->acked_sent++;
-				//last_br->packet_sent_count--;
+				//last_br->acked_sent++;
 			}
+			last_br->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_pcap, this_is_rdb_data, (last_br->syn | last_br->rst | last_br->fin) ? ST_PKT : ST_PURE_ACK);
 			ranges.insert(pair<ulong, ByteRange*>(start_seq, last_br));
 			return;
 		}
@@ -373,7 +368,6 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 					ByteRange *new_br;
 					if (start_matches) {
 						new_br = cur_br->split_end(end_seq + 1, cur_br->endSeq);
-						//cur_br->packet_sent_count++;
 						if (data_seg->flags & TH_FIN) {
 							cur_br->fin += 1;
 						}
@@ -387,7 +381,6 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 					}
 					else if (end_matches) {
 						new_br = cur_br->split_end(start_seq, cur_br->endSeq);
-						//new_br->packet_sent_count++;
 						if (data_seg->flags & TH_FIN) {
 							new_br->fin = 1;
 						}
@@ -403,7 +396,6 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 					else if (end_seq < cur_br->endSeq) {
 						// Split in the middle
 						new_br = cur_br->split_end(start_seq, cur_br->endSeq);
-						//new_br->packet_sent_count++;
 						if (data_seg->flags & TH_FIN) {
 							new_br->fin = 1;
 						}
@@ -418,19 +410,20 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 						ranges.insert(pair<ulong, ByteRange*>(new_last->startSeq, new_last));
 						range_received = new_br;
 					}
-					// New data reaches beyond current range
+					// New data spans beyond current range
 					else {
 						new_br = cur_br->split_end(start_seq, cur_br->endSeq);
-						//new_br->packet_sent_count++;
 						range_received = new_br;
 						insert_more_recursively = 1;
 					}
 					ranges.insert(pair<ulong, ByteRange*>(new_br->startSeq, new_br));
 
 					if (sent) {
-						range_received->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_pcap, this_is_rdb_data);
+						sent_type type = ST_NONE;
 						if (!level)
-							range_received->packet_retrans_count++;
+							type = ST_RTR;
+
+						range_received->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_pcap, this_is_rdb_data, type);
 						range_received->data_retrans_count++;
 
 						//printf("data_seg->retrans: %d\n", data_seg->retrans);
@@ -476,16 +469,10 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 			}
 #endif
 			last_br = new ByteRange(start_seq, new_end_seq);
-			//printf("ByteRange size: %lu\n", sizeof(*last_br));
-
 			last_br->original_payload_size = data_seg->payloadSize;
 			last_br->original_packet_is_rdb = data_seg->is_rdb;
-			if (data_seg->is_rdb) {
-				// Packet sent is already counted on previous range
-				//last_br->packet_sent_count = 0;
-			}
 
-			last_br->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_pcap, this_is_rdb_data, !data_seg->is_rdb);
+			last_br->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_pcap, this_is_rdb_data, data_seg->is_rdb ? ST_NONE : ST_PKT);
 			if (data_seg->flags & TH_SYN) {
 				assert("SYN" && 0);
 				last_br->syn = 1;
@@ -526,14 +513,12 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 					last_br->packet_received_count++;
 				}
 
-				//last_br->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_pcap, this_is_rdb_data);
 				if (data_seg->flags & TH_SYN) {
 					last_br->syn = 1;
 				}
 				else if (data_seg->flags & TH_FIN) {
 					last_br->fin = 1;
 				}
-
 #ifdef DEBUG
 				assert(data_seg->retrans == 0 && "Shouldn't be retrans!\n");
 				assert(this_is_rdb_data == 0 && "Shouldn't be RDB?!\n");
@@ -567,20 +552,19 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 				}
 #endif
 				if (sent) {
-					brIt->second->packet_sent_count++;
 					if (data_seg->flags & TH_SYN || data_seg->flags & TH_FIN) {
 						//assert("Exists no payload " && 0);
 						//colored_printf(RED, "SYN: %d, FIN: %d\n", !!(data_seg->flags & TH_SYN), data_seg->flags & TH_FIN);
 						brIt->second->syn += !!(data_seg->flags & TH_SYN);
 						brIt->second->fin += !!(data_seg->flags & TH_FIN);
-						brIt->second->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_pcap, this_is_rdb_data, false);
-						brIt->second->packet_retrans_count += 1;
+						brIt->second->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_pcap, this_is_rdb_data, ST_PKT);
 					}
 					else if (data_seg->flags & TH_RST) {
+						brIt->second->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_pcap, this_is_rdb_data, ST_PKT);
 						brIt->second->rst++;
 					}
 					else {
-						brIt->second->acked_sent += 1;
+						brIt->second->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_pcap, this_is_rdb_data, ST_PURE_ACK);
 #ifdef DEBUG
 						if (debug_print) {
 							indent_print("Neither SYN nor FIN!, increased acked_sent to %d\n", brIt->second->acked_sent);
@@ -625,7 +609,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 				}
 			}
 
-			// Reaches multiple byte ranges
+			// Spans multiple byte ranges
 			if (brIt->second->endSeq < end_seq) {
 #ifdef DEBUG
 				if (debug_print) {
@@ -636,29 +620,41 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 				}
 #endif
 				if (sent) {
-					assert("sent_count is 0!" && brIt->second->sent_count > 0);
+					//assert("sent_count is 0!" && brIt->second->sent_count > 0);
 
-					brIt->second->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_pcap, this_is_rdb_data, !level);
-
-					if (!level) {
-						brIt->second->packet_retrans_count += data_seg->retrans;
-						//brIt->second->packet_sent_count++;
-						if (data_seg->flags & TH_FIN) {
-							brIt->second->fin += 1;
+					// This means this has only pure acks registered
+					if (brIt->second->byte_count == 0) {
+						// We are at the last range in the map
+						if (ranges.rbegin()->second == brIt->second) {
+							// The last range in the map only had pure acks, so we hijack this and add the data to it
+							brIt->second->endSeq = end_seq;
+							brIt->second->update_byte_count();
+							brIt->second->original_payload_size = brIt->second->byte_count;
+							brIt->second->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_pcap, this_is_rdb_data, ST_PKT);
+							return;
 						}
 					}
-					brIt->second->data_retrans_count += data_seg->retrans;
-					brIt->second->rdb_count += data_seg->is_rdb;
-
+					else {
+						sent_type type = ST_NONE;
+						if (!level) {
+							type = data_seg->retrans ? ST_RTR : ST_PKT;
+							if (data_seg->flags & TH_FIN) {
+								brIt->second->fin += 1;
+							}
+						}
+						brIt->second->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_pcap, this_is_rdb_data, type);
+						brIt->second->data_retrans_count += data_seg->retrans;
+						brIt->second->rdb_count += data_seg->is_rdb;
 #ifdef DEBUG
-					if (debug_print) {
-						indent_print("Adding tcp timestamp 2 to %s : %u\n",  this_is_rdb_data ? "rdb" : "reg", data_seg->tstamp_tcp);
-					}
+						if (debug_print) {
+							indent_print("Adding tcp timestamp 2 to %s : %u\n",  this_is_rdb_data ? "rdb" : "reg", data_seg->tstamp_tcp);
+						}
 
-					if (this_is_rdb_data) {
-						assert(data_seg->retrans == 0 && "Should not be retrans!\n");
-					}
+						if (this_is_rdb_data) {
+							assert(data_seg->retrans == 0 && "Should not be retrans!\n");
++						}
 #endif
+					}
 				}
 				else {
 					brIt->second->increase_received(data_seg->tstamp_tcp, data_seg->tstamp_pcap, data_seg->in_sequence);
@@ -674,28 +670,28 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 				//printf("Recursive call: brIt->endseq: %lu, endseq: %lu\n", brIt->second->endSeq, end_seq);
 				insert_byte_range(brIt->second->endSeq +1, end_seq, sent, data_seg, level +1);
 			}
-			// Reaches less than the range, split current range
+			// Spans less than the range, split current range
 			else {
 				ByteRange *new_br = brIt->second->split_end(end_seq +1, brIt->second->endSeq);
 #ifdef DEBUG
 				if (debug_print) {
-					indent_print2("Reaches less, split existing Range\n");
+					indent_print2("Spans less, split existing Range\n");
 					indent_print("Existing range : %lu - %lu -> %lu - %lu\n", relative_seq(brIt->second->startSeq), relative_seq(brIt->second->endSeq),
 								 relative_seq(brIt->second->startSeq), relative_seq(end_seq));
 					indent_print("New range      : %lu - %lu\n", relative_seq(new_br->startSeq), relative_seq(new_br->endSeq));
 				}
 #endif
 				if (sent) {
+					sent_type type = ST_NONE;
 					if (!level) {
-						brIt->second->packet_retrans_count += data_seg->retrans;
-						//brIt->second->packet_sent_count++;
+						type = data_seg->retrans ? ST_RTR : ST_PKT;
 						if (data_seg->flags & TH_FIN) {
 							brIt->second->fin += 1;
 						}
 					}
 					brIt->second->data_retrans_count += data_seg->retrans;
 					brIt->second->rdb_count += data_seg->is_rdb;
-					brIt->second->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_pcap, this_is_rdb_data, !level);
+					brIt->second->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_pcap, this_is_rdb_data, type);
 #ifdef DEBUG
 					if (this_is_rdb_data) {
 						assert(data_seg->retrans != 0 && "Should not be retrans!\n");
@@ -714,14 +710,14 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 		else {
 			// The end_seq of the new range correspond to the end-seq of the entry in the map, so it's a duplicate
 			if (sent) {
-				brIt->second->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_pcap, this_is_rdb_data, !level);
+				sent_type type = ST_NONE;
 				if (!level) {
-					brIt->second->packet_retrans_count += data_seg->retrans;
-					//brIt->second->packet_sent_count++;
+					type = data_seg->retrans ? ST_RTR : ST_PKT;
 					if (data_seg->flags & TH_FIN) {
 						brIt->second->fin += 1;
 					}
 				}
+				brIt->second->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_pcap, this_is_rdb_data, type);
 				brIt->second->data_retrans_count += data_seg->retrans;
 				brIt->second->rdb_count += data_seg->is_rdb;
 
@@ -833,7 +829,6 @@ bool RangeManager::processAck(struct DataSeg *seg) {
 			if (debug_print)
 				printf("  Covers more than Range(%lu, %lu)\n", relative_seq(tmpRange->getStartSeq()), relative_seq(tmpRange->getEndSeq()));
 
-
 			if (timercmp(&seg->tstamp_pcap, &(tmpRange->sent_tstamp_pcap[0].first), <)) {
 				printf("ACK TIME IS EARLIER THAN SEND TIME!\n");
 				return false;
@@ -938,23 +933,12 @@ void percentiles(const vector<double> *v, Percentiles *p) {
 	}
 }
 
-struct SentTime {
-	int64_t time;
-	uint16_t size;
-	SentTime(int t, uint16_t s) : time(t), size(s) {}
-
-	bool operator < (const SentTime& other) const {
-        return (time < other.time);
-    }
-};
-
 
 void RangeManager::genStats(struct byteStats *bs) {
 	map<ulong, ByteRange*>::iterator it, it_end;
 	it = analyse_range_start;
 	it_end = analyse_range_end;
 
-	vector<struct SentTime> sent_times;
 	int64_t latency, tmp_byte_count, itt;
 	bs->latency.min = bs->packet_length.min = bs->itt.min = (numeric_limits<int64_t>::max)();
 	int dupack_count;
@@ -970,8 +954,9 @@ void RangeManager::genStats(struct byteStats *bs) {
 		}
 
 		for (size_t i = 0; i < it->second->sent_tstamp_pcap.size(); i++) {
-			if (it->second->sent_tstamp_pcap[i].second)
-				sent_times.push_back(SentTime(TV_TO_MS(it->second->sent_tstamp_pcap[i].first), tmp_byte_count));
+			if (it->second->sent_tstamp_pcap[i].second) {
+				bs->sent_times.push_back(SentTime(TV_TO_MS(it->second->sent_tstamp_pcap[i].first), tmp_byte_count));
+			}
 		}
 
 		dupack_count = it->second->dupack_count;
@@ -1018,13 +1003,14 @@ void RangeManager::genStats(struct byteStats *bs) {
 		}
 	}
 
-	std::sort(sent_times.begin(), sent_times.end());
+	std::sort(bs->sent_times.begin(), bs->sent_times.end());
 
-	SentTime prev = sent_times[0];
-	for (size_t i = 1; i < sent_times.size(); i++) {
-		itt = sent_times[i].time - prev.time;
+	SentTime prev = bs->sent_times[0];
+	for (size_t i = 1; i < bs->sent_times.size(); i++) {
+		itt = bs->sent_times[i].time - prev.time;
 		bs->intertransmission_times.push_back(itt);
-		prev = sent_times[i];
+		bs->sent_times[i].itt = itt;
+		prev = bs->sent_times[i];
 		bs->itt.cum += itt;
 
 		if (itt > bs->itt.max)
@@ -1086,7 +1072,7 @@ void RangeManager::genStats(struct byteStats *bs) {
 		//std::sort(bs->payload_lengths.begin(), bs->payload_lengths.end());
 		//stdev = sqrt(temp / (bs->payload_lengths.size()));
 		//bs->stdevLength = stdev;
-		bs->itt.avg = (double) bs->itt.cum / sent_times.size();
+		bs->itt.avg = (double) bs->itt.cum / bs->sent_times.size();
 		percentiles(&bs->intertransmission_times, &bs->percentiles_lengths);
 	}
 	else
@@ -1221,7 +1207,8 @@ void RangeManager::printPacketDetails() {
 
 		printf(" %-*lu - %-*lu: snt-pkt: %d, rvc-pkt: %d, sent: %d, rcv: %d, retr-pkt: %d, retr-dta: %d, rdb-cnt: %d, RCV: %s, rdb-miss: %-3d rdb-hit: %-3d",
 		       seq_char_len, relative_seq(it->second->startSeq),
-			   seq_char_len, relative_seq(it->second->endSeq), it->second->packet_sent_count, it->second->packet_received_count,
+			   seq_char_len, relative_seq(it->second->endSeq), (it->second->packet_sent_count + it->second->acked_sent),
+			   it->second->packet_received_count,
 			   it->second->sent_count, it->second->received_count, it->second->packet_retrans_count,
 			   it->second->data_retrans_count, it->second->rdb_count, received_type_str[it->second->recv_type],
 			   it->second->rdb_byte_miss, it->second->rdb_byte_hits);
@@ -1313,11 +1300,6 @@ void RangeManager::calculateRealLoss(map<ulong, ByteRange*>::iterator brIt, map<
 
 		if (brIt->second->byte_count) {
 			// Always count 1 for a ByteRange, even though the orignal sent data might have been segmented on the wire.
-			//analysed_data_packet_count += 1 + brIt->second->packet_retrans_count;
-			//if (brIt->second->packet_sent_count)
-			//	printf("SENT COUNT: %d\n", brIt->second->packet_sent_count);
-			//analysed_data_packet_count += (brIt->second->packet_sent_count > 0) + brIt->second->packet_retrans_count;
-			//analysed_data_packet_count += brIt->second->packet_sent_count;
 			analysed_data_packet_count += 1 + brIt->second->packet_retrans_count;
 		}
 
@@ -1331,20 +1313,16 @@ void RangeManager::calculateRealLoss(map<ulong, ByteRange*>::iterator brIt, map<
 		analysed_pure_acks_count += brIt->second->acked_sent;
 		analysed_rdb_packet_count += brIt->second->original_packet_is_rdb;
 		analysed_bytes_sent += brIt->second->sent_count * brIt->second->byte_count;
-		analysed_packet_count += 1 + brIt->second->packet_retrans_count; // This is the number of (adjusted) packets sent, which will be greater if segmentation offloading is enabled.
+		analysed_bytes_sent_unique += brIt->second->byte_count;
 
-		analysed_packet_count += brIt->second->acked_sent; // Count pure acks
-		analysed_packet_count += brIt->second->rst; // Count rst packets
+		// This is the number of (adjusted) packets sent, which will be greater if segmentation offloading is enabled.
+		// We count 1 for all ranges with data and where syn or fin is set
+		analysed_packet_sent_count += (brIt->second->syn || brIt->second->fin || brIt->second->byte_count);
+		analysed_packet_sent_count += brIt->second->packet_retrans_count;
+		analysed_packet_sent_count += brIt->second->acked_sent; // Count pure acks
 
-		// Range with no bytes
-		if (!brIt->second->byte_count) {
-			// This is a pure ack with no data transfered first (special case)
-			// Normally a pure ack is registered on a range with data
-			if (!(brIt->second->syn || brIt->second->fin)) {
-				// We already counted this packet with 1 + acked_sent, so remove 1
-				analysed_packet_count--;
-			}
-		}
+		// THIS MIGHT BE WRONG. REMOVE?
+		analysed_packet_sent_count += brIt->second->rst; // Count rst packets
 
 		/*
 		if (brIt->second->acked_sent) {
@@ -1354,36 +1332,43 @@ void RangeManager::calculateRealLoss(map<ulong, ByteRange*>::iterator brIt, map<
 						   brIt->second->startSeq, brIt->second->endSeq, brIt->second->acked_sent);
 		}
 		*/
+
 		analysed_retr_packet_count += brIt->second->packet_retrans_count;
 		analysed_bytes_retransmitted += brIt->second->data_retrans_count * brIt->second->byte_count;
 		analysed_ack_count += brIt->second->ack_count;
-		analysed_packet_sent_count += brIt->second->packet_sent_count;         // This should be the number of packets found in the dump (same as wireshark and tcptrace)
-		analysed_packet_received_count += brIt->second->packet_received_count; // This should be the number of packets found in the dump (same as wireshark and tcptrace)
 
-		if (brIt->second->sent_count != brIt->second->received_count) {
-			analysed_lost_ranges_count += (brIt->second->sent_count - brIt->second->received_count);
-			analysed_lost_bytes += (brIt->second->sent_count - brIt->second->received_count) * brIt->second->byte_count;
-			ulong lost = (brIt->second->sent_count - brIt->second->received_count);
+		// This should be the number of packets found in the dump (same as wireshark and tcptrace)
+		analysed_packet_sent_count_in_dump += brIt->second->packet_sent_count + brIt->second->packet_retrans_count + brIt->second->acked_sent;
 
-			// Must check if this lost packet is the same packet as for the previous range
-			if (prev_pack_lost) {
-				for (ulong i = 0; i < brIt->second->lost_tstamps_tcp.size(); i++) {
-					for (ulong u = 0; u < prev->lost_tstamps_tcp.size(); u++) {
-						if (brIt->second->lost_tstamps_tcp[i].first == prev->lost_tstamps_tcp[u].first) {
-							lost -= 1;
-							if (!lost) {
-								i = brIt->second->lost_tstamps_tcp.size();
-								u = prev->lost_tstamps_tcp.size();
+		// This should be the number of packets found in the dump (same as wireshark and tcptrace)
+		analysed_packet_received_count += brIt->second->packet_received_count;
+
+		if (GlobOpts::withRecv) {
+			if (brIt->second->sent_count != brIt->second->received_count) {
+				analysed_lost_ranges_count += (brIt->second->sent_count - brIt->second->received_count);
+				analysed_lost_bytes += (brIt->second->sent_count - brIt->second->received_count) * brIt->second->byte_count;
+				ulong lost = (brIt->second->sent_count - brIt->second->received_count);
+
+				// Must check if this lost packet is the same packet as for the previous range
+				if (prev_pack_lost) {
+					for (ulong i = 0; i < brIt->second->lost_tstamps_tcp.size(); i++) {
+						for (ulong u = 0; u < prev->lost_tstamps_tcp.size(); u++) {
+							if (brIt->second->lost_tstamps_tcp[i].first == prev->lost_tstamps_tcp[u].first) {
+								lost -= 1;
+								if (!lost) {
+									i = brIt->second->lost_tstamps_tcp.size();
+									u = prev->lost_tstamps_tcp.size();
+								}
 							}
 						}
 					}
 				}
+				lost_packets += lost;
+				prev_pack_lost = true;
 			}
-			lost_packets += lost;
-			prev_pack_lost = true;
+			else
+				prev_pack_lost = false;
 		}
-		else
-			prev_pack_lost = false;
 
 		if (brIt->second->sent_count > 1)
 			lost_tmp += brIt->second->sent_count - 1;
@@ -1589,8 +1574,6 @@ void RangeManager::writeSentTimesAndQueueingDelayVariance(const uint64_t first_t
 	map<ulong, ByteRange*>::iterator it, it_end;
 	it = analyse_range_start;
 	it_end = analyse_range_end;
-
-	//const long first = TV_TO_MS(ranges[0]->sent_tstamp_pcap[0]);
 
 	for (; it != it_end; it++) {
 		long diff = it->second->getRecvDiff() - lowestRecvDiff;

@@ -57,7 +57,7 @@ void colored_printf(int fg_color, const char *format, ...) {
 }
 
 
-char* colored_sprintf(int fg_color, char *str, char *format, ...) {
+char* colored_sprintf(int fg_color, char *str, const char *format, ...) {
 	va_list ap;
 	va_start(ap, format);
 	vsprintf(str, format, ap);
