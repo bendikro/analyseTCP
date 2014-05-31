@@ -48,7 +48,7 @@ SET (INCLUDE_FILES arpa/inet.h netinet/in.h sys/socket.h getopt.h)
 TARGET_LINK_LIBRARIES (analyseTCP pcap)
 
 # Set compiler flags for all configurations
-SET (CMAKE_CXX_FLAGS "-lm -Wall -Wno-long-long -Wno-variadic-macros") # -Werror?
+SET (CMAKE_CXX_FLAGS "-std=gnu++11 -lm -Wall -Wno-long-long -Wno-variadic-macros") # -Werror?
 
 # Add NDEBUG only for release version
 # To activate: cmake -DCMAKE_BUILD_TYPE=Release ..

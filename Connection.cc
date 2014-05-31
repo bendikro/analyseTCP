@@ -71,8 +71,8 @@ bool Connection::registerSent(struct sendData* sd) {
 			printf("(sd->data.endSeq > lastLargestEndSeq): %d\n", (sd->data.endSeq > lastLargestEndSeq));
 		}
 
-		// Same seq as previous packet
-		if ((sd->data.seq == lastLargestStartSeq) && (sd->data.endSeq > lastLargestEndSeq)) {
+		// Same seq as previous packet, if (lastLargestStartSeq + lastLargestEndSeq) == 0, it's the first packet of a stream with no SYN
+		if ((sd->data.seq == lastLargestStartSeq) && (sd->data.endSeq > lastLargestEndSeq) && (lastLargestStartSeq + lastLargestEndSeq) != 0 ) {
 			bundleCount++;
 			totRDBBytesSent += (lastLargestEndSeq - sd->data.seq +1);
 			totNewDataSent += (sd->data.endSeq - lastLargestEndSeq);
@@ -92,7 +92,7 @@ bool Connection::registerSent(struct sendData* sd) {
 			sd->data.rdb_end_seq = lastLargestEndSeq;
 		}
 		else {
-			// Should only happen on the first call when lastLargestStartSeq and lastLargestEndSeq are 0
+			// New data that is not RDB
 			totNewDataSent += sd->data.payloadSize;
 		}
 		lastLargestEndSeq = sd->data.endSeq;
@@ -432,19 +432,26 @@ void Connection::writePacketByteCountAndITT(ofstream* all_stream, ofstream* conn
 	uint64_t k = 0;
 	while (packetSizes[k].empty()) k++;
 
-	uint64_t prev = TV_TO_MS(packetSizes[k][0].time);
+	uint64_t prev = TV_TO_MICSEC(packetSizes[k][0].time);
 	uint64_t itt, tmp;
 	for (i = 0; i < packetSizes.size(); ++i) {
 		for (j = 0; j < packetSizes[i].size(); ++j) {
-			tmp = TV_TO_MS(packetSizes[i][j].time);
-			itt = tmp - prev;
+			tmp = TV_TO_MICSEC(packetSizes[i][j].time);
+			itt = (tmp - prev) / 1000L;
 			prev = tmp;
-
+/*
 			if (all_stream) {
 				*all_stream << tmp << "," << itt << "," << packetSizes[i][j].payload_size << "," << packetSizes[i][j].packet_size << endl;
 			}
 			if (conn_stream) {
 				*conn_stream << tmp << "," << itt << "," << packetSizes[i][j].payload_size << "," << packetSizes[i][j].packet_size << endl;
+			}
+*/
+			if (all_stream) {
+				*all_stream << tmp << "," << itt << "," << packetSizes[i][j].payload_size<< endl;
+			}
+			if (conn_stream) {
+				*conn_stream << tmp << "," << itt << "," << packetSizes[i][j].payload_size << endl;
 			}
 		}
 	}

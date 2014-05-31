@@ -91,6 +91,7 @@ ofstream& operator<<(ofstream& os, const LatencyItem& lat);
 
 /* Convert a timeval to milliseconds */
 #define TV_TO_MS(tv) ((int64_t)((tv).tv_sec * 1000L + ((tv).tv_usec / 1000L)))
+#define TV_TO_MICSEC(tv) ((int64_t)((tv).tv_sec * 1000000L + ((tv).tv_usec)))
 
 /* Compare two timevals */
 bool operator==(const timeval& lhs, const timeval& rhs);
@@ -113,6 +114,7 @@ public:
 	static bool withCDF;
 	static bool relative_seq;
 	static bool print_packets;
+	static vector <pair<uint64_t, uint64_t> > print_packets_pairs;
 	static string sendNatIP;
 	static string recvNatIP;
 	static bool genAckLatencyFiles;

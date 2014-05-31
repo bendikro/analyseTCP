@@ -153,13 +153,15 @@ public:
 		new_br->data_retrans_count = data_retrans_count;
 		new_br->sent_count = sent_count;
 		new_br->received_count = received_count;
-		new_br->sent_tstamp_pcap = sent_tstamp_pcap;
 		new_br->received_tstamp_tcp = received_tstamp_tcp;
 		new_br->tstamps_tcp = tstamps_tcp;
 		new_br->rdb_tstamps_tcp = rdb_tstamps_tcp;
 		new_br->ackTime = ackTime;
 		new_br->acked = acked;
 		update_byte_count();
+		new_br->sent_tstamp_pcap = sent_tstamp_pcap;
+		for (size_t i = 0; i < new_br->sent_tstamp_pcap.size(); i++)
+			new_br->sent_tstamp_pcap[i].second = ST_NONE;
 		return new_br;
 	}
 

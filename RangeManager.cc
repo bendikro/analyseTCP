@@ -180,10 +180,9 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 	//}
 	//debug_print = 1;
 
-
-	//if (start_seq < 500) {
-	//	debug_print = 1;
-	//}
+	if (data_seg->payloadSize == 1) {
+		debug_print = 1;
+	}
 	//if (start_seq >= 21643733)
 	//	debug_print = 1;
 	//
@@ -202,8 +201,8 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 	}
 	sprintf(prefix + indent, "%d", level);
 
-#define indent_print(format, args...) printf("%s "format, prefix, args)
-#define indent_print2(format) printf("%s "format, prefix)
+#define indent_print(format, args...) printf("%s " format, prefix, args)
+#define indent_print2(format) printf("%s " format, prefix)
 #endif
 
 	bool this_is_rdb_data = data_seg->is_rdb && data_seg->rdb_end_seq > start_seq;
@@ -219,7 +218,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 #endif
 
 	// An ack
-	if (start_seq == end_seq) {
+	if (start_seq == end_seq && data_seg->payloadSize != 1) {
 
 		if (sent) {
 			analysed_sent_pure_ack_count++;
@@ -652,7 +651,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 
 						if (this_is_rdb_data) {
 							assert(data_seg->retrans == 0 && "Should not be retrans!\n");
-+						}
+						}
 #endif
 					}
 				}
@@ -933,7 +932,6 @@ void percentiles(const vector<double> *v, Percentiles *p) {
 	}
 }
 
-
 void RangeManager::genStats(struct byteStats *bs) {
 	map<ulong, ByteRange*>::iterator it, it_end;
 	it = analyse_range_start;
@@ -955,7 +953,27 @@ void RangeManager::genStats(struct byteStats *bs) {
 
 		for (size_t i = 0; i < it->second->sent_tstamp_pcap.size(); i++) {
 			if (it->second->sent_tstamp_pcap[i].second) {
-				bs->sent_times.push_back(SentTime(TV_TO_MS(it->second->sent_tstamp_pcap[i].first), tmp_byte_count));
+				if (it->second->sent_tstamp_pcap[i].second == ST_PURE_ACK) {
+					bs->sent_times.push_back(SentTime(TV_TO_MICSEC(it->second->sent_tstamp_pcap[i].first), 0));
+				}
+				else if (it->second->sent_tstamp_pcap[i].second == ST_RTR) {
+					// This is a retransmit
+					// In case in collapsed retrans packet spans multiple segments, check if next range has retrans data
+					// that is not a retrans packet in itself
+					int64_t tmp_byte_count2 = tmp_byte_count;
+					map<ulong, ByteRange*>::iterator it_tmp = it;
+					it_tmp++;
+					if (it_tmp->second->packet_retrans_count < it_tmp->second->data_retrans_count) {
+						tmp_byte_count2 += it_tmp->second->data_retrans_count * it_tmp->second->byte_count;
+					}
+					bs->sent_times.push_back(SentTime(TV_TO_MICSEC(it->second->sent_tstamp_pcap[i].first), tmp_byte_count2));
+					printf("RETRANS: %lu -> %lu\n", tmp_byte_count, tmp_byte_count2);
+				}
+				else {
+					if (it->second->sent_tstamp_pcap[i].second != ST_PKT)
+						printf("SENT TYPE; %d\n", it->second->sent_tstamp_pcap[i].second);
+					bs->sent_times.push_back(SentTime(TV_TO_MICSEC(it->second->sent_tstamp_pcap[i].first), tmp_byte_count));
+				}
 			}
 		}
 
@@ -1007,7 +1025,7 @@ void RangeManager::genStats(struct byteStats *bs) {
 
 	SentTime prev = bs->sent_times[0];
 	for (size_t i = 1; i < bs->sent_times.size(); i++) {
-		itt = bs->sent_times[i].time - prev.time;
+		itt = (bs->sent_times[i].time - prev.time) / 1000L;
 		bs->intertransmission_times.push_back(itt);
 		bs->sent_times[i].itt = itt;
 		prev = bs->sent_times[i];
@@ -1201,8 +1219,32 @@ void RangeManager::printPacketDetails() {
 
 	cout << endl << "Packet details for conn: " << conn->getConnKey() << endl;
 
+	bool print_packet_ranges = GlobOpts::print_packets_pairs.size();
+	size_t print_packet_ranges_index;
+	if (print_packet_ranges) {
+		print_packet_ranges_index = 0;
+	}
+
+	int range_count = 0;
 	for (; it != it_end; it++) {
-		printf("Range (%4lu, %4d):", it->second->endSeq == it->second->startSeq ? 0 : it->second->endSeq - it->second->startSeq +1,
+		range_count++;
+		//if (it->second->byte_count > 3)
+		//	continue;
+
+		if (print_packet_ranges) {
+			while (it->second->endSeq > GlobOpts::print_packets_pairs[print_packet_ranges_index].second) {
+				// We are at the last range so we quit printing
+				if (GlobOpts::print_packets_pairs.size() == (print_packet_ranges_index + 1)) {
+					goto endprint;
+				}
+				print_packet_ranges_index++;
+				cout << "---------------------------------------------------------" << endl;
+			}
+			if (it->second->startSeq < GlobOpts::print_packets_pairs[print_packet_ranges_index].first)
+				continue;
+		}
+
+		printf("R %5d (%4lu, %4d):", range_count, it->second->endSeq == it->second->startSeq ? 0 : it->second->endSeq - it->second->startSeq +1,
 			   it->second->original_payload_size);
 
 		printf(" %-*lu - %-*lu: snt-pkt: %d, rvc-pkt: %d, sent: %d, rcv: %d, retr-pkt: %d, retr-dta: %d, rdb-cnt: %d, RCV: %s, rdb-miss: %-3d rdb-hit: %-3d",
@@ -1242,6 +1284,8 @@ void RangeManager::printPacketDetails() {
 		}
 		printf("\n");
 	}
+endprint:
+	;
 }
 
 
@@ -1675,9 +1719,9 @@ void RangeManager::calculateLossGroupedByInterval(const uint64_t first, vector<L
 
 	// Extract total values from ranges
 	typedef vector<double> lossvec;
-	auto_ptr<lossvec> total_count( new lossvec() );
-	auto_ptr<lossvec> total_bytes( new lossvec() );
-	auto_ptr<lossvec> total_new_bytes( new lossvec() );
+	unique_ptr<lossvec> total_count(new lossvec());
+	unique_ptr<lossvec> total_bytes(new lossvec());
+	unique_ptr<lossvec> total_new_bytes(new lossvec());
 	lossvec& tc = *total_count.get();
 	lossvec& tb = *total_bytes.get();
 	lossvec& tn = *total_new_bytes.get();

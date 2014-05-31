@@ -51,6 +51,7 @@ uint64_t GlobOpts::lossAggrMs     		= 1000;
 uint64_t GlobOpts::throughputAggrMs 	= 1000;
 bool GlobOpts::relative_seq       		= false;
 bool GlobOpts::print_packets      		= false;
+vector <pair<uint64_t, uint64_t> > GlobOpts::print_packets_pairs;
 string GlobOpts::sendNatIP        		= "";
 string GlobOpts::recvNatIP        		= "";
 bool GlobOpts::connDetails        		= false;
@@ -66,7 +67,6 @@ bool GlobOpts::oneway_delay_variance	= false;
 string LatencyItem::str() const {
 	ostringstream buffer;
 	buffer << time_ms << "," << latency;
-	//buffer << latency;
 	return buffer.str();
 }
 
@@ -167,19 +167,107 @@ void test(Dump *d) {
 }
 #endif
 
-#define OPTSTRING "f:s:g:r:q:p:m:n:o:u:lctL::T::QaAeji::yvkVd:h"
+static struct option long_options[] = {
+	{"sender-dump",              	required_argument, 0, 'f'},
+	{"src-ip",                   	required_argument, 0, 's'},
+	{"src-port",                 	required_argument, 0, 'q'},
+	{"dst-ip",                   	required_argument, 0, 'r'},
+	{"dst-port",                 	required_argument, 0, 'p'},
+	{"src-nat-ip",               	required_argument, 0, 'm'},
+	{"dst-nat-ip",              	required_argument, 0, 'n'},
+	{"receiver-dump",            	required_argument, 0, 'g'},
+	{"output-dir",               	required_argument, 0, 'o'},
+	{"prefix",                   	required_argument, 0, 'u'},
+	{"transport-layer",   		 	no_argument,       0, 't'},
+	{"latency-variation",        	no_argument,       0, 'c'},
+	{"latency-values",           	no_argument,       0, 'l'},
+	{"queueing-delay",			 	no_argument,       0, 'Q'},
+	{"throughput-interval",         optional_argument, 0, 'T'},
+	{"loss-interval",            	optional_argument, 0, 'L'},
+	{"percentiles",              	optional_argument, 0, 'i'},
+	{"connection-list",          	no_argument,       0, 'e'},
+	{"aggregated",               	no_argument,       0, 'a'},
+	{"aggregated-only",          	no_argument,       0, 'A'},
+	{"relative-sequence-numbers",	no_argument,       0, 'j'},
+	{"packet-details",             	optional_argument, 0, 'y'},
+	{"colored-print",              	no_argument,       0, 'k'},
+	{"help",                     	no_argument,       0, 'h'},
+	{"validate-ranges",            	no_argument,       0, 'V'},
+	{"verbose",                  	optional_argument, 0, 'v'},
+	{"debug",                    	required_argument, 0, 'd'},
+	{"analyse-start",            	required_argument, 0, 'S'},
+	{"analyse-end",              	required_argument, 0, 'E'},
+	{"analyse-duration",         	required_argument, 0, 'D'},
+	{0, 0, 0, 0}
+};
+
+string OPTSTRING;
+string usage_str;
+
+void parse_print_packets(char* optarg) {
+	std::istringstream ss(optarg);
+	std::string token;
+	uint64_t last_range_seq = 0;
+	uint64_t num;
+	size_t range_i;
+	while (std::getline(ss, token, ',')) {
+		range_i = token.find("-");
+		if (range_i == string::npos) {
+			// Add just this seqnum
+			istringstream(token) >> num;
+			GlobOpts::print_packets_pairs.push_back(pair<uint64_t, uint64_t>(num, num));
+		}
+		else {
+			// e.g. '-1000'
+			if (range_i == 0) {
+				istringstream(token.substr(1, string::npos)) >> num;
+				GlobOpts::print_packets_pairs.push_back(make_pair(last_range_seq, num));
+				last_range_seq = num + 1;
+			}
+			else if (range_i == token.size() - 1) {
+				string f1 = token.substr(0, range_i);
+				GlobOpts::print_packets_pairs.push_back(make_pair(std::stoul(f1), (numeric_limits<uint64_t>::max)()));
+			}
+			else {
+				// We have a range with two values
+				string f1 = token.substr(0, token.find("-"));
+				string f2 = token.substr(token.find("-")+1, string::npos);
+				istringstream(token.substr(1, string::npos)) >> num;
+				GlobOpts::print_packets_pairs.push_back(make_pair(std::stoul(f1), std::stoul(f2)));
+				last_range_seq = std::stoul(f2) + 1;
+			}
+		}
+		istringstream(token) >> num;
+	}
+}
+
+void make_optstring() {
+/*
+    const char *name;
+    int         has_arg;
+    int        *flag;
+    int         val;
+*/
+	stringstream usage_tmp, opts;
+	int i = 0;
+	for (; long_options[i].name != 0; i++) {
+		if (i)
+			usage_tmp << "|";
+		usage_tmp << "-" << ((char) long_options[i].val);
+
+		opts << (char) long_options[i].val;
+		if (long_options[i].has_arg == no_argument)
+			continue;
+		opts << ':';
+		if (long_options[i].has_arg == optional_argument)
+			opts << ':';
+	}
+	OPTSTRING = opts.str();
+	usage_str = usage_tmp.str();
+}
 
 void usage (char* argv, int exit_status=1, int help_level=1){
-	string s(OPTSTRING);
-	string::iterator c = s.begin();
-
-	printf("Usage: %s [-%c", argv, *c++);
-	for (; c != s.end(); ++c) {
-		if (*c != ':') {
-			printf("|-%c", *c);
-		}
-	}
-	printf("]\n");
+	printf("Usage: %s [%s]\n", argv, usage_str.c_str());
 
 	printf("Required options:\n");
 	printf(" -f <pcap-file>      : Sender-side dumpfile.\n");
@@ -238,7 +326,7 @@ void usage (char* argv, int exit_status=1, int help_level=1){
 	if (help_level > 1) {
 		printf("                       Example for 90th, 99th and 99.9th: -i90,99,99.9\n");
 	}
-	printf(" -y                  : Print details for each packet.\n");
+	printf(" -y<seq-num-range>   : Print details for each packet. Provide an option sequence number or range of seq to print\n");
 	printf("                       This requires a receiver-side dumpfile (option -g).\n");
 	printf(" -v                  : Be verbose, print more statistics details. The more v's the more verbose.\n");
 	if (help_level > 1) {
@@ -287,41 +375,6 @@ void usage (char* argv, int exit_status=1, int help_level=1){
 	exit(exit_status);
 }
 
-
-static struct option long_options[] = {
-	{"src-ip",                   	required_argument, 0, 's'},
-	{"dst-ip",                   	required_argument, 0, 'r'},
-	{"src-port",                 	required_argument, 0, 'q'},
-	{"dst-port",                 	required_argument, 0, 'p'},
-	{"src-nat-ip",               	required_argument, 0, 'm'},
-	{"dst-nat-ip",              	required_argument, 0, 'n'},
-	{"sender-dump",              	required_argument, 0, 'f'},
-	{"receiver-dump",            	required_argument, 0, 'g'},
-	{"output-dir",               	required_argument, 0, 'o'},
-	{"prefix",                   	required_argument, 0, 'u'},
-	{"transport-layer",   		 	no_argument,       0, 't'},
-	{"latency-variation",        	no_argument,       0, 'c'},
-	{"latency-values",           	no_argument,       0, 'l'},
-	{"queueing-delay",			 	no_argument,       0, 'Q'},
-	{"throughput-interval",         optional_argument, 0, 'T'},
-	{"loss-interval",            	optional_argument, 0, 'L'},
-	{"percentiles",              	optional_argument, 0, 'i'},
-	{"connection-list",          	no_argument,       0, 'e'},
-	{"aggregated",               	no_argument,       0, 'a'},
-	{"aggregated-only",          	no_argument,       0, 'A'},
-	{"relative-sequence-numbers",	no_argument,       0, 'j'},
-	{"packet-details",             	no_argument,       0, 'y'},
-	{"colored-print",              	no_argument,       0, 'k'},
-	{"help",                     	no_argument,       0, 'h'},
-	{"validate-ranges",            	no_argument,       0, 'V'},
-	{"verbose",                  	optional_argument, 0, 'v'},
-	{"debug",                    	required_argument, 0, 'd'},
-	{"analyse-start",            	required_argument, 0, 'S'},
-	{"analyse-end",              	required_argument, 0, 'E'},
-	{"analyse-duration",         	required_argument, 0, 'D'},
-	{0, 0, 0, 0}
-};
-
 string src_ip = "";
 string dst_ip = "";
 string src_port = "";
@@ -337,7 +390,7 @@ void parse_cmd_args(int argc, char *argv[]) {
 	// Default to disable color prints
 	disable_colors = true;
 
-	while ((c = getopt_long(argc, argv, OPTSTRING, long_options, &option_index)) != -1) {
+	while ((c = getopt_long(argc, argv, OPTSTRING.c_str(), long_options, &option_index)) != -1) {
 		switch (c) {
 		case 's':
 			src_ip = optarg;
@@ -424,6 +477,8 @@ void parse_cmd_args(int argc, char *argv[]) {
 			break;
 		case 'y':
 			GlobOpts::print_packets = true;
+			if (optarg)
+				parse_print_packets(optarg);
 			break;
 		case 'd':
 			GlobOpts::debugLevel = atoi(optarg);
@@ -490,11 +545,8 @@ void parse_cmd_args(int argc, char *argv[]) {
 }
 
 int main(int argc, char *argv[]){
-
+	make_optstring();
 	parse_cmd_args(argc, argv);
-
-//	cout.sync_with_stdio(false);
-	//setvbuf(stdout, NULL, _IOFBF, 20000);
 
 	if(GlobOpts::debugLevel < 0)
 		cerr << "debugLevel = " << GlobOpts::debugLevel << endl;

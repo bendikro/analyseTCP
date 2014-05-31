@@ -271,11 +271,6 @@ void updateMaxStats(struct BaseStats& aggStats, struct BaseStats& stats) {
 }
 
 void Dump::writeITT(ofstream& stream, vector<struct SentTime>& sent_times) {
-	//ofstream cdf_f;
-	//cdf_f.open((char*)(((GlobOpts::prefix + "itt-range-all.dat").str()).c_str()), ios::out);
-	const uint64_t first_tstamp = TV_TO_MS(first_sent_time);
-	printf("2 first_tstamp: %lu\n", first_tstamp);
-
 	for (size_t i = 0; i < sent_times.size(); i++) {
 		stream << (sent_times[i].time) << "," << sent_times[i].itt << "," << sent_times[i].size << endl;
 	}
@@ -1278,7 +1273,7 @@ void Dump::write_loss_to_file() {
 	map<ConnectionMapKey*, Connection*>::iterator conn;
 	for (conn = conns.begin(); conn != conns.end(); ++conn) {
 
-		auto_ptr< vector<LossInterval> > loss( new vector<LossInterval>() );
+		unique_ptr< vector<LossInterval> > loss(new vector<LossInterval>());
 
 		conn->second->rm->calculateLossGroupedByInterval(TV_TO_MS(first_sent_time), *aggr, *loss);
 		total_count += conn->second->rm->analysed_sent_ranges_count;
