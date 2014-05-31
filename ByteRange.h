@@ -19,17 +19,19 @@ using namespace std;
 #include "RangeManager.h"
 #include "time_util.h"
 
+# define END_SEQ(seq_end) (seq_end)
+
 class ByteRange {
 public:
 	uint64_t startSeq;                 // The relative sequence number of the first byte in this range
 	uint64_t endSeq;                   // The relative sequence number of the last byte in this range
-	uint8_t received_count;            // Count number of times this byte range has been received
-	uint8_t sent_count;                // Count number of times this byte range has been sent (incl. retransmissions)
 	uint16_t byte_count;               // The number of bytes in this range
 	uint16_t original_payload_size;
 	uint8_t packet_sent_count;         // Count number of packet transmissions. This value is not copied when splitting a byte range!
 	uint8_t packet_retrans_count;      // Count number of packet retransmissions. This value is not copied when splitting a byte range!
 	uint8_t packet_received_count;
+	uint8_t data_received_count;       // Count number of times this byte range has been received
+	uint8_t data_sent_count;           // Count number of times this byte range has been sent (incl. retransmissions)
 	uint8_t data_retrans_count;        // Count number of times this byte range has been retransmitted
 	uint8_t rdb_count;                 // Count number of times this byte range has been transmitted as redundant (rdb) data
 	uint8_t rdb_byte_miss;
@@ -59,12 +61,12 @@ public:
 	uint16_t tcp_window;
 	long diff;
 
-	ByteRange(uint32_t start, uint32_t end) {
+	ByteRange(uint64_t start, uint64_t end) {
 		startSeq = start;
 		endSeq = end;
-		sent_count = 0;
+		data_sent_count = 0;
 		byte_count = 0;
-		received_count = 0;
+		data_received_count = 0;
 		dupack_count = 0;
 		acked = 0;
 		ack_count = 0;
@@ -94,12 +96,12 @@ public:
 	}
 
 	inline void increase_received(uint32_t tstamp_tcp, timeval tstamp_pcap, bool in_sequence) {
-		if (!received_count) {
+		if (!data_received_count) {
 			app_layer_latency_tstamp = in_sequence;
 			received_tstamp_tcp = tstamp_tcp;
 			received_tstamp_pcap = tstamp_pcap;
 		}
-		received_count++;
+		data_received_count++;
 
 		vector< pair<uint32_t,timeval> >::iterator it, it_end;
 		it = lost_tstamps_tcp.begin(), it_end = lost_tstamps_tcp.end();
@@ -120,7 +122,7 @@ public:
 			tstamps_tcp.push_back(tstamp_tcp);
 		}
 
-		if (sent_t == ST_PKT)
+		if (sent_t == ST_PKT || sent_t == ST_RST)
 			packet_sent_count++;
 
 		if (sent_t == ST_RTR)
@@ -128,8 +130,8 @@ public:
 
 		if (sent_t == ST_PURE_ACK)
 			acked_sent++;
-		else
-			sent_count++;
+		else if (sent_t != ST_RST) // RST packets never send data, so only increase the packet sent counter
+			data_sent_count++;
 
 		sent_tstamp_pcap.push_back(pair<timeval, uint8_t>(tstamp_pcap, sent_t));
 		lost_tstamps_tcp.push_back(pair<uint32_t,timeval>(tstamp_tcp, tstamp_pcap));
@@ -137,13 +139,11 @@ public:
 
 	void update_byte_count() {
 		byte_count = endSeq - startSeq;
-		if (endSeq != startSeq)
-			byte_count += 1;
 	}
 
 	// Split and make a new range at the end
 	ByteRange* split_end(uint64_t start, uint64_t end) {
-		endSeq = start - 1;
+		endSeq = start;
 		return split(start, end);
 	}
 
@@ -151,8 +151,8 @@ public:
 		ByteRange *new_br = new ByteRange(start, end);
 		new_br->packet_sent_count = 0;
 		new_br->data_retrans_count = data_retrans_count;
-		new_br->sent_count = sent_count;
-		new_br->received_count = received_count;
+		new_br->data_sent_count = data_sent_count;
+		new_br->data_received_count = data_received_count;
 		new_br->received_tstamp_tcp = received_tstamp_tcp;
 		new_br->tstamps_tcp = tstamps_tcp;
 		new_br->rdb_tstamps_tcp = rdb_tstamps_tcp;
@@ -174,6 +174,8 @@ public:
 	int getNumRetrans() { return packet_retrans_count; }
 	uint8_t getNumBundled() { return rdb_count; }
 	uint16_t getNumBytes() { return byte_count; }
+	inline uint16_t getDataSentCount() { return data_sent_count; }
+	inline uint16_t getDataReceivedCount() { return data_received_count; }
 	int getOrinalPayloadSize() { return original_payload_size; }
 	int getTotalBytesTransfered() { return byte_count + byte_count * data_retrans_count + byte_count * rdb_count; }
 	bool isAcked() { return acked; }

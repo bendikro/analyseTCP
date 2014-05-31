@@ -19,7 +19,7 @@ using namespace std;
 #include "time_util.h"
 
 enum received_type {DEF, DATA, RDB, RETR};
-enum sent_type {ST_NONE, ST_PKT, ST_RTR, ST_PURE_ACK};
+enum sent_type {ST_NONE, ST_PKT, ST_RTR, ST_PURE_ACK, ST_RST};
 
 extern const char *received_type_str[4];
 
@@ -61,7 +61,7 @@ public:
 	uint analysed_lost_bytes;
 	int ack_count;
 	uint64_t analysed_bytes_sent, analysed_bytes_sent_unique, analysed_bytes_retransmitted, analysed_redundant_bytes;
-	int analysed_packet_sent_count, analysed_retr_packet_count, analysed_rdb_packet_count, analysed_ack_count,
+	int analysed_packet_sent_count, analysed_retr_packet_count, analysed_retr_packet_count_in_dump, analysed_rdb_packet_count, analysed_ack_count,
 		analysed_packet_sent_count_in_dump, analysed_packet_received_count, analysed_ranges_count, analysed_sent_pure_ack_count;
 	int analysed_data_packet_count;
 	int analysed_syn_count, analysed_fin_count, analysed_rst_count, analysed_pure_acks_count;
@@ -77,10 +77,11 @@ public:
 													  analysed_sent_ranges_count(0), analysed_lost_bytes(0),
 													  ack_count(0), analysed_bytes_sent(0), analysed_bytes_sent_unique(0), analysed_bytes_retransmitted(0),
 													  analysed_redundant_bytes(0), analysed_packet_sent_count(0),
-													  analysed_retr_packet_count(0), analysed_rdb_packet_count(0), analysed_ack_count(0),
-													  analysed_packet_sent_count_in_dump(0), analysed_packet_received_count(0),
-													  analysed_ranges_count(0), analysed_sent_pure_ack_count(0), analysed_data_packet_count(0),
-													  analysed_syn_count(0), analysed_fin_count(0), analysed_rst_count(0), analysed_pure_acks_count(0)
+													  analysed_retr_packet_count(0), analysed_retr_packet_count_in_dump(0),
+		                                              analysed_rdb_packet_count(0), analysed_ack_count(0),
+		                                              analysed_packet_sent_count_in_dump(0), analysed_packet_received_count(0),
+		                                              analysed_ranges_count(0), analysed_sent_pure_ack_count(0), analysed_data_packet_count(0),
+		                                              analysed_syn_count(0), analysed_fin_count(0), analysed_rst_count(0), analysed_pure_acks_count(0)
 	{
 		conn = c;
 		firstSeq = first_seq;
@@ -120,7 +121,6 @@ public:
 	void calculateRealLoss(map<ulong, ByteRange*>::iterator brIt, map<ulong, ByteRange*>::iterator brIt_end);
 	void analyseReceiverSideData();
 	void calculateRetransAndRDBStats();
-	//void write_loss_over_time(unsigned slice_interval, unsigned timeslice_count, FILE *loss_retrans_out, FILE *loss_loss_out);
 	void calculateLossGroupedByInterval(const uint64_t first_ts, vector<LossInterval>& aggr_loss, vector<LossInterval>& loss);
 	void printPacketDetails();
 };

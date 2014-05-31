@@ -14,11 +14,12 @@ INCLUDE_DIRECTORIES (${INCLUDE_DIRS})
 # Prepare sources for app.
 SET (APP_SRCS analyseTCP.cc analyseTCP.h
     	      Dump.cc Dump.h
-	      Connection.h Connection.cc
-	      RangeManager.cc RangeManager.h
-	      ByteRange.cc ByteRange.h
-		  color_print.cc color_print.h
-		  time_util.cc time_util.h)
+			  Connection.h Connection.cc
+			  RangeManager.cc RangeManager.h
+			  ByteRange.cc ByteRange.h
+			  color_print.cc color_print.h
+			  time_util.cc time_util.h
+			  util.cc util.h)
 
 ADD_EXECUTABLE (analyseTCP ${APP_SRCS})
 

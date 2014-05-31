@@ -7,8 +7,7 @@ extern GlobStats *globStats;
 int GlobStats::totNumBytes;
 
 /* Methods for class Dump */
-Dump::Dump(string src_ip, string dst_ip, string src_port, string dst_port, string fn)
-{
+Dump::Dump(string src_ip, string dst_ip, string src_port, string dst_port, string fn) {
 	timerclear(&first_sent_time);
 	srcIp = src_ip;
 	dstIp = dst_ip;
@@ -252,7 +251,7 @@ void print_stats_separator(bool final) {
 
 // Update minimum values
 void updateMinStats(struct BaseStats& aggStats, struct BaseStats& stats) {
-	if (stats.min != -1 && stats.min < aggStats.min)
+	if (stats.min != -1 && (stats.min < aggStats.min))
 		aggStats.min = stats.min;
 	if (stats.max != -1 && stats.max < aggStats.max)
 		aggStats.max = stats.max;
@@ -285,10 +284,11 @@ void Dump::printStatistics() {
 	memset(&cs, 0, sizeof(struct connStats));
 	memset(&csAggregated, 0, sizeof(struct connStats));
 
-	struct byteStats bsAggregated, bsAggregatedMin, bsAggregatedMax;
-	bsAggregatedMin.latency.min = bsAggregatedMin.latency.avg = bsAggregatedMin.latency.max = (numeric_limits<int64_t>::max)();
-	bsAggregatedMin.packet_length.min = bsAggregatedMin.packet_length.avg = bsAggregatedMin.packet_length.max = (numeric_limits<int64_t>::max)();
-	bsAggregatedMin.itt.min = bsAggregatedMin.itt.avg = bsAggregatedMin.itt.max = (numeric_limits<int64_t>::max)();
+	byteStats bsAggregated, bsAggregatedMin, bsAggregatedMax;
+	bsAggregatedMin.latency.min = bsAggregatedMin.latency.max = (numeric_limits<int64_t>::max)();
+	bsAggregatedMin.packet_length.avg = bsAggregatedMin.latency.avg = bsAggregatedMin.itt.avg = (numeric_limits<double>::max)();
+	bsAggregatedMin.packet_length.min = bsAggregatedMin.packet_length.max = (numeric_limits<int64_t>::max)();
+	bsAggregatedMin.itt.min = bsAggregatedMin.itt.max = (numeric_limits<int64_t>::max)();
 
 	csAggregated.rdb_byte_hits = 0;
 	csAggregated.rdb_byte_misses = 0;
@@ -340,6 +340,7 @@ void Dump::printStatistics() {
 
 		if (!(GlobOpts::aggOnly)) {
 			printBytesLatencyStats(&cs, &bs, false, NULL, NULL);
+			print_stats_separator(true);
 		}
 
 		if (GlobOpts::aggregate) {
@@ -391,7 +392,6 @@ void Dump::printStatistics() {
 				bsAggregated.dupacks[i] += bs.dupacks[i];
 			}
 		}
-		print_stats_separator(true);
 	}
 
 	if (GlobOpts::aggregate) {
@@ -456,13 +456,14 @@ void Dump::printPacketStats(connStats *cs, byteStats *bs, bool aggregated, byteS
 	       "  SYN/FIN/RST packets sent                      : %10s\n"	\
 	       "  Number of retransmissions                     : %10d\n"	\
 	       "  Number of packets with bundled segments       : %10d\n"	\
+		   "  Number of packets with redundant data         : %10d\n"	\
 		   "  Number of received acks                       : %10d\n"   \
 	       "  Total bytes sent (payload)                    : %10lu\n"	\
 	       "  Number of unique bytes                        : %10lu\n"   \
 	       "  Number of retransmitted bytes                 : %10d\n"	\
 		   "  Redundant bytes (bytes already sent)          : %10lu (%.2f %%)\n",
 		   cs->pureAcksCount, syn_fin_rst,
-		   cs->nrRetrans, cs->bundleCount, cs->ackCount, cs->totBytesSent,
+		   cs->nrRetrans, cs->bundleCount, cs->nrRetrans + cs->bundleCount, cs->ackCount, cs->totBytesSent,
 	       cs->totUniqueBytesSent, cs->totRetransBytesSent, cs->totBytesSent - cs->totUniqueBytesSent,
 	       ((double) (cs->totBytesSent - cs->totUniqueBytesSent) / cs->totBytesSent) * 100);
 
@@ -709,10 +710,6 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 	if (sd.data.seq == ULONG_MAX) {
 		printf("Found invalid sequence numbers in beginning of sender dump. Probably the sender dump has retransmissions of packets before the first packet in dump\n");
 		return;
-	}
-
-	if (sd.data.payloadSize > 0) {
-		sd.data.endSeq -= 1;
 	}
 
 	if (first_sent_time.tv_sec == 0 && first_sent_time.tv_usec == 0) {
@@ -1059,10 +1056,10 @@ void Dump::printConns() {
 	}
 
 	printf("\nConnections in sender dump: %lu\n\n", conns.size());
-	printf("        %-30s   %-17s %-12s   %12s", "Conn key", "Duration (sec)", "Packets sent", "Loss (est)");
+	printf("        %-30s   %-17s %-12s   %-12s   ", "Conn key", "Duration (sec)", "Loss (est)", "Packets sent");
 
 	if (GlobOpts::withRecv) {
-		printf("%12s   %12s   %12s   %12s", "Packets recv", "Packet loss", "Byte loss", "Range loss");
+		printf(" %12s   %12s %12s  %12s", "Packets recv", "Packet loss", "Byte loss", "Range loss");
 	}
 	printf("\n");
 
@@ -1074,15 +1071,15 @@ void Dump::printConns() {
 		cIt->second->addPacketStats(&csAggregated);
 
 		if (cs.nrPacketsSent != cs.nrPacketsSentFoundInDump) {
-			sprintf(loss_estimated, "%.1f/%.1f", ((double) cs.nrRetrans / cs.nrPacketsSent) * 100, ((double) cs.nrRetrans / cs.nrPacketsSentFoundInDump) * 100);
+			sprintf(loss_estimated, "%.2f / %.2f", ((double) cs.nrRetrans / cs.nrPacketsSent) * 100, ((double) cs.nrRetrans / cs.nrPacketsSentFoundInDump) * 100);
 		}
 		else {
-			sprintf(loss_estimated, "%.1f", ((double) cs.nrRetrans / cs.nrPacketsSent) * 100);
+			sprintf(loss_estimated, "%.2f / %.2f", ((double) cs.nrRetrans / cs.nrPacketsSent) * 100, ((double) cs.nrRetrans / cs.nrPacketsSentFoundInDump) * 100);
 		}
-		printf("   %-40s   %-15d %-11d    %-11s", cIt->second->getConnKey().c_str(), cs.duration, cs.nrPacketsSentFoundInDump, loss_estimated);
+		printf("   %-40s %-13d %-15s  %-14d", (cIt->second->getConnKey() + ":").c_str(), cs.duration, loss_estimated, cs.nrPacketsSentFoundInDump);
 
 		if (GlobOpts::withRecv) {
-			printf("  %-11d %8.2f %%    %8.2f %%    %8.2f %%\n",
+			printf("  %-11d  %8.2f %%     %8.2f %%   %8.2f %%",
 				   cs.nrPacketsReceivedFoundInDump,
 				   (((double) ((cs.nrPacketsSentFoundInDump - cs.nrPacketsReceivedFoundInDump)) / cs.nrPacketsSentFoundInDump) * 100),
 				   (cs.bytes_lost / (double) cs.totBytesSent) * 100,

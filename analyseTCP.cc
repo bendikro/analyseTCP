@@ -327,7 +327,6 @@ void usage (char* argv, int exit_status=1, int help_level=1){
 		printf("                       Example for 90th, 99th and 99.9th: -i90,99,99.9\n");
 	}
 	printf(" -y<seq-num-range>   : Print details for each packet. Provide an option sequence number or range of seq to print\n");
-	printf("                       This requires a receiver-side dumpfile (option -g).\n");
 	printf(" -v                  : Be verbose, print more statistics details. The more v's the more verbose.\n");
 	if (help_level > 1) {
 		printf("                         v   = Be verbose and print some details.\n");

@@ -253,10 +253,14 @@ struct BaseStats {
 	BaseStats() : min(0), avg(0), max(0), cum(0) {}
 
 	BaseStats& operator+=(const BaseStats &rhs) {
-		min += rhs.min;
-		avg += rhs.avg;
-		max += rhs.max;
-		cum += rhs.cum;
+		if (rhs.min != -1 && rhs.min != LONG_MAX)
+			min += rhs.min;
+		if (rhs.avg != -1)
+			avg += rhs.avg;
+		if (rhs.max != -1)
+			max += rhs.max;
+		if (rhs.cum != -1)
+			cum += rhs.cum;
 		return *this;
 	}
 };
@@ -278,9 +282,9 @@ struct SentTime {
 struct byteStats {
 	int nrRanges;   /* Number of ranges in conn */
 
-	struct BaseStats latency;
-	struct BaseStats packet_length;
-	struct BaseStats itt;
+	BaseStats latency;
+	BaseStats packet_length;
+	BaseStats itt;
 
 	double stdevLat;
 	double stdevLength;
@@ -292,7 +296,7 @@ struct byteStats {
 	vector<double> latencies;
 	vector<double> payload_lengths;
 	vector<double> intertransmission_times;
-	vector<struct SentTime> sent_times;
+	vector<SentTime> sent_times;
 	vector<int> retrans;
 	vector<int> dupacks;
 	byteStats() : nrRanges(0), stdevLength(0) {
