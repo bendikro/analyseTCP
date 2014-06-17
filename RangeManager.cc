@@ -1000,13 +1000,14 @@ void RangeManager::genStats(struct byteStats *bs) {
 				}
 				else if (it->second->sent_tstamp_pcap[i].second == ST_RTR) {
 					// This is a retransmit
-					// In case in collapsed retrans packet spans multiple segments, check if next range has retrans data
+					// In case a collapsed retrans packet spans multiple segments, check if next range has retrans data
 					// that is not a retrans packet in itself
 					int64_t tmp_byte_count2 = tmp_byte_count;
 					map<ulong, ByteRange*>::iterator it_tmp = it;
-					it_tmp++;
-					if (it_tmp->second->packet_retrans_count < it_tmp->second->data_retrans_count) {
-						tmp_byte_count2 += it_tmp->second->data_retrans_count * it_tmp->second->byte_count;
+					if (++it_tmp != it_end) {
+						if (it_tmp->second->packet_retrans_count < it_tmp->second->data_retrans_count) {
+							tmp_byte_count2 += it_tmp->second->data_retrans_count * it_tmp->second->byte_count;
+						}
 					}
 					bs->sent_times.push_back(SentTime(TV_TO_MICSEC(it->second->sent_tstamp_pcap[i].first), tmp_byte_count2));
 					//printf("RETRANS: %lu -> %lu\n", tmp_byte_count, tmp_byte_count2);
