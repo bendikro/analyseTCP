@@ -15,7 +15,7 @@ using namespace std;
 #include <stdint.h>
 #include <assert.h>
 
-#include "analyseTCP.h"
+#include "common.h"
 #include "time_util.h"
 
 enum received_type {DEF, DATA, RDB, RETR};

@@ -5,6 +5,8 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.0)
 #SET (INCLUDE_DIRS /work/include)
 #SET (LIB_DIRS /work/lib)
 
+SET (INCLUDE_DIRS tests/ tests/cxxtest-4.4)
+
 # Put executable files in custom dir
 #SET(EXECUTABLE_OUTPUT_PATH dir)
 
@@ -12,7 +14,7 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.0)
 INCLUDE_DIRECTORIES (${INCLUDE_DIRS})
 
 # Prepare sources for app.
-SET (APP_SRCS analyseTCP.cc analyseTCP.h
+SET (APP_SRCS common.cc common.h
     	      Dump.cc Dump.h
 			  Connection.h Connection.cc
 			  RangeManager.cc RangeManager.h
@@ -21,7 +23,18 @@ SET (APP_SRCS analyseTCP.cc analyseTCP.h
 			  time_util.cc time_util.h
 			  util.cc util.h)
 
+SET (TEST_FILES tests/TestAnalyseTCP.h)
+SET (TESTS_SRCS ${APP_SRCS} tests/testrunner.cpp ${TEST_FILES})
+SET (APP_SRCS ${APP_SRCS} analyseTCP.cc)
+
 ADD_EXECUTABLE (analyseTCP ${APP_SRCS})
+ADD_EXECUTABLE (test EXCLUDE_FROM_ALL ${TESTS_SRCS})
+
+add_custom_target(buildTestRunner
+  COMMAND ./cxxtest-4.4/bin/cxxtestgen --error-printer -o testrunner.cpp TestAnalyseTCP.h
+  WORKING_DIRECTORY ../tests
+  COMMENT "Build test runner" VERBATIM)
+add_dependencies(test buildTestRunner)
 
 # Some problem with this check on OS X
 IF (NOT APPLE)
@@ -47,6 +60,7 @@ ENDIF (PCAP)
 SET (INCLUDE_FILES arpa/inet.h netinet/in.h sys/socket.h getopt.h)
 
 TARGET_LINK_LIBRARIES (analyseTCP pcap)
+TARGET_LINK_LIBRARIES (test pcap)
 
 # Set compiler flags for all configurations
 SET (CMAKE_CXX_FLAGS "-std=gnu++11 -lm -Wall -Wno-long-long -Wno-variadic-macros") # -Werror?

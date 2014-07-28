@@ -15,7 +15,6 @@ using namespace std;
 #include <stdint.h>
 #include <assert.h>
 
-#include "analyseTCP.h"
 #include "RangeManager.h"
 #include "time_util.h"
 

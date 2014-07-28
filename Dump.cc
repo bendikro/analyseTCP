@@ -1,5 +1,4 @@
 #include "Dump.h"
-#include "analyseTCP.h"
 #include "color_print.h"
 #include <memory>
 
@@ -766,7 +765,7 @@ uint64_t Dump::get_relative_sequence_number(uint32_t seq, uint32_t firstSeq, ulo
 	wrap_index = firstSeq + largestSeq;
 	wrap_index += 1;
 
-	//printf("\nget_relative_sequence_number: seq: %u, firstSeq: %u, largestSeq: %lu, largestSeqAbsolute: %u, wrap_index: %lu\n", seq, firstSeq, largestSeq, largestSeqAbsolute, wrap_index);
+	//printf("get_relative_sequence_number: seq: %u, firstSeq: %u, largestSeq: %lu, largestSeqAbsolute: %u, wrap_index: %lu\n", seq, firstSeq, largestSeq, largestSeqAbsolute, wrap_index);
 	// Either seq has wrapped, or a retrans (or maybe reorder if netem is run on sender machine)
 	if (seq < largestSeqAbsolute) {
 		// This is an earlier sequence number
@@ -979,6 +978,14 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data) {
 			warning_printed = true;
 		}
 		return;
+	}
+
+	if (tmpConn->lastLargestRecvEndSeq == 0 &&
+		ntohl(tcp->th_seq) != tmpConn->rm->firstSeq) {
+	    if (tcp->th_flags & TH_SYN) {
+			printf("Invalid sequence number in SYN packet. This is probably an old connection - discarding...\n");
+			return;
+		}
 	}
 
 	/* Prepare packet data struct */
