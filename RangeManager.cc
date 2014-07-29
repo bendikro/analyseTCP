@@ -1303,7 +1303,7 @@ void RangeManager::printPacketDetails() {
 		//psent += (it->second->syn || it->second->fin || /*it->second->rst ||*/ it->second->byte_count);
 		psent += (it->second->syn + it->second->rst);
 		//psent += (it->second->syn || it->second->rst || (it->second->byte_count && it->second->packet_sent_count));
-		psent += (it->second->fin && !it->second->byte_count);
+		psent += (!it->second->byte_count ? it->second->fin : 0);
 		psent += !!it->second->byte_count;
 		psent += it->second->data_retrans_count;
 		//psent += it->second->packet_retrans_count;
@@ -1409,6 +1409,8 @@ void RangeManager::calculateRealLoss(map<ulong, ByteRange*>::iterator brIt, map<
 			analysed_data_packet_count += 1 + brIt->second->data_retrans_count;
 			ranges_with_data++;
 		}
+		else
+			analysed_retr_no_payload_packet_count += brIt->second->packet_retrans_count;
 
 		//printf("sent_count: %d, retrans_count: %d\n", brIt->second->getDataSentCount(), brIt->second->retrans_count);
 		//assert("FAIL" && (1 + brIt->second->packet_retrans_count == brIt->second->getDataSentCount()));
@@ -1429,16 +1431,24 @@ void RangeManager::calculateRealLoss(map<ulong, ByteRange*>::iterator brIt, map<
 		//analysed_packet_sent_count += (brIt->second->syn || brIt->second->fin || /*brIt->second->rst ||*/ brIt->second->byte_count);
 		//analysed_packet_sent_count += (brIt->second->syn + brIt->second->fin) + (!!brIt->second->byte_count));
 
+/*
+		printf("brIt->second->syn + brIt->second->rst: %d\n", brIt->second->syn + brIt->second->rst);
+		printf("brIt->second->fin && !brIt->second->byte_count: %d\n", !brIt->second->byte_count ? brIt->second->fin : 0);
+		printf("!!brIt->second->byte_count: %d\n", !!brIt->second->byte_count);
+		printf("brIt->second->data_retrans_count: %d\n", brIt->second->data_retrans_count);
+		printf("brIt->second->acked_sent: %d\n", brIt->second->acked_sent);
+*/
+
 		analysed_packet_sent_count += (brIt->second->syn + brIt->second->rst);
 		// Count packet sent for FIN only if no data was sent
-		analysed_packet_sent_count += (brIt->second->fin && !brIt->second->byte_count);
+		analysed_packet_sent_count += !brIt->second->byte_count ? brIt->second->fin : 0;
 
 		analysed_packet_sent_count += !!brIt->second->byte_count;
 		//analysed_packet_sent_count += brIt->second->packet_retrans_count;
 		analysed_packet_sent_count += brIt->second->data_retrans_count;
 		analysed_packet_sent_count += brIt->second->acked_sent; // Count pure acks
-
 		analysed_retr_packet_count += brIt->second->packet_retrans_count;
+
 		analysed_bytes_retransmitted += brIt->second->data_retrans_count * brIt->second->byte_count;
 		analysed_ack_count += brIt->second->ack_count;
 
@@ -1615,9 +1625,11 @@ int RangeManager::calculateClockDrift() {
 	}
 
 	if (!timerisset(&minTimeEnd) || !timerisset(&minTimeStart)) {
-		printf("Timvals have not not populated! minTimeStart is zero: %s, minTimeEnd is zero: %s\n",
+		printf("Timevals have not been populated! minTimeStart is zero: %s, minTimeEnd is zero: %s\n",
 			   !timerisset(&minTimeStart) ? "Yes" : "No", !timerisset(&minTimeEnd) ? "Yes" : "No");
 		warn_with_file_and_linenum(__FILE__, __LINE__);
+		drift = 0;
+		return 1;
 	}
 
 	/* Get time interval between values */

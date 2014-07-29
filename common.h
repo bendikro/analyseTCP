@@ -162,6 +162,7 @@ struct connStats {
 	                              // This might differ from actual packets on the wire because TCP segmentation offloading
 	int nrPacketsReceivedFoundInDump;
 	int nrRetrans;
+	int nrRetransNoPayload;
 	int bundleCount;
 	int ackCount;
 	int synCount;

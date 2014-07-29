@@ -463,7 +463,7 @@ void Dump::printPacketStats(connStats *cs, byteStats *bs, bool aggregated, byteS
 	       "  Number of retransmitted bytes                 : %10d\n"	\
 		   "  Redundant bytes (bytes already sent)          : %10lu (%.2f %%)\n",
 		   cs->pureAcksCount, syn_fin_rst,
-		   cs->nrRetrans, cs->bundleCount, cs->nrRetrans + cs->bundleCount, cs->ackCount, cs->totBytesSent,
+		   cs->nrRetrans, cs->bundleCount, cs->nrRetrans - cs->nrRetransNoPayload + cs->bundleCount, cs->ackCount, cs->totBytesSent,
 	       cs->totUniqueBytesSent, cs->totRetransBytesSent, cs->totBytesSent - cs->totUniqueBytesSent,
 	       safe_div((cs->totBytesSent - cs->totUniqueBytesSent), cs->totBytesSent) * 100);
 
