@@ -291,6 +291,10 @@ struct DataSeg {
 	uint32_t tstamp_tcp;
 	uint32_t tstamp_tcp_echo;
 	u_char flags;
+	DataSeg() : seq(0), endSeq(0), rdb_end_seq(0), seq_absolute(0), ack(0),
+		window(0), payloadSize(0), retrans(0), is_rdb(0), in_sequence(0),
+		tstamp_tcp(0), tstamp_tcp_echo(0), flags(0) {
+	}
 //	u_char *data;
 };
 

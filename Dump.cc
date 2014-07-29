@@ -434,6 +434,7 @@ void Dump::printStatistics() {
 	itt_stream.close();
 }
 
+#define safe_div(x, y) ( (y) != 0 ? ((double) (x)) / (y) : 0.0 )
 
 void Dump::printPacketStats(connStats *cs, byteStats *bs, bool aggregated, byteStats* aggregatedMin, byteStats* aggregatedMax) {
 	printf("  Duration: %u seconds (%f hours)\n", cs->duration, ((double) cs->duration / 60 / 60));
@@ -464,7 +465,7 @@ void Dump::printPacketStats(connStats *cs, byteStats *bs, bool aggregated, byteS
 		   cs->pureAcksCount, syn_fin_rst,
 		   cs->nrRetrans, cs->bundleCount, cs->nrRetrans + cs->bundleCount, cs->ackCount, cs->totBytesSent,
 	       cs->totUniqueBytesSent, cs->totRetransBytesSent, cs->totBytesSent - cs->totUniqueBytesSent,
-	       ((double) (cs->totBytesSent - cs->totUniqueBytesSent) / cs->totBytesSent) * 100);
+	       safe_div((cs->totBytesSent - cs->totUniqueBytesSent), cs->totBytesSent) * 100);
 
 	if (cs->totUniqueBytesSent != cs->totUniqueBytes) {
 		colored_printf(RED, "  Trace is missing segments. Bytes missing      : %10d\n", cs->totUniqueBytes - cs->totUniqueBytesSent);
@@ -473,14 +474,14 @@ void Dump::printPacketStats(connStats *cs, byteStats *bs, bool aggregated, byteS
 	if (cs->nrPacketsSent != cs->nrPacketsSentFoundInDump) {
 		printf("  Estimated loss rate based on retransmission\n");
 		printf("    Based on sent pkts (adj. for fragmentation) : %10.2f %%\n",
-			   (((double) cs->nrRetrans / cs->nrPacketsSent) * 100));
+			   safe_div(cs->nrRetrans, cs->nrPacketsSent) * 100);
 		printf("    Based on sent pkts (found in dump)          : %10.2f %%\n",
-			   (((double) cs->nrRetrans / cs->nrPacketsSentFoundInDump) * 100));
+			   safe_div(cs->nrRetrans, cs->nrPacketsSentFoundInDump) * 100);
 
 	}
 	else {
 		printf("  Estimated loss rate based on retransmissions  : %10.2f %%\n",
-			   (((double) cs->nrRetrans / cs->nrPacketsSent) * 100));
+			   safe_div(cs->nrRetrans, cs->nrPacketsSent) * 100);
 	}
 
 	if (GlobOpts::withRecv && cs->ranges_sent) {
@@ -488,12 +489,12 @@ void Dump::printPacketStats(connStats *cs, byteStats *bs, bool aggregated, byteS
 		printf("Receiver side loss stats:\n");
 		printf("  Number of packets received                    : %10d\n", cs->nrPacketsReceivedFoundInDump);
 		printf("  Packets lost                                  : %10d\n", (cs->nrPacketsSentFoundInDump - cs->nrPacketsReceivedFoundInDump));
-		printf("  Packet loss                                   : %10.2f %%\n",  ((double) ((cs->nrPacketsSentFoundInDump - cs->nrPacketsReceivedFoundInDump)) / cs->nrPacketsSentFoundInDump) * 100);
+		printf("  Packet loss                                   : %10.2f %%\n",  safe_div((cs->nrPacketsSentFoundInDump - cs->nrPacketsReceivedFoundInDump), cs->nrPacketsSentFoundInDump) * 100);
 
 		printf("  Bytes Lost (actual loss on receiver side)     : %10lu\n", cs->bytes_lost);
-		printf("  Bytes Loss                                    : %10.2f %%\n", ((double) (cs->bytes_lost) / cs->totBytesSent) * 100);
+		printf("  Bytes Loss                                    : %10.2f %%\n", safe_div(cs->bytes_lost, cs->totBytesSent) * 100);
 		printf("  Ranges Lost (actual loss on receiver side)    : %10lu\n", cs->ranges_lost);
-		printf("  Ranges Loss                                   : %10.2f %%\n", ((double) (cs->ranges_lost) / cs->ranges_sent) * 100);
+		printf("  Ranges Loss                                   : %10.2f %%\n", safe_div(cs->ranges_lost, cs->ranges_sent) * 100);
 	}
 
 	print_stats_separator(false);
@@ -501,7 +502,7 @@ void Dump::printPacketStats(connStats *cs, byteStats *bs, bool aggregated, byteS
 
 	if (aggregated) {
 		printf("  Average of all packets in all connections     : %10d\n",
-		       (int) floorf((double) (cs->totBytesSent / cs->nrDataPacketsSent)));
+		       (int) floorf((double) safe_div(cs->totBytesSent, cs->nrDataPacketsSent)));
 		printf("  Average of the average for each connection    : %10d\n", (int) bs->packet_length.avg);
 	}
 	else {
@@ -524,16 +525,16 @@ void Dump::printPacketStats(connStats *cs, byteStats *bs, bool aggregated, byteS
 	if (cs->rdb_bytes_sent) {
 		print_stats_separator(false);
 		printf("RDB stats:\n");
-		printf("  RDB packets                                   : %10d (%.2f%% of data packets sent)\n", cs->bundleCount, ((double) cs->bundleCount) / cs->nrDataPacketsSent * 100);
-		printf("  RDB bytes bundled                             : %10lu (%.2f%% of total bytes sent)\n", cs->rdb_bytes_sent, ((double) cs->rdb_bytes_sent) / cs->totBytesSent * 100);
+		printf("  RDB packets                                   : %10d (%.2f%% of data packets sent)\n", cs->bundleCount, safe_div(cs->bundleCount, cs->nrDataPacketsSent) * 100);
+		printf("  RDB bytes bundled                             : %10lu (%.2f%% of total bytes sent)\n", cs->rdb_bytes_sent, safe_div(cs->rdb_bytes_sent, cs->totBytesSent) * 100);
 
 		if (GlobOpts::withRecv) {
-			printf("  RDB packet hits                               : %10d (%.2f%% of RDB packets sent)\n", cs->rdb_packet_hits, ((double) cs->rdb_packet_hits) / cs->bundleCount * 100);
-			printf("  RDB packet misses                             : %10d (%.2f%% of RDB packets sent)\n", cs->rdb_packet_misses, ((double) cs->rdb_packet_misses) / cs->bundleCount * 100);
+			printf("  RDB packet hits                               : %10d (%.2f%% of RDB packets sent)\n", cs->rdb_packet_hits, safe_div(cs->rdb_packet_hits, cs->bundleCount) * 100);
+			printf("  RDB packet misses                             : %10d (%.2f%% of RDB packets sent)\n", cs->rdb_packet_misses, safe_div(cs->rdb_packet_misses, cs->bundleCount) * 100);
 			printf("  RDB byte hits                                 : %10lu (%.2f%% of RDB bytes, %.2f%% of total bytes)\n",
-				   cs->rdb_byte_hits, ((double) cs->rdb_byte_hits / cs->rdb_bytes_sent) * 100, ((double) cs->rdb_byte_hits / cs->totBytesSent) * 100);
+				   cs->rdb_byte_hits, safe_div(cs->rdb_byte_hits, cs->rdb_bytes_sent) * 100, safe_div(cs->rdb_byte_hits, cs->totBytesSent) * 100);
 			printf("  RDB byte misses                               : %10lu (%.2f%% of RDB bytes, %.2f%% of total bytes)\n",
-				   cs->rdb_byte_misses, ((double) cs->rdb_byte_misses / cs->rdb_bytes_sent) * 100, ((double) cs->rdb_byte_misses / cs->totBytesSent) * 100);
+				   cs->rdb_byte_misses, safe_div(cs->rdb_byte_misses, cs->rdb_bytes_sent) * 100, safe_div(cs->rdb_byte_misses, cs->totBytesSent) * 100);
 		}
 	}
 }
@@ -570,6 +571,9 @@ void Dump::printStats(string prefix, string unit, struct BaseStats& bs) {
 }
 
 void Dump::printAggStats(string prefix, string unit, struct connStats *cs, struct BaseStats& bs, struct BaseStats& aggregatedMin, struct BaseStats& aggregatedMax) {
+	if (aggregatedMin.min == (numeric_limits<int64_t>::max)())
+		aggregatedMin.min = aggregatedMin.avg = aggregatedMin.max = 0;
+
 	printf("  Minimum %10s (min, avg, max)            :    %7lu, %7lu, %7lu %s\n", prefix.c_str(), aggregatedMin.min, bs.min, aggregatedMax.min, unit.c_str());
 	printf("  Average %10s (min, avg, max)            :    %7.0f, %7.0f, %7.0f %s\n", prefix.c_str(), aggregatedMin.avg, bs.avg, aggregatedMax.avg, unit.c_str());
 	printf("  Maximum %10s (min, avg, max)            :    %7lu, %7lu, %7lu %s\n", prefix.c_str(), aggregatedMin.max, bs.max, aggregatedMax.max, unit.c_str());

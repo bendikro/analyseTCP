@@ -89,7 +89,7 @@ public:
 		fin = 0;
 		syn = 0;
 		rst = 0;
-		original_packet_is_rdb = false;
+		original_packet_is_rdb = 0;
 		acked_sent = 0;
 		app_layer_latency_tstamp = 0;
 	}
@@ -178,7 +178,7 @@ public:
 	int getOrinalPayloadSize() { return original_payload_size; }
 	int getTotalBytesTransfered() { return byte_count + byte_count * data_retrans_count + byte_count * rdb_count; }
 	bool isAcked() { return acked; }
-	void insertAckTime(timeval *tv) { ackTime = *tv; acked = true; }
+	void insertAckTime(timeval *tv) { ackTime = *tv; acked = 1; }
 	void calculateRecvDiff(timeval *recv_tstamp = NULL);
 	long getRecvDiff() { return diff; }
 	void setRecvDiff(long diff) { this->diff = diff; }
