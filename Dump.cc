@@ -618,9 +618,13 @@ void Dump::printBytesLatencyStats(struct connStats *cs, struct byteStats* bs, bo
 	}
 
 	if (GlobOpts::verbose) {
+		vector<int>::reverse_iterator curr;
+		int value;
+
 		vector<int> retrans_accumed = bs->retrans;
-		for (ulong i = retrans_accumed.size() - 1; i > 0; i--) {
-			retrans_accumed[i-1] += retrans_accumed[i];
+		for (value = 0, curr = retrans_accumed.rbegin(); curr != retrans_accumed.rend(); ++curr) {
+			*curr += value;
+			value = *curr;
 		}
 
 		print_stats_separator(false);
@@ -635,8 +639,9 @@ void Dump::printBytesLatencyStats(struct connStats *cs, struct byteStats* bs, bo
 		print_stats_separator(false);
 
 		vector<int> dupacks_accumed = bs->dupacks;
-		for (ulong i = dupacks_accumed.size() - 1; i > 0; i--) {
-			dupacks_accumed[i-1] += dupacks_accumed[i];
+		for (value = 0, curr = dupacks_accumed.rbegin(); curr != dupacks_accumed.rend(); ++curr) {
+			*curr += value;
+			value = *curr;
 		}
 		printf("  Max dupacks                                   : %10lu \n", bs->dupacks.size());
 		for (ulong i = 0; i < bs->dupacks.size(); i++) {
