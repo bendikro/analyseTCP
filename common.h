@@ -29,6 +29,12 @@ using namespace std;
 
 #include "color_print.h"
 
+#define safe_div(x, y) ( (y) != 0 ? ((double) (x)) / (y) : 0.0 )
+//#define val_or_zero_s32_max(x) ( (x) != INT32_MAX ? (x) : 0 )
+//#define val_or_zero_u32_max(x) ( (x) != UINT32_MAX ? (x) : 0 )
+//#define val_or_zero_s64_max(x) ( (x) != INT64_MAX ? (x) : 0 )
+//#define val_or_zero_u64_max(x) ( (x) != UINT64_MAX ? (x) : 0 )
+
 typedef unsigned char uint8;
 
 // A loss value object, used for aggregating loss over intervals

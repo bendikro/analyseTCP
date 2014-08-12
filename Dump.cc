@@ -434,7 +434,6 @@ void Dump::printStatistics() {
 	itt_stream.close();
 }
 
-#define safe_div(x, y) ( (y) != 0 ? ((double) (x)) / (y) : 0.0 )
 
 void Dump::printPacketStats(connStats *cs, byteStats *bs, bool aggregated, byteStats* aggregatedMin, byteStats* aggregatedMax) {
 	printf("  Duration: %u seconds (%f hours)\n", cs->duration, ((double) cs->duration / 60 / 60));

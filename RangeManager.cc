@@ -1605,7 +1605,7 @@ int RangeManager::calculateClockDrift() {
 
 	startIt = ranges.begin();
 
-	const uint64_t n = std::min(200UL, ranges.size() / 2 - 1);
+	const uint64_t n = std::min(200UL, ranges.size() / 2);
 
 	for (uint64_t i = 0; i < n; i++) {
 		if (startIt->second->getRecvDiff() < minDiffStart) {

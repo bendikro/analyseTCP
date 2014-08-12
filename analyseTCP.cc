@@ -58,7 +58,7 @@ static struct option long_options[] = {
 	{"colored-print",              	no_argument,       0, 'k'},
 	{"help",                     	no_argument,       0, 'h'},
 	{"validate-ranges",            	no_argument,       0, 'V'},
-	{"verbose",                  	optional_argument, 0, 'v'},
+	{"verbose",                  	no_argument, 	   0, 'v'},
 	{"debug",                    	required_argument, 0, 'd'},
 	{"analyse-start",            	required_argument, 0, 'S'},
 	{"analyse-end",              	required_argument, 0, 'E'},
