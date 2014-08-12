@@ -716,7 +716,7 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 
 	if (sd.data.seq == ULONG_MAX) {
 		if (sd.data.flags & TH_SYN) {
-			fprintf(stderr, "Found invalid sequence numbers in beginning of sender dump. Probably old SYN packets\n");
+			fprintf(stdout, "Found invalid sequence numbers in beginning of sender dump. Probably old SYN packets\n");
 			return;
 		}
 
@@ -872,7 +872,7 @@ void Dump::processAcks(const struct pcap_pkthdr* header, const u_char *data) {
 	seg.flags  = tcp->th_flags;
 
 	if (seg.ack == ULONG_MAX) {
-		fprintf(stderr, "Invalid sequence number for ACK!\n");
+		fprintf(stdout, "Invalid sequence number for ACK! (SYN=%d)\n", !!(seg.flags & TH_SYN));
 		return;
 	}
 
@@ -1039,7 +1039,7 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data) {
 
 	if (sd.data.seq == ULONG_MAX) {
 		if (sd.data.flags & TH_SYN) {
-			fprintf(stderr, "Found invalid sequence numbers in beginning of receive dump. Probably an old SYN packet\n");
+			fprintf(stdout, "Found invalid sequence numbers in beginning of receive dump. Probably an old SYN packet\n");
 			return;
 		}
 
