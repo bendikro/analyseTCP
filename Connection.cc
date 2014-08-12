@@ -24,10 +24,14 @@ bool Connection::registerSent(struct sendData* sd) {
 			colored_printf(RED, "Sending unexpected sequence number: %lu, lastlargest: %lu\n",
 						   sd->data.seq, lastLargestEndSeq);
 		}
+
 		// For some reason, seq can increase even if no data was sent, some issue with multiple SYN packets.
+		// 2014-08-12: This is expected for SYN retries after timeout (aka new connections)
 		if (sd->data.flags & TH_SYN) {
 			//printf("Changing firstSeq from %u to %u\n", rm->firstSeq, sd->data.seq_absolute);
+
 			rm->firstSeq = sd->data.seq_absolute;
+
 			//printf("Changing SD seq from (%lu - %lu) to (%d - %d)\n", sd->data.seq, sd->data.endSeq, 0, 0);
 			sd->data.seq = 0;
 			sd->data.endSeq = 0;

@@ -711,6 +711,11 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 	sd.data.flags        = tcp->th_flags;
 
 	if (sd.data.seq == ULONG_MAX) {
+		if (sd.data.flags & TH_SYN) {
+			fprintf(stderr, "Found invalid sequence numbers in beginning of sender dump. Probably old SYN packets\n");
+			return;
+		}
+
 		printf("Found invalid sequence numbers in beginning of sender dump. Probably the sender dump has retransmissions of packets before the first packet in dump\n");
 		return;
 	}
@@ -804,12 +809,24 @@ uint64_t Dump::get_relative_sequence_number(uint32_t seq, uint32_t firstSeq, ulo
 	wrap_index /= 4294967296L;
 	// When seq has wrapped, wrap_index will make sure the relative sequence number continues to grow
 	seq_relative = seq + (wrap_index * 4294967296L) - firstSeq;
-	if (seq_relative > 9999999999) {
-		printf("wrap_index: %lu\n", wrap_index);
-		printf("\nget_relative_sequence_number: seq: %u, firstSeq: %u, largestSeq: %lu, largestSeqAbsolute: %u\n", seq, firstSeq, largestSeq, largestSeqAbsolute);
-		printf("seq_relative: %lu\n", seq_relative);
-		printf("Conn: %s\n", conn->getConnKey().c_str());
-		assert(0 && "Incorrect sequence number calculation!\n");
+	if (seq_relative > 9999999999) {// TODO: Do a better check than this, e.g. checking for distance of largestSeq and seq_relative > a large number
+		// use stderr for error messages for crying out loud!!!!!
+		//fprintf(stderr, "wrap_index: %lu\n", wrap_index);
+		//fprintf(stderr, "\nget_relative_sequence_number: seq: %u, firstSeq: %u, largestSeq: %lu, largestSeqAbsolute: %u\n", seq, firstSeq, largestSeq, largestSeqAbsolute);
+		//fprintf(stderr, "seq_relative: %lu\n", seq_relative);
+		//fprintf(stderr, "Conn: %s\n", conn->getConnKey().c_str());
+		
+#if !defined(NDEBUG) && defined(DEBUG)
+		fprintf(stderr, "Encountered invalid sequence number for connection %s: %u (firstSeq=%u, largestSeq=%lu, largestSeqAbsolute=%u\n",
+				conn->getConnKey().c_str(),
+				seq,
+				firstSeq,
+				largestSeq,
+				largestSeqAbsolute);
+#endif
+
+		//assert(0 && "Incorrect sequence number calculation!\n");
+		return ULONG_MAX;
 	}
 	//printf("RETURN seq_relative: %lu\n", seq_relative);
 	return seq_relative;
@@ -849,6 +866,11 @@ void Dump::processAcks(const struct pcap_pkthdr* header, const u_char *data) {
 	seg.tstamp_pcap = header->ts;
 	seg.window = ntohs(tcp->th_win);
 	seg.flags  = tcp->th_flags;
+
+	if (seg.ack == ULONG_MAX) {
+		fprintf(stderr, "Invalid sequence number for ACK!\n");
+		return;
+	}
 
 	uint8_t* opt = (uint8_t*) tcp + 20;
 	findTCPTimeStamp(&seg, opt, tcpOptionLen);
@@ -1012,6 +1034,11 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data) {
 	sd.data.window       = ntohs(tcp->th_win);
 
 	if (sd.data.seq == ULONG_MAX) {
+		if (sd.data.flags & TH_SYN) {
+			fprintf(stderr, "Found invalid sequence numbers in beginning of receive dump. Probably an old SYN packet\n");
+			return;
+		}
+
 		if (tmpConn->lastLargestRecvEndSeq == 0) {
 			printf("Found invalid sequence numbers in beginning of receive dump. Probably the sender tcpdump didn't start in time to save this packets\n");
 		}
