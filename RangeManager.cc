@@ -1288,12 +1288,15 @@ void RangeManager::printPacketDetails() {
 		}
 
 		printf("R (%4u, %4u):", /*range_count,*/ it->second->getNumBytes(), it->second->original_payload_size);
-		printf(" %-*lu - %-*lu: snt-pkt: %d, snt-ack: %d, rvc-pkt: %d, sent: %d, rcv: %d, retr-pkt: %d, retr-dta: %d, rdb-cnt: %d",
+		printf(" %-*lu - %-*lu: snt-pkt: %d, snt-ack: %d, rcv-pkt: %d"
+			   ", sent: %d, rcv: %d, retr-pkt: %d, retr-dta: %d, rdb-cnt: %d"
+			   ,
 		       seq_char_len, relative_seq(it->second->startSeq),
 			   seq_char_len, relative_seq(it->second->endSeq), it->second->packet_sent_count, it->second->acked_sent,
-			   it->second->packet_received_count,
-			   it->second->getDataSentCount(), it->second->getDataReceivedCount(), it->second->packet_retrans_count,
-			   it->second->data_retrans_count, it->second->rdb_count);
+			   it->second->packet_received_count
+			   ,it->second->getDataSentCount(), it->second->getDataReceivedCount(), it->second->packet_retrans_count,
+			   it->second->data_retrans_count, it->second->rdb_count
+			);
 
 		if (GlobOpts::withRecv) {
 			printf("RCV: %s, rdb-miss: %-3d rdb-hit: %-3d", received_type_str[it->second->recv_type], it->second->rdb_byte_miss, it->second->rdb_byte_hits);
@@ -1580,11 +1583,14 @@ void RangeManager::doDriftCompensation() {
 	for (; it != it_end; it++) {
 		double diff = (double) it->second->getRecvDiff();
 		/* Compensate for drift */
-		diff -= (drift * getDuration(it->second));
-		it->second->setRecvDiff(diff);
-
-		if (diff < lowestRecvDiff) {
-			lowestRecvDiff = diff;
+		if (diff > 0) {
+			//printf("(%s) diff: %g", STR_RELATIVE_SEQNUM_PAIR(it->second->getStartSeq(), it->second->getEndSeq()), diff);
+			diff -= ((drift * getDuration(it->second)));
+			it->second->setRecvDiff(diff);
+			//printf(" -= (%g * %g) = %g -> %g \n", drift, getDuration(it->second), (drift * getDuration(it->second)), diff);
+			if (diff < lowestRecvDiff) {
+				lowestRecvDiff = diff;
+			}
 		}
 		if(GlobOpts::debugLevel==4 || GlobOpts::debugLevel==5){
 			cerr << "dcDiff: " << diff << endl;
@@ -1594,12 +1600,12 @@ void RangeManager::doDriftCompensation() {
 
 /* Calculate clock drift on CDF */
 int RangeManager::calculateClockDrift() {
-	map<ulong, ByteRange*>::iterator startIt;
-	map<ulong, ByteRange*>::reverse_iterator endIt;
+	map<ulong, ByteRange*>::iterator startIt, startDriftRange;
+	map<ulong, ByteRange*>::reverse_iterator endIt, endDriftRange;
 	long minDiffStart = LONG_MAX;
 	long minDiffEnd = LONG_MAX;
 	struct timeval minTimeStart, minTimeEnd, tv;
-	float time, tmpDrift;
+	double durationSec, tmpDrift;
 	timerclear(&minTimeStart);
 	timerclear(&minTimeEnd);
 
@@ -1611,15 +1617,18 @@ int RangeManager::calculateClockDrift() {
 		if (startIt->second->getRecvDiff() < minDiffStart) {
 			minDiffStart = startIt->second->getRecvDiff();
 			minTimeStart = *(startIt->second->getSendTime());
+			startDriftRange = startIt;
 		}
 		startIt++;
 	}
 
 	endIt = ranges.rbegin();
 	for (uint64_t i = 0; i < n; i++) {
-		if (endIt->second->getRecvDiff() < minDiffEnd) {
+		// RecvDiff == 0 means the diff was not calculated
+		if (endIt->second->getRecvDiff() < minDiffEnd && endIt->second->getRecvDiff() != 0) {
 			minDiffEnd = endIt->second->getRecvDiff();
 			minTimeEnd = *(endIt->second->getSendTime());
+			endDriftRange = endIt;
 		}
 		endIt++;
 	}
@@ -1634,16 +1643,19 @@ int RangeManager::calculateClockDrift() {
 
 	/* Get time interval between values */
 	timersub(&minTimeEnd, &minTimeStart, &tv);
-	time = tv.tv_sec + (tv.tv_usec / 1000000.0);
-	tmpDrift = (float) (minDiffEnd - minDiffStart) / time;
+	durationSec = tv.tv_sec + tv.tv_usec / 10000000;
+	tmpDrift = (double) (minDiffEnd - minDiffStart) / durationSec;
 
 	if (GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5) {
-		cerr << "startMin: " << minDiffStart << endl;
-		cerr << "startTime: " << minTimeStart.tv_sec << "." << minTimeStart.tv_usec << endl;
-		cerr << "endMin: " << minDiffEnd << endl;
-		cerr << "endTime: " << minTimeEnd.tv_sec << "." << minTimeEnd.tv_usec << endl;
-		cerr << "Time: " << time << endl;
-		cerr << "Clock drift: " << tmpDrift << " ms/s" << endl;
+		printf("Using start diff of range: %s\n", STR_RELATIVE_SEQNUM_PAIR(startDriftRange->second->getStartSeq(), startDriftRange->second->getEndSeq()));
+		printf("Using end   diff of range: %s\n", STR_RELATIVE_SEQNUM_PAIR(endDriftRange->second->getStartSeq(), endDriftRange->second->getEndSeq()));
+
+		printf("startMin: %lu\n", minDiffStart);
+		printf("startTime: %lu.%lu\n", minTimeStart.tv_sec, minTimeStart.tv_usec);
+		printf("endMin: %lu\n", minDiffEnd);
+		printf("endTime: %lu.%lu\n", minTimeEnd.tv_sec, minTimeEnd.tv_usec);
+		printf("DurationSec: %g\n", durationSec);
+		printf("Clock drift: %g ms/s\n", tmpDrift);
 	}
 	drift = tmpDrift;
 	return 0;
@@ -1698,10 +1710,11 @@ void RangeManager::writeSentTimesAndQueueingDelayVariance(const uint64_t first_t
 		long diff = it->second->getRecvDiff() - lowestRecvDiff;
 		int64_t ts = TV_TO_MS(it->second->sent_tstamp_pcap[it->second->send_tcp_stamp_recv_index].first);
 
-		assert(diff >= 0 && "Negative diff, this shouldn't happen!");
-
-		LatencyItem lat(((uint64_t) ts) - first_tstamp, diff);
-		stream << lat << endl;
+		//assert(diff >= 0 && "Negative diff, this shouldn't happen!");
+		if (diff >= 0) {
+			LatencyItem lat(((uint64_t) ts) - first_tstamp, diff);
+			stream << lat << endl;
+		}
 	}
 }
 

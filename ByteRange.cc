@@ -19,7 +19,7 @@ bool ByteRange::match_received_type(bool print) {
 		printf("tstamps: %lu, rdb-stamps: %lu", tstamps_tcp.size(), rdb_tstamps_tcp.size());
 	}
 	// Find which data packet was received first
-	for (ulong i = 0; i < tstamps_tcp.size(); i++) {
+	for (uint8_t i = 0; i < tstamps_tcp.size(); i++) {
 		if (print) {
 			printf("     timestamp: %u\n", tstamps_tcp[i]);
 		}
@@ -38,7 +38,7 @@ bool ByteRange::match_received_type(bool print) {
 			}
 		}
 	}
-	for (ulong i = 0; i < rdb_tstamps_tcp.size(); i++) {
+	for (uint8_t i = 0; i < rdb_tstamps_tcp.size(); i++) {
 		if (print) {
 			printf(" rdb_timestamp: %u\n", rdb_tstamps_tcp[i]);
 		}
@@ -167,7 +167,7 @@ void ByteRange::calculateRecvDiff(timeval *recv_tstamp) {
 	negtimersub(recv_tstamp, &sent_tstamp_pcap[send_tcp_stamp_recv_index].first, &tv);
 
 	ms += tv.tv_sec * 1000;
-	if(ms >= 0)
+	if (ms >= 0)
 		ms += (tv.tv_usec / 1000);
 	else
 		ms -= (tv.tv_usec / 1000);
