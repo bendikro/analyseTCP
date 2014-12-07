@@ -60,6 +60,11 @@ ENDIF (PCAP)
 
 SET (INCLUDE_FILES arpa/inet.h netinet/in.h sys/socket.h getopt.h)
 
+IF (APPLE)
+  SET (ulong "unsigned long")
+ENDIF (APPLE)
+
+
 TARGET_LINK_LIBRARIES (analyseTCP pcap)
 # TARGET_LINK_LIBRARIES (test pcap)
 
