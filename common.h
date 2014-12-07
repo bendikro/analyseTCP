@@ -128,15 +128,15 @@ public:
 	GlobStats() {
 		retrans_filenames.push_back(string("latency-all-"));
 	}
-	void update_vectors_size(vector<std::tr1::shared_ptr<vector <LatencyItem> > > &vectors, ulong count) {
-		for (ulong i = vectors.size(); i < count; i++) {
+	void update_vectors_size(vector<std::tr1::shared_ptr<vector <LatencyItem> > > &vectors, uint64_t count) {
+		for (uint64_t i = vectors.size(); i < count; i++) {
 			vectors.push_back(std::tr1::shared_ptr<vector <LatencyItem> > (new vector<LatencyItem>()));
 		}
 	}
-	void update_retrans_filenames(ulong count) {
+	void update_retrans_filenames(uint64_t count) {
 		update_vectors_size(ack_latency_vectors, count);
 		stringstream filename_tmp;
-		for (ulong i = retrans_filenames.size(); i < count; i++) {
+		for (uint64_t i = retrans_filenames.size(); i < count; i++) {
 			filename_tmp.str("");
 			filename_tmp << "latency-retr" << i << "-";
 			retrans_filenames.push_back(filename_tmp.str());
@@ -144,7 +144,7 @@ public:
 	}
 
 	void prefix_filenames(vector<string> &filenames) {
-		for (ulong i = 0; i < filenames.size(); i++) {
+		for (uint64_t i = 0; i < filenames.size(); i++) {
 			filenames[i] = GlobOpts::prefix + filenames[i];
 		}
 	}

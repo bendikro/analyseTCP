@@ -23,7 +23,7 @@ char *colored(int fg_color, char *buf, const char *str) {
 
 
 void colored_printf(int fg_color, const char *format, ...) {
-	uint max_size = 1000;
+	uint32_t max_size = 1000;
 	char *buf = static_cast<char*>(malloc(max_size));
 	if (buf == NULL) {
 		printf("Failed to allocate memory (colored_printf)!\n");

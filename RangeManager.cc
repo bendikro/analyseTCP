@@ -13,7 +13,7 @@ const char *received_type_str[] = {"DEF", "DTA", "RDB", "RTR"};
 #define STR_SEQNUM_PAIR(seq_start, seq_end) seq_pair_str(seq_start, seq_end).c_str()
 
 RangeManager::~RangeManager() {
-	map<ulong, ByteRange*>::iterator it, it_end;
+	map<uint64_t, ByteRange*>::iterator it, it_end;
 	it = ranges.begin();
 	it_end = ranges.end();
 	for (; it != it_end; it++) {
@@ -25,14 +25,14 @@ RangeManager::~RangeManager() {
   If relative_seq option is enabled, the seq argument is returned as is.
   If disabled, it will convert the seq to the absolute sequence number (the actual value found in the TCP header)
  */
-ulong RangeManager::relative_seq(ulong seq) {
+uint64_t RangeManager::relative_seq(uint64_t seq) {
 	if (GlobOpts::relative_seq)
 		return seq;
-	ulong wrap_index;
+	uint64_t wrap_index;
 	wrap_index = (firstSeq + seq) / 4294967296L;
 	//	printf("relative_seq: seq: %lu, first + seq: %lu, wrap_index: %lu\n", seq, firstSeq + seq, wrap_index);
-	ulong res = seq + firstSeq;
-	res -= ((ulong) wrap_index * 4294967296L);
+	uint64_t res = seq + firstSeq;
+	res -= ((uint64_t) wrap_index * 4294967296L);
 	//printf("relative_seq  ret: %lu\n", res);
 	return res;
 }
@@ -40,8 +40,8 @@ ulong RangeManager::relative_seq(ulong seq) {
 
 /* Register all bytes with a common send time as a range */
 void RangeManager::insertSentRange(struct sendData *sd) {
-	ulong startSeq = sd->data.seq;
-	ulong endSeq = sd->data.endSeq;
+	uint64_t startSeq = sd->data.seq;
+	uint64_t endSeq = sd->data.endSeq;
 
 #ifdef DEBUG
 	int debug_print = 0;
@@ -84,8 +84,8 @@ void RangeManager::insertSentRange(struct sendData *sd) {
 			if (GlobOpts::validate_ranges) {
 				printf("RangeManager::insertRange: Missing byte in send range in conn '%s''\n",
 					   conn->getConnKey().c_str());
-				printf("Expected seq: %lu but got %lu\n", lastSeq, startSeq);
-				printf("Absolute: lastSeq: %lu, startSeq: %lu. Relative: lastSeq: %lu, startSeq: %lu\n",
+				printf("Expected seq: %llu but got %llu\n", lastSeq, startSeq);
+				printf("Absolute: lastSeq: %llu, startSeq: %llu. Relative: lastSeq: %llu, startSeq: %llu\n",
 					   lastSeq, startSeq, relative_seq(lastSeq), relative_seq(startSeq));
 				printf("This is an indication that tcpdump has dropped packets while collecting the trace.\n");
 				warn_with_file_and_linenum(__FILE__, __LINE__);
@@ -167,9 +167,9 @@ void RangeManager::insertReceivedRange(struct sendData *sd) {
   This inserts the the data into the ranges map.
   It's called both with sent end received data ranges.
 */
-void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, DataSeg *data_seg, int level) {
+void RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, bool sent, DataSeg *data_seg, int level) {
 	ByteRange *last_br = NULL;
-	map<ulong, ByteRange*>::iterator brIt, brIt_end;
+	map<uint64_t, ByteRange*>::iterator brIt, brIt_end;
 	brIt_end = ranges.end();
 	brIt = brIt_end;
 
@@ -318,13 +318,13 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 			}
 			last_br->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_pcap, this_is_rdb_data,
 								   (last_br->syn | last_br->rst | last_br->fin) ? ST_PKT : ST_PURE_ACK);
-			ranges.insert(pair<ulong, ByteRange*>(start_seq, last_br));
+			ranges.insert(pair<uint64_t, ByteRange*>(start_seq, last_br));
 			return;
 		}
 
-		map<ulong, ByteRange*>::iterator lowIt, highIt;
+		map<uint64_t, ByteRange*>::iterator lowIt, highIt;
 		highIt = ranges.upper_bound(end_seq);
-		ulong new_end_seq = end_seq;
+		uint64_t new_end_seq = end_seq;
 
 		// This is retransmitted or packet containing rdb data
 		if (start_seq < lastSeq) {
@@ -334,7 +334,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 				indent_print("FOUND RETRANS: start_seq < lastSeq: %lu < %lu\n", start_seq, lastSeq);
 			}
 #endif
-			ulong lower = std::min(0UL, start_seq - 30000);
+			uint64_t lower = std::min<uint64_t>(0, start_seq - 30000);
 			lowIt = ranges.lower_bound(lower);
 
 			// Search for existing ranges for this data
@@ -415,7 +415,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 										 STR_RELATIVE_SEQNUM_PAIR(new_last->startSeq, new_last->endSeq), (new_last->endSeq - new_last->startSeq) +1);
 						}
 #endif
-						ranges.insert(pair<ulong, ByteRange*>(new_last->startSeq, new_last));
+						ranges.insert(pair<uint64_t, ByteRange*>(new_last->startSeq, new_last));
 						range_received = new_br;
 					}
 					// New data spans beyond current range
@@ -424,7 +424,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 						range_received = new_br;
 						insert_more_recursively = 1;
 					}
-					ranges.insert(pair<ulong, ByteRange*>(new_br->startSeq, new_br));
+					ranges.insert(pair<uint64_t, ByteRange*>(new_br->startSeq, new_br));
 
 					if (sent) {
 						sent_type type = ST_NONE;
@@ -514,7 +514,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 				}
 			}
 #endif
-			ranges.insert(pair<ulong, ByteRange*>(start_seq, last_br));
+			ranges.insert(pair<uint64_t, ByteRange*>(start_seq, last_br));
 		}
 #ifdef DEBUG
 		else {
@@ -537,7 +537,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 				assert(data_seg->retrans == 0 && "Shouldn't be retrans!\n");
 				assert(this_is_rdb_data == 0 && "Shouldn't be RDB?!\n");
 #endif
-				ranges.insert(pair<ulong, ByteRange*>(start_seq, last_br));
+				ranges.insert(pair<uint64_t, ByteRange*>(start_seq, last_br));
 			}
 			//assert(sent && "RECEIVED??\n");
 		}
@@ -713,7 +713,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 						brIt->second->packet_received_count++;
 					}
 				}
-				ranges.insert(pair<ulong, ByteRange*>(new_br->startSeq, new_br));
+				ranges.insert(pair<uint64_t, ByteRange*>(new_br->startSeq, new_br));
 			}
 		}
 		else {
@@ -769,9 +769,9 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
    Organize in ranges that have common send and ack times */
 bool RangeManager::processAck(struct DataSeg *seg) {
 	ByteRange* tmpRange;
-	map<ulong, ByteRange*>::iterator it, it_end, prev;
+	map<uint64_t, ByteRange*>::iterator it, it_end, prev;
 	bool ret = false;
-	ulong ack = seg->ack;
+	uint64_t ack = seg->ack;
 	it = ranges.begin();
 	it_end = ranges.end();
 	ack_count++;
@@ -799,7 +799,7 @@ bool RangeManager::processAck(struct DataSeg *seg) {
 		if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
 			cerr << "--------All data has been ACKed before - skipping--------" << endl;
 		printf("ACKed before!\n");
-		printf("ProcessACK: %8lu  (%8lu), TSVal: %u, last acked start seq: %lu\n", relative_seq(ack), ack, seg->tstamp_tcp,
+		printf("ProcessACK: %8llu  (%8llu), TSVal: %u, last acked start seq: %llu\n", relative_seq(ack), ack, seg->tstamp_tcp,
 		       relative_seq(it->second->getStartSeq()));
 
 		return true;
@@ -877,7 +877,7 @@ bool RangeManager::processAck(struct DataSeg *seg) {
 			tmpRange->ack_count++;
 
 			// Second part of range: insert after tmpRange (tmpRange)
-			highestAckedByteRangeIt = ranges.insert(std::pair<ulong, ByteRange*>(new_br->getStartSeq(), new_br)).first;
+			highestAckedByteRangeIt = ranges.insert(std::pair<uint64_t, ByteRange*>(new_br->getStartSeq(), new_br)).first;
 			return true;
 		}
 
@@ -934,7 +934,7 @@ bool RangeManager::processAck(struct DataSeg *seg) {
 		}
 
 		fprintf(stderr, "Conn: %s\n", conn->getConnKey().c_str());
-		fprintf(stderr, "RangeManager::processAck: Possible error when processing ack: %lu (%lu)\n", relative_seq(ack), ack);
+		fprintf(stderr, "RangeManager::processAck: Possible error when processing ack: %llu (%llu)\n", relative_seq(ack), ack);
 		fprintf(stderr, "Range(%s) (%s)\n",
 				STR_RELATIVE_SEQNUM_PAIR(tmpRange->getStartSeq(), tmpRange->getEndSeq()), STR_SEQNUM_PAIR(tmpRange->getStartSeq(), tmpRange->getEndSeq()));
 		ByteRange *tmp = ranges.begin()->second;
@@ -945,7 +945,7 @@ bool RangeManager::processAck(struct DataSeg *seg) {
 		break;
 	}
 	if (!ret)
-		printf("ByteRange - Failed to find packet for ack: %lu\n", ack);
+		printf("ByteRange - Failed to find packet for ack: %llu\n", ack);
 
 	return ret;
 }
@@ -974,7 +974,7 @@ void percentiles(const vector<double> *v, Percentiles *p) {
 }
 
 void RangeManager::genStats(struct byteStats *bs) {
-	map<ulong, ByteRange*>::iterator it, it_end;
+	map<uint64_t, ByteRange*>::iterator it, it_end;
 	it = analyse_range_start;
 	it_end = analyse_range_end;
 
@@ -1002,7 +1002,7 @@ void RangeManager::genStats(struct byteStats *bs) {
 					// In case a collapsed retrans packet spans multiple segments, check if next range has retrans data
 					// that is not a retrans packet in itself
 					int64_t tmp_byte_count2 = tmp_byte_count;
-					map<ulong, ByteRange*>::iterator it_tmp = it;
+					map<uint64_t, ByteRange*>::iterator it_tmp = it;
 					if (++it_tmp != it_end) {
 						if (it_tmp->second->packet_retrans_count < it_tmp->second->data_retrans_count) {
 							tmp_byte_count2 += it_tmp->second->data_retrans_count * it_tmp->second->byte_count;
@@ -1147,9 +1147,9 @@ void RangeManager::genStats(struct byteStats *bs) {
 void RangeManager::validateContent() {
 	int numAckTimes = 0;
 	int numSendTimes = 0;
-	ulong tmpEndSeq = 0;
+	uint64_t tmpEndSeq = 0;
 
-	map<ulong, ByteRange*>::iterator first, it, it_end, prev;
+	map<uint64_t, ByteRange*>::iterator first, it, it_end, prev;
 	first = it = ranges.begin();
 	it_end = ranges.end();
 	prev = it_end;
@@ -1158,9 +1158,9 @@ void RangeManager::validateContent() {
 	   LastRange.endSeq == lastSeq
 	   every packet in between are aligned */
 	if (it->second->getStartSeq() != 0) {
-		printf("firstSeq: %u, StartSeq: %lu\n", firstSeq, it->second->getStartSeq());
-		printf("RangeManager::validateContent: firstSeq != StartSeq (%lu != %lu)\n", relative_seq(it->second->getStartSeq()), relative_seq(firstSeq));
-		printf("First range (%lu, %lu)\n", relative_seq(it->second->getStartSeq()), relative_seq(it->second->getEndSeq()));
+		printf("firstSeq: %u, StartSeq: %llu\n", firstSeq, it->second->getStartSeq());
+		printf("RangeManager::validateContent: firstSeq != StartSeq (%llu != %llu)\n", relative_seq(it->second->getStartSeq()), relative_seq(firstSeq));
+		printf("First range (%llu, %llu)\n", relative_seq(it->second->getStartSeq()), relative_seq(it->second->getEndSeq()));
 		printf("Conn: %s\n", conn->getConnKey().c_str());
 		warn_with_file_and_linenum(__FILE__, __LINE__);
 	}
@@ -1170,13 +1170,13 @@ void RangeManager::validateContent() {
 	//printf("ranges.rbegin()->second->getEndSeq(): %lu\n", ranges.rbegin()->second->getEndSeq());
 	//printf("lastSeq - 1: %lu\n", lastSeq - 1);
 	if (!(ranges.rbegin()->second->getEndSeq() <= lastSeq && ranges.rbegin()->second->getEndSeq() >= (lastSeq - 1))) {
-		printf("RangeManager::validateContent: lastSeq unaligned! lastSeq: %lu, EndSeq: %lu\n", relative_seq(lastSeq), relative_seq(ranges.rbegin()->second->getEndSeq()));
+		printf("RangeManager::validateContent: lastSeq unaligned! lastSeq: %llu, EndSeq: %llu\n", relative_seq(lastSeq), relative_seq(ranges.rbegin()->second->getEndSeq()));
 		printf("Conn: %s\n", conn->getConnKey().c_str());
 		warn_with_file_and_linenum(__FILE__, __LINE__);
 	}
 
 	if (conn->totBytesSent != (conn->totNewDataSent + conn->totRDBBytesSent + conn->totRetransBytesSent)) {
-		printf("conn->totBytesSent(%lu) does not equal (totNewDataSent + totRDBBytesSent + totRetransBytesSent) (%lu)\n",
+		printf("conn->totBytesSent(%llu) does not equal (totNewDataSent + totRDBBytesSent + totRetransBytesSent) (%llu)\n",
 		       conn->totBytesSent, (conn->totNewDataSent + conn->totRDBBytesSent + conn->totRetransBytesSent));
 		printf("Conn: %s\n", conn->getConnKey().c_str());
 		warn_with_file_and_linenum(__FILE__, __LINE__);
@@ -1254,7 +1254,7 @@ void RangeManager::validateContent() {
   Print a list of all the registered ranges.
 */
 void RangeManager::printPacketDetails() {
-	map<ulong, ByteRange*>::iterator it, it_end;
+	map<uint64_t, ByteRange*>::iterator it, it_end;
 	it = analyse_range_start;
 	it_end = analyse_range_end;
 
@@ -1288,7 +1288,7 @@ void RangeManager::printPacketDetails() {
 		}
 
 		printf("R (%4u, %4u):", /*range_count,*/ it->second->getNumBytes(), it->second->original_payload_size);
-		printf(" %-*lu - %-*lu: snt-pkt: %d, snt-ack: %d, rcv-pkt: %d"
+		printf(" %-*llu - %-*llu: snt-pkt: %d, snt-ack: %d, rcv-pkt: %d"
 			   ", sent: %d, rcv: %d, retr-pkt: %d, retr-dta: %d, rdb-cnt: %d"
 			   ,
 		       seq_char_len, relative_seq(it->second->startSeq),
@@ -1357,9 +1357,9 @@ void RangeManager::calculateRetransAndRDBStats() {
 	calculateRealLoss(analyse_range_start, analyse_range_end);
 }
 
-void RangeManager::calculateRealLoss(map<ulong, ByteRange*>::iterator brIt, map<ulong, ByteRange*>::iterator brIt_end) {
+void RangeManager::calculateRealLoss(map<uint64_t, ByteRange*>::iterator brIt, map<uint64_t, ByteRange*>::iterator brIt_end) {
 	ByteRange *prev = NULL;
-	ulong index = 0;
+	uint64_t index = 0;
 	int lost_tmp = 0;
 	int match_fails_before_end = 0;
 	int match_fails_at_end = 0;
@@ -1465,12 +1465,12 @@ void RangeManager::calculateRealLoss(map<ulong, ByteRange*>::iterator brIt, map<
 			if (brIt->second->getDataSentCount() != brIt->second->getDataReceivedCount()) {
 				analysed_lost_ranges_count += (brIt->second->getDataSentCount() - brIt->second->getDataReceivedCount());
 				analysed_lost_bytes += (brIt->second->getDataSentCount() - brIt->second->getDataReceivedCount()) * brIt->second->byte_count;
-				ulong lost = (brIt->second->getDataSentCount() - brIt->second->getDataReceivedCount());
+				uint64_t lost = (brIt->second->getDataSentCount() - brIt->second->getDataReceivedCount());
 
 				// Must check if this lost packet is the same packet as for the previous range
 				if (prev_pack_lost) {
-					for (ulong i = 0; i < brIt->second->lost_tstamps_tcp.size(); i++) {
-						for (ulong u = 0; u < prev->lost_tstamps_tcp.size(); u++) {
+					for (uint64_t i = 0; i < brIt->second->lost_tstamps_tcp.size(); i++) {
+						for (uint64_t u = 0; u < prev->lost_tstamps_tcp.size(); u++) {
 							if (brIt->second->lost_tstamps_tcp[i].first == prev->lost_tstamps_tcp[u].first) {
 								lost -= 1;
 								if (!lost) {
@@ -1526,7 +1526,7 @@ ByteRange* RangeManager::getHighestAcked() {
    Returns duration of connection (in seconds)
 */
 uint32_t RangeManager::getDuration() {
-	map<ulong, ByteRange*>::iterator brIt_end = ranges.end();
+	map<uint64_t, ByteRange*>::iterator brIt_end = ranges.end();
 	brIt_end--;
 	return getDuration(brIt_end->second);
 }
@@ -1544,7 +1544,7 @@ void RangeManager::calculateLatencyVariation() {
 
 
 void RangeManager::registerRecvDiffs() {
-	map<ulong, ByteRange*>::iterator it, it_end;
+	map<uint64_t, ByteRange*>::iterator it, it_end;
 	it = ranges.begin();
 	it_end = ranges.end();
 	timeval *last_app_layer_tstamp = NULL;
@@ -1576,7 +1576,7 @@ void RangeManager::registerRecvDiffs() {
 
 
 void RangeManager::doDriftCompensation() {
-	map<ulong, ByteRange*>::iterator it, it_end;
+	map<uint64_t, ByteRange*>::iterator it, it_end;
 	it = analyse_range_start;
 	it_end = analyse_range_end;
 
@@ -1600,8 +1600,8 @@ void RangeManager::doDriftCompensation() {
 
 /* Calculate clock drift on CDF */
 int RangeManager::calculateClockDrift() {
-	map<ulong, ByteRange*>::iterator startIt, startDriftRange;
-	map<ulong, ByteRange*>::reverse_iterator endIt, endDriftRange;
+	map<uint64_t, ByteRange*>::iterator startIt, startDriftRange;
+	map<uint64_t, ByteRange*>::reverse_iterator endIt, endDriftRange;
 	long minDiffStart = LONG_MAX;
 	long minDiffEnd = LONG_MAX;
 	struct timeval minTimeStart, minTimeEnd, tv;
@@ -1651,9 +1651,15 @@ int RangeManager::calculateClockDrift() {
 		printf("Using end   diff of range: %s\n", STR_RELATIVE_SEQNUM_PAIR(endDriftRange->second->getStartSeq(), endDriftRange->second->getEndSeq()));
 
 		printf("startMin: %lu\n", minDiffStart);
+#ifdef __APPLE__
+		printf("startTime: %lu.%u\n", minTimeStart.tv_sec, minTimeStart.tv_usec);
+		printf("endMin: %lu\n", minDiffEnd);
+		printf("endTime: %lu.%u\n", minTimeEnd.tv_sec, minTimeEnd.tv_usec);
+#else
 		printf("startTime: %lu.%lu\n", minTimeStart.tv_sec, minTimeStart.tv_usec);
 		printf("endMin: %lu\n", minDiffEnd);
 		printf("endTime: %lu.%lu\n", minTimeEnd.tv_sec, minTimeEnd.tv_usec);
+#endif
 		printf("DurationSec: %g\n", durationSec);
 		printf("Clock drift: %g ms/s\n", tmpDrift);
 	}
@@ -1662,7 +1668,7 @@ int RangeManager::calculateClockDrift() {
 }
 
 void RangeManager::makeByteLatencyVariationCDF() {
-	map<ulong, ByteRange*>::iterator it, it_end;
+	map<uint64_t, ByteRange*>::iterator it, it_end;
 	it = analyse_range_start;
 	it_end = analyse_range_end;
 	map<const long, int>::iterator element, end, endAggr;
@@ -1702,7 +1708,7 @@ void RangeManager::makeByteLatencyVariationCDF() {
 
 
 void RangeManager::writeSentTimesAndQueueingDelayVariance(const uint64_t first_tstamp, ofstream& stream) {
-	map<ulong, ByteRange*>::iterator it, it_end;
+	map<uint64_t, ByteRange*>::iterator it, it_end;
 	it = analyse_range_start;
 	it_end = analyse_range_end;
 
@@ -1767,7 +1773,7 @@ void RangeManager::calculateLossGroupedByInterval(const uint64_t first, vector<L
 
 	vector< pair<uint32_t, timeval> >::iterator lossIt, lossEnd;
 	vector<pair<timeval, uint8_t> >::iterator sentIt, sentEnd;
-	map<ulong, ByteRange*>::iterator range;
+	map<uint64_t, ByteRange*>::iterator range;
 
 	// Extract total values from ranges
 	typedef vector<double> lossvec;
@@ -1861,14 +1867,14 @@ void RangeManager::calculateLossGroupedByInterval(const uint64_t first, vector<L
   aggregated result files should be made.
 */
 void RangeManager::genAckLatencyFiles(long first_tstamp, const string& connKey) {
-	map<ulong, ByteRange*>::iterator it, it_end;
+	map<uint64_t, ByteRange*>::iterator it, it_end;
 	it = analyse_range_start;
 	it_end = analyse_range_end;
 
 	vector<std::tr1::shared_ptr<vector <LatencyItem> > > diff_times;
-	ulong num_retr_tmp;
+	uint64_t num_retr_tmp;
 	int diff_tmp;
-	ulong send_time_ms;
+	uint64_t send_time_ms;
 
 	for (; it != it_end; it++) {
 		diff_tmp = it->second->getSendAckTimeDiff(this);
@@ -1914,7 +1920,7 @@ void RangeManager::genAckLatencyFiles(long first_tstamp, const string& connKey) 
 		// Add the output dir and custom prefix string to filenames
 		globStats->prefix_filenames(filenames);
 
-		for (ulong num_retr_tmp = 0; num_retr_tmp < filenames.size(); num_retr_tmp++) {
+		for (uint64_t num_retr_tmp = 0; num_retr_tmp < filenames.size(); num_retr_tmp++) {
 			ofstream stream;
 			stream.open(filenames[num_retr_tmp].c_str(), ios::out);
 

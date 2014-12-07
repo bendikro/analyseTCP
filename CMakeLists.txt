@@ -1,4 +1,5 @@
 PROJECT (analyseTCP CXX)
+SET(CMAKE_VERBOSE_MAKEFILE off)
 ENABLE_LANGUAGE(C)
 
 CMAKE_MINIMUM_REQUIRED(VERSION 2.0)
@@ -24,17 +25,17 @@ SET (APP_SRCS common.cc common.h
 			  util.cc util.h)
 
 SET (TEST_FILES tests/TestAnalyseTCP.h)
-SET (TESTS_SRCS ${APP_SRCS} tests/testrunner.cpp ${TEST_FILES})
+# SET (TESTS_SRCS ${APP_SRCS} tests/testrunner.cpp ${TEST_FILES})
 SET (APP_SRCS ${APP_SRCS} analyseTCP.cc)
 
 ADD_EXECUTABLE (analyseTCP ${APP_SRCS})
-ADD_EXECUTABLE (test EXCLUDE_FROM_ALL ${TESTS_SRCS})
+# ADD_EXECUTABLE (test EXCLUDE_FROM_ALL ${TESTS_SRCS})
 
-add_custom_target(buildTestRunner
-  COMMAND ./cxxtest-4.4/bin/cxxtestgen --error-printer -o testrunner.cpp TestAnalyseTCP.h
-  WORKING_DIRECTORY ../tests
-  COMMENT "Build test runner" VERBATIM)
-add_dependencies(test buildTestRunner)
+# add_custom_target(buildTestRunner
+#   COMMAND ./cxxtest-4.4/bin/cxxtestgen --error-printer -o testrunner.cpp TestAnalyseTCP.h
+#   WORKING_DIRECTORY ../tests
+#   COMMENT "Build test runner" VERBATIM)
+# add_dependencies(test buildTestRunner)
 
 # Some problem with this check on OS X
 IF (NOT APPLE)
@@ -60,10 +61,15 @@ ENDIF (PCAP)
 SET (INCLUDE_FILES arpa/inet.h netinet/in.h sys/socket.h getopt.h)
 
 TARGET_LINK_LIBRARIES (analyseTCP pcap)
-TARGET_LINK_LIBRARIES (test pcap)
+# TARGET_LINK_LIBRARIES (test pcap)
 
 # Set compiler flags for all configurations
-SET (CMAKE_CXX_FLAGS "-std=gnu++11 -lm -Wall -Wno-long-long -Wno-variadic-macros") # -Werror?
+# SET (CMAKE_CXX_FLAGS "-std=gnu++11 -lm -Wall -Wno-long-long -Wno-variadic-macros") # -Werror?
+SET (CMAKE_CXX_FLAGS "-lm -Wall -Wno-long-long -Wno-variadic-macros") # -Werror?
+IF (CMAKE_COMPILER_IS_GNUCXX)
+  SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
+ENDIF (CMAKE_COMPILER_IS_GNUCXX)
+
 
 # Add NDEBUG only for release version
 # To activate: cmake -DCMAKE_BUILD_TYPE=Release ..

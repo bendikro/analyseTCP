@@ -89,7 +89,7 @@ private:
 	void writeITT(ofstream& stream, vector<struct SentTime>& sent_times);
 public:
 	Dump(string src_ip, string dst_ip, string src_port, string dst_port, string fn);
-	uint64_t get_relative_sequence_number(uint32_t ack, uint32_t firstSeq, ulong largestAckSeq, uint32_t largestAckSeqAbsolute, Connection *conn);
+	uint64_t get_relative_sequence_number(uint32_t ack, uint32_t firstSeq, uint64_t largestAckSeq, uint32_t largestAckSeqAbsolute, Connection *conn);
 	void analyseSender();
 	void processRecvd(string fn);
 	void calculateRetransAndRDBStats();

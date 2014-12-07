@@ -40,16 +40,16 @@ private:
 	int minimum_segment_size;
 	int maximum_segment_size;
 
-	map<ulong, ByteRange*>::iterator highestAckedByteRangeIt;
+	map<uint64_t, ByteRange*>::iterator highestAckedByteRangeIt;
 	map<const long, int> byteLatencyVariationCDFValues;
 	//multimap<const long, uint16_t> packetLatencyVariationValues;
 
 public:
-	map<ulong, ByteRange*> ranges;
+	map<uint64_t, ByteRange*> ranges;
 	uint32_t firstSeq; /* The absolute start sequence number */
 	uint64_t lastSeq;  /* Global relative end sequence number (Equals the number of unique bytes) */
 
-	map<ulong, ByteRange*>::iterator first_to_analyze, last_to_analyze;
+	map<uint64_t, ByteRange*>::iterator first_to_analyze, last_to_analyze;
 
 	// The number of RDB bytes that were redundant and not
 	int rdb_packet_misses;
@@ -66,7 +66,7 @@ public:
 	int analysed_data_packet_count;
 	int analysed_syn_count, analysed_fin_count, analysed_rst_count, analysed_pure_acks_count;
 
-	map<ulong, ByteRange*>::iterator analyse_range_start, analyse_range_last, analyse_range_end;
+	map<uint64_t, ByteRange*>::iterator analyse_range_start, analyse_range_last, analyse_range_end;
 	uint64_t analyse_time_sec_start, analyse_time_sec_end;
 
 	Connection *conn;
@@ -109,7 +109,7 @@ public:
 	void writeSentTimesAndQueueingDelayVariance(const uint64_t first_tstamp, ofstream& stream);
 	int calculateClockDrift();
 	void doDriftCompensation();
-	void insert_byte_range(ulong start_seq, ulong end_seq, bool sent, struct DataSeg *data_seq, int level);
+	void insert_byte_range(uint64_t start_seq, uint64_t end_seq, bool sent, struct DataSeg *data_seq, int level);
 	void genAckLatencyFiles(long first_tstamp, const string& connKey);
 	int getNumBytes() { return lastSeq; } // lastSeq is the last relative seq number
 	long int getByteRangesCount() { return ranges.size(); }
@@ -118,8 +118,8 @@ public:
 	long int getByteRangesSent() { return analysed_sent_ranges_count; }
 	int getRedundantBytes(){ return analysed_redundant_bytes; }
 	int getLostBytes() { return analysed_lost_bytes; }
-	ulong relative_seq(ulong seq);
-	void calculateRealLoss(map<ulong, ByteRange*>::iterator brIt, map<ulong, ByteRange*>::iterator brIt_end);
+	uint64_t relative_seq(uint64_t seq);
+	void calculateRealLoss(map<uint64_t, ByteRange*>::iterator brIt, map<uint64_t, ByteRange*>::iterator brIt_end);
 	void analyseReceiverSideData();
 	void calculateRetransAndRDBStats();
 	void calculateLossGroupedByInterval(const uint64_t first_ts, vector<LossInterval>& aggr_loss, vector<LossInterval>& loss);

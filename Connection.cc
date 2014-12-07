@@ -197,7 +197,7 @@ void Connection::calculateRetransAndRDBStats() {
 
 // Set which ranges to analyse
 void Connection::set_analyse_range_interval() {
-	ulong start_index = 0;
+	uint64_t start_index = 0;
 	rm->analyse_range_start = rm->ranges.begin();
 	rm->analyse_range_end = rm->ranges.end();
 	rm->analyse_range_last = rm->analyse_range_end;
@@ -210,7 +210,7 @@ void Connection::set_analyse_range_interval() {
 	rm->analyse_time_sec_end = tv.tv_sec;
 
 	if (GlobOpts::analyse_start) {
-		map<ulong, ByteRange*>::iterator it, it_end;
+		map<uint64_t, ByteRange*>::iterator it, it_end;
 		it = rm->ranges.begin();
 		timeval first_pcap_tstamp = it->second->sent_tstamp_pcap[0].first;
 		it_end = rm->ranges.end();
@@ -226,7 +226,7 @@ void Connection::set_analyse_range_interval() {
 	}
 
 	if (GlobOpts::analyse_end) {
-		multimap<ulong, ByteRange*>::reverse_iterator rit, rit_end = rm->ranges.rend();
+		multimap<uint64_t, ByteRange*>::reverse_iterator rit, rit_end = rm->ranges.rend();
 		rit = rm->ranges.rbegin();
 		timeval last_pcap_tstamp = rit->second->sent_tstamp_pcap[0].first;
 		rit_end = rm->ranges.rend();
@@ -243,13 +243,13 @@ void Connection::set_analyse_range_interval() {
 		}
 	}
 	else if (GlobOpts::analyse_duration) {
-		ulong end_index = rm->ranges.size();
+		uint64_t end_index = rm->ranges.size();
 		timeval begin_tv = rm->analyse_range_start->second->sent_tstamp_pcap[0].first;
-		map<ulong, ByteRange*>::iterator begin_it, end_it, tmp_it;
+		map<uint64_t, ByteRange*>::iterator begin_it, end_it, tmp_it;
 		begin_it = rm->analyse_range_start;
 		end_it = rm->ranges.end();
 		while (true) {
-			ulong advance = (end_index - start_index) / 2;
+			uint64_t advance = (end_index - start_index) / 2;
 			// We have found the transition point
 			if (!advance) {
 				rm->analyse_range_end = rm->analyse_range_last = begin_it;
@@ -370,11 +370,11 @@ void Connection::writeByteLatencyVariationCDF(ofstream *stream) {
 	rm->writeByteLatencyVariationCDF(stream);
 }
 
-ulong Connection::getNumUniqueBytes() {
-	multimap<ulong, ByteRange*>::iterator it, it_end;
+uint64_t Connection::getNumUniqueBytes() {
+	multimap<uint64_t, ByteRange*>::iterator it, it_end;
 	it = rm->analyse_range_start;
 	it_end = rm->analyse_range_end;
-	ulong first_data_seq = 0, last_data_seq = 0;
+	uint64_t first_data_seq = 0, last_data_seq = 0;
 	for (; it != it_end; it++) {
 		if (it->second->getNumBytes()) {
 			first_data_seq = it->second->getStartSeq();
@@ -390,7 +390,7 @@ ulong Connection::getNumUniqueBytes() {
 			break;
 		}
 	}
-	ulong unique_data_bytes = last_data_seq - first_data_seq;
+	uint64_t unique_data_bytes = last_data_seq - first_data_seq;
 	return unique_data_bytes;
 }
 
