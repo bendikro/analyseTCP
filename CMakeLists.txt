@@ -6,13 +6,15 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.0)
 #SET (INCLUDE_DIRS /work/include)
 #SET (LIB_DIRS /work/lib)
 
+INCLUDE (CheckTypeSize)
+
 SET (INCLUDE_DIRS tests/ tests/cxxtest-4.4)
 
 # Put executable files in custom dir
 #SET(EXECUTABLE_OUTPUT_PATH dir)
 
 #Added work/include to enable building with locally installed libs on
-INCLUDE_DIRECTORIES (${INCLUDE_DIRS})
+INCLUDE_DIRECTORIES (${INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR})
 
 # Prepare sources for app.
 SET (APP_SRCS common.cc common.h
@@ -60,10 +62,7 @@ ENDIF (PCAP)
 
 SET (INCLUDE_FILES arpa/inet.h netinet/in.h sys/socket.h getopt.h)
 
-IF (APPLE)
-  SET (ulong "unsigned long")
-ENDIF (APPLE)
-
+CHECK_TYPE_SIZE(ulong HAVE_ULONG)
 
 TARGET_LINK_LIBRARIES (analyseTCP pcap)
 # TARGET_LINK_LIBRARIES (test pcap)
@@ -85,6 +84,7 @@ SET (CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 SET (CMAKE_CXX_FLAGS_DEBUG "-g3 -Wall -DDEBUG -Wextra -pedantic")
 # Platform specific debug flags
 
+CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 
 # Distclean functionality (Remove cmake generated files)
 IF (UNIX OR APPLE)
