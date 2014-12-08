@@ -46,7 +46,8 @@ void RangeManager::insertSentRange(struct sendData *sd) {
 #ifdef DEBUG
 	int debug_print = 0;
 	if (debug_print) {
-		printf("\ninsertSentRange (%lu): (%s) (%s), retrans: %d, is_rdb: %d\n", endSeq - startSeq,
+		printf("\ninsertSentRange (%lu): (%s) (%s), retrans: %d, is_rdb: %d\n",
+               (ulong)(endSeq - startSeq),
 			   STR_RELATIVE_SEQNUM_PAIR(startSeq, endSeq),
 			   STR_SEQNUM_PAIR(startSeq, endSeq), sd->data.retrans, sd->data.is_rdb);
 	}
@@ -84,9 +85,9 @@ void RangeManager::insertSentRange(struct sendData *sd) {
 			if (GlobOpts::validate_ranges) {
 				printf("RangeManager::insertRange: Missing byte in send range in conn '%s''\n",
 					   conn->getConnKey().c_str());
-				printf("Expected seq: %lu but got %lu\n", lastSeq, startSeq);
+				printf("Expected seq: %lu but got %lu\n", (ulong)lastSeq, startSeq);
 				printf("Absolute: lastSeq: %lu, startSeq: %lu. Relative: lastSeq: %lu, startSeq: %lu\n",
-					   lastSeq, startSeq, relative_seq(lastSeq), relative_seq(startSeq));
+					   (ulong)lastSeq, startSeq, relative_seq(lastSeq), relative_seq(startSeq));
 				printf("This is an indication that tcpdump has dropped packets while collecting the trace.\n");
 				warn_with_file_and_linenum(__FILE__, __LINE__);
 			}
@@ -334,7 +335,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 				indent_print("FOUND RETRANS: start_seq < lastSeq: %lu < %lu\n", start_seq, lastSeq);
 			}
 #endif
-			ulong lower = std::min<ulong>(0, start_seq - 30000);
+			ulong lower = std::min(0UL, start_seq - 30000);
 			lowIt = ranges.lower_bound(lower);
 
 			// Search for existing ranges for this data
@@ -1158,7 +1159,7 @@ void RangeManager::validateContent() {
 	   LastRange.endSeq == lastSeq
 	   every packet in between are aligned */
 	if (it->second->getStartSeq() != 0) {
-		printf("firstSeq: %u, StartSeq: %lu\n", firstSeq, it->second->getStartSeq());
+		printf("firstSeq: %u, StartSeq: %lu\n", firstSeq, (ulong)it->second->getStartSeq());
 		printf("RangeManager::validateContent: firstSeq != StartSeq (%lu != %lu)\n", relative_seq(it->second->getStartSeq()), relative_seq(firstSeq));
 		printf("First range (%lu, %lu)\n", relative_seq(it->second->getStartSeq()), relative_seq(it->second->getEndSeq()));
 		printf("Conn: %s\n", conn->getConnKey().c_str());
@@ -1177,7 +1178,7 @@ void RangeManager::validateContent() {
 
 	if (conn->totBytesSent != (conn->totNewDataSent + conn->totRDBBytesSent + conn->totRetransBytesSent)) {
 		printf("conn->totBytesSent(%lu) does not equal (totNewDataSent + totRDBBytesSent + totRetransBytesSent) (%lu)\n",
-		       conn->totBytesSent, (conn->totNewDataSent + conn->totRDBBytesSent + conn->totRetransBytesSent));
+		       (ulong)conn->totBytesSent, (ulong)(conn->totNewDataSent + conn->totRDBBytesSent + conn->totRetransBytesSent));
 		printf("Conn: %s\n", conn->getConnKey().c_str());
 		warn_with_file_and_linenum(__FILE__, __LINE__);
 	}
@@ -1611,9 +1612,9 @@ int RangeManager::calculateClockDrift() {
 
 	startIt = ranges.begin();
 
-	const ulong n = std::min(200UL, ranges.size() / 2);
+	const uint64_t n = std::min(200UL, ranges.size() / 2);
 
-	for (ulong i = 0; i < n; i++) {
+	for (uint64_t i = 0; i < n; i++) {
 		if (startIt->second->getRecvDiff() < minDiffStart) {
 			minDiffStart = startIt->second->getRecvDiff();
 			minTimeStart = *(startIt->second->getSendTime());
@@ -1623,7 +1624,7 @@ int RangeManager::calculateClockDrift() {
 	}
 
 	endIt = ranges.rbegin();
-	for (ulong i = 0; i < n; i++) {
+	for (uint64_t i = 0; i < n; i++) {
 		// RecvDiff == 0 means the diff was not calculated
 		if (endIt->second->getRecvDiff() < minDiffEnd && endIt->second->getRecvDiff() != 0) {
 			minDiffEnd = endIt->second->getRecvDiff();
@@ -1651,15 +1652,9 @@ int RangeManager::calculateClockDrift() {
 		printf("Using end   diff of range: %s\n", STR_RELATIVE_SEQNUM_PAIR(endDriftRange->second->getStartSeq(), endDriftRange->second->getEndSeq()));
 
 		printf("startMin: %lu\n", minDiffStart);
-#ifdef __APPLE__
-		printf("startTime: %lu.%u\n", minTimeStart.tv_sec, minTimeStart.tv_usec);
+		printf("startTime: %lu.%lu\n", (ulong)minTimeStart.tv_sec, (ulong)minTimeStart.tv_usec);
 		printf("endMin: %lu\n", minDiffEnd);
-		printf("endTime: %lu.%u\n", minTimeEnd.tv_sec, minTimeEnd.tv_usec);
-#else
-		printf("startTime: %lu.%lu\n", minTimeStart.tv_sec, minTimeStart.tv_usec);
-		printf("endMin: %lu\n", minDiffEnd);
-		printf("endTime: %lu.%lu\n", minTimeEnd.tv_sec, minTimeEnd.tv_usec);
-#endif
+		printf("endTime: %lu.%lu\n", (ulong)minTimeEnd.tv_sec, (ulong)minTimeEnd.tv_usec);
 		printf("DurationSec: %g\n", durationSec);
 		printf("Clock drift: %g ms/s\n", tmpDrift);
 	}
@@ -1707,7 +1702,7 @@ void RangeManager::makeByteLatencyVariationCDF() {
 }
 
 
-void RangeManager::writeSentTimesAndQueueingDelayVariance(const ulong first_tstamp, ofstream& stream) {
+void RangeManager::writeSentTimesAndQueueingDelayVariance(const uint64_t first_tstamp, ofstream& stream) {
 	map<ulong, ByteRange*>::iterator it, it_end;
 	it = analyse_range_start;
 	it_end = analyse_range_end;
@@ -1718,7 +1713,7 @@ void RangeManager::writeSentTimesAndQueueingDelayVariance(const ulong first_tsta
 
 		//assert(diff >= 0 && "Negative diff, this shouldn't happen!");
 		if (diff >= 0) {
-			LatencyItem lat(((ulong) ts) - first_tstamp, diff);
+			LatencyItem lat(((uint64_t) ts) - first_tstamp, diff);
 			stream << lat << endl;
 		}
 	}
@@ -1763,12 +1758,12 @@ void LossInterval::add_total(double ranges, double all_bytes, double new_bytes) 
 	tot_new_bytes += new_bytes;
 }
 
-static inline ulong interval_idx(const timeval& ts, ulong first) {
-	ulong relative_ts = TV_TO_MS(ts) - first;
+static inline uint64_t interval_idx(const timeval& ts, uint64_t first) {
+	uint64_t relative_ts = TV_TO_MS(ts) - first;
 	return relative_ts / GlobOpts::lossAggrMs;
 }
 
-void RangeManager::calculateLossGroupedByInterval(const ulong first, vector<LossInterval>& all_loss, vector<LossInterval>& loss) {
+void RangeManager::calculateLossGroupedByInterval(const uint64_t first, vector<LossInterval>& all_loss, vector<LossInterval>& loss) {
 	assert(GlobOpts::withRecv && "Writing loss grouped by interval requires receiver trace");
 
 	vector< pair<uint32_t, timeval> >::iterator lossIt, lossEnd;
@@ -1789,7 +1784,7 @@ void RangeManager::calculateLossGroupedByInterval(const ulong first, vector<Loss
 		sentEnd = range->second->sent_tstamp_pcap.end();
 
 		if (sentIt != sentEnd && range->second->packet_sent_count > 0) {
-			ulong bucket_idx = interval_idx((*sentIt).first, first);
+			uint64_t bucket_idx = interval_idx((*sentIt).first, first);
 
 			while (bucket_idx >= tc.size()) {
 				tc.push_back(0);
@@ -1803,7 +1798,7 @@ void RangeManager::calculateLossGroupedByInterval(const ulong first, vector<Loss
 		// Place sent counts and byte counts in the right bucket
 		for (; sentIt != sentEnd; ++sentIt)
 		{
-			ulong bucket_idx = interval_idx((*sentIt).first, first);
+			uint64_t bucket_idx = interval_idx((*sentIt).first, first);
 
 			while (bucket_idx >= tc.size()) {
 				tc.push_back(0);
@@ -1824,7 +1819,7 @@ void RangeManager::calculateLossGroupedByInterval(const ulong first, vector<Loss
 		if (lossIt != lossEnd &&
 			range->second->packet_sent_count > 0 &&
 			lossIt->second == range->second->sent_tstamp_pcap[0].first) {
-			ulong bucket_idx = interval_idx(range->second->sent_tstamp_pcap[0].first, first);
+			uint64_t bucket_idx = interval_idx(range->second->sent_tstamp_pcap[0].first, first);
 
 			while (bucket_idx >= loss.size()) {
 				loss.push_back(LossInterval(0, 0, 0));
@@ -1835,7 +1830,7 @@ void RangeManager::calculateLossGroupedByInterval(const ulong first, vector<Loss
 
 		// Place loss values in the right bucket
 		for (; lossIt != lossEnd; ++lossIt) {
-			ulong bucket_idx = interval_idx(lossIt->second, first);
+			uint64_t bucket_idx = interval_idx(lossIt->second, first);
 
 			while (bucket_idx >= loss.size()) {
 				loss.push_back(LossInterval(0, 0, 0));
@@ -1845,13 +1840,13 @@ void RangeManager::calculateLossGroupedByInterval(const ulong first, vector<Loss
 		}
 	}
 
-	const ulong num_buckets = loss.size();
+	const uint64_t num_buckets = loss.size();
 	while (num_buckets >= all_loss.size()) {
 		all_loss.push_back(LossInterval(0, 0, 0));
 	}
 
 	// Set total values
-	for (ulong idx = 0; idx < num_buckets; ++idx) {
+	for (uint64_t idx = 0; idx < num_buckets; ++idx) {
 		all_loss[idx] += loss[idx];
 		all_loss[idx].add_total(tc[idx], tb[idx], tn[idx]);
 		loss[idx].add_total(tc[idx], tb[idx], tn[idx]);

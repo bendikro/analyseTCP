@@ -1,6 +1,5 @@
 #include "color_print.h"
 #include <stdlib.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>

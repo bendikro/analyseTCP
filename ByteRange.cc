@@ -59,26 +59,26 @@ void ByteRange::print_tstamps_tcp() {
 	printf("recv timestamp: %u ", received_tstamp_tcp);
 	printf("tstamps_tcp: %lu, rdb-stamps: %lu\n", tstamps_tcp.size(), rdb_tstamps_tcp.size());
 
-	for (uint64_t i = 0; i < tstamps_tcp.size(); i++) {
+	for (ulong i = 0; i < tstamps_tcp.size(); i++) {
 		printf("     timestamp: %u\n", tstamps_tcp[i]);
 	}
-	for (uint64_t i = 0; i < rdb_tstamps_tcp.size(); i++) {
+	for (ulong i = 0; i < rdb_tstamps_tcp.size(); i++) {
 		printf(" rdb_timestamp: %u\n", rdb_tstamps_tcp[i]);
 	}
 	printf("\n");
 }
 
 void ByteRange::print_tstamps_pcap() {
-	uint64_t acktime_3 = ackTime.tv_sec * 1000000 + ackTime.tv_usec;
+	ulong acktime_3 = ackTime.tv_sec * 1000000 + ackTime.tv_usec;
 	printf("acked timestamp: %lu ", acktime_3);
 
 	timeval tmp;
-	uint64_t ms = 0;
-	for (uint64_t i = 0; i < sent_tstamp_pcap.size(); i++) {
+	ulong ms = 0;
+	for (ulong i = 0; i < sent_tstamp_pcap.size(); i++) {
 		timersub(&ackTime, &sent_tstamp_pcap[i].first, &tmp);
 		ms = (tmp.tv_sec * 1000) + (tmp.tv_usec / 1000);
 
-		uint64_t ts = 0;
+		ulong ts = 0;
 		if (sent_tstamp_pcap[i].first.tv_sec > 0) {
 			ts += sent_tstamp_pcap[i].first.tv_sec * 1000000;
 		}
@@ -103,7 +103,7 @@ int ByteRange::getSendAckTimeDiff(RangeManager *rm) {
 	if (ackTime.tv_sec == 0 && ackTime.tv_usec == 0) {
 		// If equals, they're syn or acks
 		if (startSeq != endSeq) {
-			multimap<uint64_t, ByteRange*>::reverse_iterator it, it_end = rm->ranges.rend();
+			multimap<ulong, ByteRange*>::reverse_iterator it, it_end = rm->ranges.rend();
 			int count = 0;
 			// Goes through all the packets from the end
 			// If all the packets after this packet has no ack time, then we presume it's caused by the

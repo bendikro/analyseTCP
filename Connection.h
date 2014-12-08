@@ -82,7 +82,7 @@ public:
 	void writeSentTimesAndQueueingDelayVariance(const uint64_t first, ofstream& stream) { rm->writeSentTimesAndQueueingDelayVariance(first, stream); }
 	void addRDBStats(int *rdb_sent, int *rdb_miss, int *rdb_hits, int *totBytesSent);
 	void genAckLatencyFiles(long first_tstamp) { rm->genAckLatencyFiles(first_tstamp, getConnKey()); }
-	uint64_t getNumUniqueBytes();
+	ulong getNumUniqueBytes();
 	string getConnKey();
 	string getSrcIp();
 	string getDstIp();

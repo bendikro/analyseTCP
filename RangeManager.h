@@ -47,7 +47,7 @@ private:
 public:
 	map<ulong, ByteRange*> ranges;
 	uint32_t firstSeq; /* The absolute start sequence number */
-	ulong lastSeq;  /* Global relative end sequence number (Equals the number of unique bytes) */
+	uint64_t lastSeq;  /* Global relative end sequence number (Equals the number of unique bytes) */
 
 	map<ulong, ByteRange*>::iterator first_to_analyze, last_to_analyze;
 
@@ -60,14 +60,14 @@ public:
 	int analysed_sent_ranges_count;
 	uint analysed_lost_bytes;
 	int ack_count;
-	ulong analysed_bytes_sent, analysed_bytes_sent_unique, analysed_bytes_retransmitted, analysed_redundant_bytes;
+	uint64_t analysed_bytes_sent, analysed_bytes_sent_unique, analysed_bytes_retransmitted, analysed_redundant_bytes;
 	int analysed_packet_sent_count, analysed_retr_packet_count, analysed_retr_packet_count_in_dump, analysed_retr_no_payload_packet_count, analysed_rdb_packet_count, analysed_ack_count,
 		analysed_packet_sent_count_in_dump, analysed_packet_received_count, analysed_ranges_count, analysed_sent_pure_ack_count;
 	int analysed_data_packet_count;
 	int analysed_syn_count, analysed_fin_count, analysed_rst_count, analysed_pure_acks_count;
 
 	map<ulong, ByteRange*>::iterator analyse_range_start, analyse_range_last, analyse_range_end;
-	ulong analyse_time_sec_start, analyse_time_sec_end;
+	uint64_t analyse_time_sec_start, analyse_time_sec_end;
 
 	Connection *conn;
 public:
@@ -106,7 +106,7 @@ public:
 	void registerRecvDiffs();
 	void makeByteLatencyVariationCDF();
 	void writeByteLatencyVariationCDF(ofstream *stream);
-	void writeSentTimesAndQueueingDelayVariance(const ulong first_tstamp, ofstream& stream);
+	void writeSentTimesAndQueueingDelayVariance(const uint64_t first_tstamp, ofstream& stream);
 	int calculateClockDrift();
 	void doDriftCompensation();
 	void insert_byte_range(ulong start_seq, ulong end_seq, bool sent, struct DataSeg *data_seq, int level);
@@ -122,7 +122,7 @@ public:
 	void calculateRealLoss(map<ulong, ByteRange*>::iterator brIt, map<ulong, ByteRange*>::iterator brIt_end);
 	void analyseReceiverSideData();
 	void calculateRetransAndRDBStats();
-	void calculateLossGroupedByInterval(const ulong first_ts, vector<LossInterval>& aggr_loss, vector<LossInterval>& loss);
+	void calculateLossGroupedByInterval(const uint64_t first_ts, vector<LossInterval>& aggr_loss, vector<LossInterval>& loss);
 	void printPacketDetails();
 };
 
