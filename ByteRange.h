@@ -58,8 +58,10 @@ public:
 	uint8_t ack_count;                 // Count number of times this packet was acked
 	uint8_t dupack_count;
 	uint16_t tcp_window;
+private:
 	long diff;
 
+public:
 	ByteRange(uint64_t start, uint64_t end) {
 		startSeq = start;
 		endSeq = end;

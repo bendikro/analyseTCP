@@ -1,6 +1,8 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#define EXTENDED_STATS 1
+
 #include "config.h"
 
 using namespace std;
@@ -189,66 +191,20 @@ struct connStats {
 	uint64_t ranges_lost;
 };
 
-struct Percentiles {
+struct Percentiles
+{
 	map<string, double> percentiles;
 	int max_char_length;
-	void init() {
-		max_char_length = 0;
-		std::istringstream ss(GlobOpts::percentiles);
-		std::string token;
-		double num;
-		while (std::getline(ss, token, ',')) {
-			istringstream(token) >> num;
-			if (num >= 100) {
-				colored_printf(YELLOW, "Invalid percentile '%s'\n", token.c_str());
-				continue;
-			}
-			max_char_length = token.length();
-			percentiles.insert(pair<string, double>(token, 0));
-		}
-	}
 
-	void print(string fmt, bool show_quartiles) {
-		map<string, double>::iterator it;
-		for (it = percentiles.begin(); it != percentiles.end(); it++) {
-			if (show_quartiles) {
-				string q = "";
-				if (it->first == "25")
-					q = "(First quartile)";
-				else if (it->first == "50")
-					q = "(Second quartile, median) ";
-				else if (it->first == "75")
-					q = "(Third quartile)";
-				printf(fmt.c_str(), max_char_length, it->first.c_str(), q.c_str(), it->second);
-			}
-			else
-				printf(fmt.c_str(), max_char_length, it->first.c_str(), it->second);
-		}
-	}
+	void init();
+
+    void compute( const vector<double>& v );
+
+	void print(string fmt, bool show_quartiles);
 };
 
-struct BaseStats {
-	int64_t min;
-	double avg;
-	int64_t max;
-	int64_t cum;
-	BaseStats() : min(0), avg(0), max(0), cum(0) {}
-
-	BaseStats& operator+=(const BaseStats &rhs) {
-		if (rhs.min != -1 && rhs.min != LONG_MAX)
-			min += rhs.min;
-		if (rhs.avg != -1)
-			avg += rhs.avg;
-		if (rhs.max != -1)
-			max += rhs.max;
-		if (rhs.cum != -1)
-			cum += rhs.cum;
-		return *this;
-	}
-};
-
-
-struct SentTime {
+struct SentTime
+{
 	uint64_t time;
 	uint16_t size;
 	uint16_t itt;
@@ -259,11 +215,75 @@ struct SentTime {
     }
 };
 
+class BaseStats
+{
+    bool    _is_aggregate;
+    int32_t _counter;
+public:
+	int64_t min;
+	int64_t max;
+	int64_t cum;
+    bool    valid;
+
+	BaseStats( bool is_aggregate = false );
+
+    void add_to_aggregate( const BaseStats &rhs );
+
+    // add to cum, increase _counter, update min and max
+    void add( uint64_t );
+
+    double   get_avg( ) const;
+    uint32_t get_counter( ) const;
+
+private:
+	BaseStats& operator+=(const BaseStats &rhs) {
+		if (rhs.min != -1 && rhs.min != LONG_MAX)
+			min += rhs.min;
+		// if (rhs.avg != -1) avg += rhs.avg;
+		if (rhs.max != -1)
+			max += rhs.max;
+		if (rhs.cum != -1)
+			cum += rhs.cum;
+		return *this;
+	}
+};
+
+#ifdef EXTENDED_STATS
+class ExtendedStats : public BaseStats
+{
+public:
+    ExtendedStats( )
+        : BaseStats( false )
+    { }
+
+    void add_to_aggregate( const ExtendedStats &rhs );
+
+    // call BaseStats::add, append to _values
+    void add( uint64_t );
+
+    // derive _std_dev and _percentiles from _values
+    void makeStats( );
+
+    void sortValues( );
+    void computePercentiles( );
+
+private:
+    vector<double> _values;
+public:
+    Percentiles    _percentiles;
+    double         _std_dev;
+};
+#endif
 
 /* Struct used to keep track of bytewise latency stats */
 struct byteStats {
 	int nrRanges;   /* Number of ranges in conn */
 
+#ifdef EXTENDED_STATS
+	ExtendedStats latency;
+	ExtendedStats packet_length;
+	ExtendedStats itt;
+#else
 	BaseStats latency;
 	BaseStats packet_length;
 	BaseStats itt;
@@ -278,11 +298,17 @@ struct byteStats {
 	vector<double> latencies;
 	vector<double> payload_lengths;
 	vector<double> intertransmission_times;
+#endif
 	vector<SentTime> sent_times;
 	vector<int> retrans;
 	vector<int> dupacks;
+#ifdef EXTENDED_STATS
+	byteStats() : nrRanges(0)
+    { }
+#else
 	byteStats() : nrRanges(0), stdevLength(0) {
 	}
+#endif
 };
 
 struct DataSeg {

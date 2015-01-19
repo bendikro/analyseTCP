@@ -126,6 +126,6 @@ public:
 	void printPacketDetails();
 };
 
-void percentiles(const vector<double> *v, Percentiles *p);
+// void percentiles(const vector<double> *v, Percentiles *p);
 
 #endif /* RANGEMANAGER_H */

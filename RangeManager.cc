@@ -964,16 +964,6 @@ double median(vector<double>::const_iterator begin,
     return m;
 }
 
-void percentiles(const vector<double> *v, Percentiles *p) {
-	map<string, double>::iterator it;
-	double num;
-	for (it = p->percentiles.begin(); it != p->percentiles.end(); it++) {
-		istringstream(it->first) >> num;
-		vector<double>::const_iterator it_p = v->begin() + ((int) ceil(v->size() * (num / 100.0)));
-		it->second = *it_p;
-	}
-}
-
 void RangeManager::genStats(struct byteStats *bs) {
 	map<ulong, ByteRange*>::iterator it, it_end;
 	it = analyse_range_start;
@@ -986,12 +976,21 @@ void RangeManager::genStats(struct byteStats *bs) {
 	for (; it != it_end; it++) {
 		// Skip if invalid (negative) latency
 		tmp_byte_count = it->second->getOrinalPayloadSize();
+#ifdef EXTENDED_STATS
+		bs->packet_length.add(tmp_byte_count);
+		for (int i = 0; i < it->second->getNumRetrans(); i++) {
+			bs->packet_length.add(tmp_byte_count);
+		}
+#else
+        // griff: What is happening here??? How can this make sense?
+        //        Bendik, please explain if this is not a bug.
 		bs->payload_lengths.push_back(tmp_byte_count);
 		bs->latency.cum += tmp_byte_count;
 		for (int i = 0; i < it->second->getNumRetrans(); i++) {
 			bs->payload_lengths.push_back(tmp_byte_count);
 			bs->latency.cum += tmp_byte_count;
 		}
+#endif
 
 		for (size_t i = 0; i < it->second->sent_tstamp_pcap.size(); i++) {
 			if (it->second->sent_tstamp_pcap[i].second) {
@@ -1040,6 +1039,9 @@ void RangeManager::genStats(struct byteStats *bs) {
 		}
 
 		if ((latency = it->second->getSendAckTimeDiff(this))) {
+#ifdef EXTENDED_STATS
+			bs->latency.add( latency );
+#else
 			bs->latencies.push_back(latency);
 			bs->latency.cum += latency;
 			if (latency > bs->latency.max) {
@@ -1048,6 +1050,7 @@ void RangeManager::genStats(struct byteStats *bs) {
 			if (latency < bs->latency.min) {
 				bs->latency.min = latency;
 			}
+#endif
 			bs->nrRanges++;
 		} else {
 			if (!it->second->isAcked())
@@ -1069,6 +1072,11 @@ void RangeManager::genStats(struct byteStats *bs) {
 	SentTime prev = bs->sent_times[0];
 	for (size_t i = 1; i < bs->sent_times.size(); i++) {
 		itt = (bs->sent_times[i].time - prev.time) / 1000L;
+#ifdef EXTENDED_STATS
+		bs->itt.add( itt );
+		bs->sent_times[i].itt = itt;
+		prev = bs->sent_times[i];
+#else
 		bs->intertransmission_times.push_back(itt);
 		bs->sent_times[i].itt = itt;
 		prev = bs->sent_times[i];
@@ -1080,8 +1088,14 @@ void RangeManager::genStats(struct byteStats *bs) {
 		if (itt < bs->itt.min) {
 			bs->itt.min = itt;
 		}
+#endif
 	}
 
+#ifdef EXTENDED_STATS
+    bs->latency.makeStats( );
+    bs->packet_length.makeStats( );
+    bs->itt.makeStats( );
+#else
 	double temp;
 	double stdev;
 	if (bs->latencies.size()) {
@@ -1092,21 +1106,22 @@ void RangeManager::genStats(struct byteStats *bs) {
 		for (unsigned int i = 0; i < bs->latencies.size(); i++) {
 			temp += (bs->latencies[i] - mean) * (bs->latencies[i] - mean);
 		}
+		stdev = sqrt(temp / (bs->latencies.size()));
 
 		std::sort(bs->latencies.begin(), bs->latencies.end());
-		stdev = sqrt(temp / (bs->latencies.size()));
 		bs->stdevLat = stdev;
-		bs->latency.avg = mean;
+		// bs->latency.avg = mean;
 		percentiles(&bs->latencies, &bs->percentiles_latencies);
 	}
 	else
-		bs->latency.min = bs->latency.avg = bs->latency.max = -1;
+		// bs->latency.min = bs->latency.avg = bs->latency.max = -1;
+        bs->latency.valid = false;
 
 	if (bs->payload_lengths.size()) {
 		// Payload size stats
 		double sumLen = analysed_bytes_sent;
 		double meanLen = sumLen / bs->payload_lengths.size();
-		bs->packet_length.avg = meanLen;
+		// bs->packet_length.avg = meanLen;
 		temp = 0;
 		for (unsigned int i = 0; i < bs->payload_lengths.size(); i++) {
 			temp += (bs->payload_lengths[i] - meanLen) * (bs->payload_lengths[i] - meanLen);
@@ -1118,7 +1133,8 @@ void RangeManager::genStats(struct byteStats *bs) {
 		percentiles(&bs->payload_lengths, &bs->percentiles_lengths);
 	}
 	else
-		bs->packet_length.min = bs->packet_length.avg = bs->packet_length.max = -1;
+		// bs->packet_length.min = bs->packet_length.avg = bs->packet_length.max = -1;
+		bs->packet_length.valid = false;
 
 	if (bs->intertransmission_times.size()) {
 		// Payload size stats
@@ -1133,11 +1149,15 @@ void RangeManager::genStats(struct byteStats *bs) {
 		//std::sort(bs->payload_lengths.begin(), bs->payload_lengths.end());
 		//stdev = sqrt(temp / (bs->payload_lengths.size()));
 		//bs->stdevLength = stdev;
-		bs->itt.avg = (double) bs->itt.cum / bs->sent_times.size();
+
+		// bs->itt.avg = (double) bs->itt.cum / bs->sent_times.size();
+        assert( bs->itt.get_avg() == (double) bs->itt.cum / bs->sent_times.size() );
 		percentiles(&bs->intertransmission_times, &bs->percentiles_lengths);
 	}
 	else
-		bs->itt.min = bs->itt.avg = bs->itt.max = -1;
+		// bs->itt.min = bs->itt.avg = bs->itt.max = -1;
+		bs->itt.valid = false;
+#endif
 }
 
 /* Check that every byte from firstSeq to lastSeq is present.
@@ -1918,6 +1938,7 @@ void RangeManager::genAckLatencyFiles(long first_tstamp, const string& connKey) 
 		for (ulong num_retr_tmp = 0; num_retr_tmp < filenames.size(); num_retr_tmp++) {
 			ofstream stream;
 			stream.open(filenames[num_retr_tmp].c_str(), ios::out);
+            stream << "# Timestamp/ms, Latency/ms" << endl;
 
 			vector<LatencyItem>& vec_retr = *diff_times[num_retr_tmp];
 			for (unsigned long int i = 0; i < diff_times[num_retr_tmp]->size(); i++) {
