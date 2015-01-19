@@ -69,6 +69,7 @@ private:
 	string filename;
 	string srcPort;
 	string dstPort;
+    string tcpPort;
 	int64_t sentPacketCount;
 	uint64_t sentBytesCount;
 	int64_t recvPacketCount;
@@ -88,7 +89,7 @@ private:
 	void printPacketITTStats(struct connStats *cs, struct byteStats* bs, bool aggregated, struct byteStats* aggregatedMin, struct byteStats* aggregatedMax);
 	void writeITT(ofstream& stream, vector<struct SentTime>& sent_times);
 public:
-	Dump(string src_ip, string dst_ip, string src_port, string dst_port, string fn);
+	Dump(string src_ip, string dst_ip, string src_port, string dst_port, string tcp_port, string fn);
 	uint64_t get_relative_sequence_number(uint32_t ack, uint32_t firstSeq, ulong largestAckSeq, uint32_t largestAckSeqAbsolute, Connection *conn);
 	void analyseSender();
 	void processRecvd(string fn);

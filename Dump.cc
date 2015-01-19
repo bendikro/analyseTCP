@@ -1,17 +1,26 @@
 #include "Dump.h"
 #include "color_print.h"
 #include <memory>
+#include <string.h>
+
+// griff: temporary, meant to become a CLI option
+//        idea of the option is to split a connection into individual HTTP GETs
+#define IS_THIS_HTTP_GET 1
+#ifdef IS_THIS_HTTP_GET
+static void look_for_get_request( const struct pcap_pkthdr* header, const u_char *data );
+#endif
 
 extern GlobStats *globStats;
 int GlobStats::totNumBytes;
 
 /* Methods for class Dump */
-Dump::Dump(string src_ip, string dst_ip, string src_port, string dst_port, string fn) {
+Dump::Dump(string src_ip, string dst_ip, string src_port, string dst_port, string tcp_port, string fn) {
 	timerclear(&first_sent_time);
 	srcIp = src_ip;
 	dstIp = dst_ip;
 	srcPort = src_port;
 	dstPort = dst_port;
+    tcpPort = tcp_port;
 	filename = fn;
 	sentPacketCount = 0;
 	sentBytesCount = 0;
@@ -110,6 +119,9 @@ void Dump::analyseSender() {
 	if (!dstPort.empty())
 		filterExp << " && dst " << (dst_port_range ? "portrange " : "port ") << dstPort;
 
+    if (!tcpPort.empty())
+		filterExp << " && tcp port " << tcpPort;
+
 	// Earlier, only packets with TCP payload were used.
 	//filterExp << " && (ip[2:2] - ((ip[0]&0x0f)<<2) - (tcp[12]>>2)) >= 1";
 
@@ -179,6 +191,8 @@ void Dump::analyseSender() {
 	if (!srcPort.empty())
 		filterExp << " && dst " << (src_port_range ? "portrange " : "port ") << srcPort;
 
+	if (!tcpPort.empty())
+		filterExp << " && tcp port " << tcpPort;
 /*
   filterExp << " && ((tcp[tcpflags] & tcp-syn) != tcp-syn)"
   << " && ((tcp[tcpflags] & tcp-fin) != tcp-fin)"
@@ -790,6 +804,10 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 	/* define/compute tcp payload (segment) offset */
 	//sd.data.data = (u_char *) (data + SIZE_ETHERNET + ipHdrLen + tcpHdrLen);
 
+#ifdef IS_THIS_HTTP_GET
+    look_for_get_request( header, data );
+#endif
+
 	sentPacketCount++;
 	sentBytesCount += sd.data.payloadSize;
 
@@ -1115,6 +1133,11 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data) {
 	//sd.data.data = (u_char *) (data + SIZE_ETHERNET + ipHdrLen + tcpHdrLen);
 	recvPacketCount++;
 	recvBytesCount += sd.data.payloadSize;
+
+#ifdef IS_THIS_HTTP_GET
+    look_for_get_request( header, data );
+#endif
+
 	tmpConn->registerRecvd(&sd);
 }
 
@@ -1627,3 +1650,36 @@ void Dump::free_resources() {
 		delete cIt->second;
 	}
 }
+
+#ifdef IS_THIS_HTTP_GET
+static void look_for_get_request( const struct pcap_pkthdr* header, const u_char *data )
+{
+	const sniff_ip *ip; /* The IP header */
+	const sniff_tcp *tcp; /* The TCP header */
+	ip = (struct sniff_ip*) (data + SIZE_ETHERNET);
+	// u_int ipSize = ntohs(ip->ip_len);
+	u_int ipHdrLen = IP_HL(ip)*4;
+	tcp = (struct sniff_tcp*) (data + SIZE_ETHERNET + ipHdrLen);
+	u_int tcpHdrLen = TH_OFF(tcp)*4;
+
+    u_char* ptr = (u_char *) (data + SIZE_ETHERNET + ipHdrLen + tcpHdrLen);
+    if( (ptr - data) < header->caplen )
+    {
+        u_int payload_len = header->caplen - ( ptr - data );
+        if( payload_len > 3 )
+        {
+            if( not strncmp( (const char*)ptr, "GET", 3 ) )
+            {
+                cerr << "Found get request in received data" << endl;
+                cerr << "payload length=" << header->len - (SIZE_ETHERNET + ipHdrLen + tcpHdrLen) << endl;
+                for( u_int i=0; i<payload_len; i++ )
+                {
+                    cerr << (char)( isprint(ptr[i]) ? ptr[i] : '?' );
+                }
+                cerr << endl;
+            }
+        }
+    }
+}
+#endif
+

@@ -63,6 +63,7 @@ static struct option long_options[] = {
 	{"analyse-start",            	required_argument, 0, 'S'},
 	{"analyse-end",              	required_argument, 0, 'E'},
 	{"analyse-duration",         	required_argument, 0, 'D'},
+	{"tcp-port",         	        required_argument, 0, 400},
 	{0, 0, 0, 0}
 };
 
@@ -213,6 +214,7 @@ void usage (char* argv, int exit_status=1, int help_level=1){
 	printf(" --analyse-start=<start>       : Start analysing <start> seconds into the stream(s)\n");
 	printf(" --analyse-end=<end>           : Stop analysing <end> seconds before the end of the stream(s)\n");
 	printf(" --analyse-duration=<duration> : Stop analysing after <duration> seconds after the start\n");
+	printf(" --tcp-port=<port>             : Sender or receiver port, combines -q and -p\n");
 
 	if (help_level > 2) {
 		printf("\n");
@@ -243,6 +245,7 @@ string src_ip = "";
 string dst_ip = "";
 string src_port = "";
 string dst_port = "";
+string tcp_port = "";
 string sendfn = ""; /* Sender dump file name */
 string recvfn = ""; /* Receiver dump filename */
 
@@ -264,10 +267,33 @@ void parse_cmd_args(int argc, char *argv[]) {
 			break;
 		case 'p':
 			dst_port = string(optarg);
+            if( not tcp_port.empty() )
+            {
+				colored_printf(RED, "-p cannot be combined with --tcp-port, ignoring -p\n" );
+                dst_port = "";
+            }
 			break;
 		case 'q':
 			src_port = string(optarg);
+            if( not tcp_port.empty() )
+            {
+				colored_printf(RED, "-q cannot be combined with --tcp-port, ignoring -q\n" );
+                src_port = "";
+            }
 			break;
+        case 400 :
+            tcp_port = string(optarg);
+            if( not dst_port.empty() )
+            {
+				colored_printf(RED, "--tcp-port cannot be combined with -p, ignoring --tcp-port\n" );
+                tcp_port = "";
+            }
+            else if( not src_port.empty() )
+            {
+				colored_printf(RED, "--tcp-port cannot be combined with -q, ignoring --tcp-port\n" );
+                tcp_port = "";
+            }
+            break;
 		case 'e':
 			GlobOpts::connDetails = true;
 			break;
@@ -433,7 +459,7 @@ int main(int argc, char *argv[]){
 	globStats = &s;
 
 	/* Create Dump - object */
-	Dump *senderDump = new Dump(src_ip, dst_ip, src_port, dst_port, sendfn);
+	Dump *senderDump = new Dump(src_ip, dst_ip, src_port, dst_port, tcp_port, sendfn);
 	//test(senderDump);
 	senderDump->analyseSender();
 
