@@ -114,7 +114,8 @@ public:
 	static bool oneway_delay_variance;
 };
 
-class GlobStats {
+class GlobStats
+{
 public:
 	static map<const long, int> byteLatencyVariationCDFValues;
 	static map<const long, int> packetLatencyVariationValues;

@@ -10,6 +10,7 @@
 #include <arpa/inet.h>
 #include <iomanip>
 #include "Connection.h"
+#include "fourTuple.h"
 
 /* Forward declarations */
 class Connection;
@@ -60,16 +61,19 @@ struct SortedConnectionKeyComparator {
 
 
 /* Represents one dump, and keeps globally relevant information */
-class Dump {
-
+class Dump
+{
 private:
 	timeval first_sent_time;
+	string filename;
+
 	string srcIp;
 	string dstIp;
-	string filename;
-	string srcPort;
-	string dstPort;
-    string tcpPort;
+	string srcPort; /* specify tcp.src in filter */
+	string dstPort; /* specify tcp.dst in filter */
+    string tcpPort; /* specify tcp.port in filter */
+    vector<four_tuple_t> _connections;
+
 	int64_t sentPacketCount;
 	uint64_t sentBytesCount;
 	int64_t recvPacketCount;
@@ -89,7 +93,18 @@ private:
 	void printPacketITTStats(struct connStats *cs, struct byteStats* bs, bool aggregated, struct byteStats* aggregatedMin, struct byteStats* aggregatedMax);
 	void writeITT(ofstream& stream, vector<struct SentTime>& sent_times);
 public:
+    /** Version used by analyseTCP
+     *  It may represent an entire trace, or one that is retricted to a set of given src and dest
+     *  IP addresses and ports.
+     */
 	Dump(string src_ip, string dst_ip, string src_port, string dst_port, string tcp_port, string fn);
+
+    /** Version used by analyseDASH
+     *  It represents a subset of a trace that contains an arbitrary number of connection
+     *  that must be specified completely by a 4-tuple.
+     */
+	Dump( const vector<four_tuple_t>& connections, string fn );
+
 	uint64_t get_relative_sequence_number(uint32_t ack, uint32_t firstSeq, ulong largestAckSeq, uint32_t largestAckSeqAbsolute, Connection *conn);
 	void analyseSender();
 	void processRecvd(string fn);

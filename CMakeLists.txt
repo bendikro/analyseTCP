@@ -19,12 +19,13 @@ INCLUDE_DIRECTORIES (${INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR})
 # Prepare sources for app.
 SET (APP_SRCS common.cc common.h
     	      Dump.cc Dump.h
-			  Connection.h Connection.cc
-			  RangeManager.cc RangeManager.h
-			  ByteRange.cc ByteRange.h
-			  color_print.cc color_print.h
-			  time_util.cc time_util.h
-			  util.cc util.h)
+              fourTuple.cc fourTuple.h
+              Connection.h Connection.cc
+              RangeManager.cc RangeManager.h
+              ByteRange.cc ByteRange.h
+              color_print.cc color_print.h
+              time_util.cc time_util.h
+              util.cc util.h)
 
 SET (TEST_FILES tests/TestAnalyseTCP.h)
 # SET (TESTS_SRCS ${APP_SRCS} tests/testrunner.cpp ${TEST_FILES})
@@ -85,6 +86,19 @@ SET (CMAKE_CXX_FLAGS_DEBUG "-g3 -Wall -DDEBUG -Wextra -pedantic")
 # Platform specific debug flags
 
 CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h)
+
+ADD_EXECUTABLE (analyseDASH
+	analyseDASH.cc analyseDASH.h
+	common.cc common.h
+	Dump.cc Dump.h
+	Connection.h Connection.cc
+	RangeManager.cc RangeManager.h
+	util.cc util.h
+	ByteRange.cc ByteRange.h
+	fourTuple.cc fourTuple.h
+	color_print.cc color_print.h
+	)
+TARGET_LINK_LIBRARIES (analyseDASH pcap)
 
 # Distclean functionality (Remove cmake generated files)
 IF (UNIX OR APPLE)

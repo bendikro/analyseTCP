@@ -14,20 +14,44 @@ extern GlobStats *globStats;
 int GlobStats::totNumBytes;
 
 /* Methods for class Dump */
-Dump::Dump(string src_ip, string dst_ip, string src_port, string dst_port, string tcp_port, string fn) {
+Dump::Dump(string src_ip, string dst_ip, string src_port, string dst_port, string tcp_port, string fn)
+	: filename( fn )
+	, srcIp( src_ip )
+	, dstIp( dst_ip )
+	, srcPort( src_port )
+	, dstPort( dst_port )
+	, tcpPort( tcp_port )
+	, sentPacketCount( 0 )
+	, sentBytesCount( 0 )
+	, recvPacketCount( 0 )
+	, recvBytesCount( 0 )
+	, ackCount( 0 )
+	, max_payload_size( 0 )
+{
 	timerclear(&first_sent_time);
 	srcIp = src_ip;
 	dstIp = dst_ip;
 	srcPort = src_port;
 	dstPort = dst_port;
     tcpPort = tcp_port;
-	filename = fn;
-	sentPacketCount = 0;
-	sentBytesCount = 0;
-	recvPacketCount = 0;
-	recvBytesCount = 0;
-	ackCount = 0;
-	max_payload_size = 0;
+}
+
+Dump::Dump( const vector<four_tuple_t>& connections, string fn )
+	: filename( fn )
+	, srcIp( "" )
+	, dstIp( "" )
+	, srcPort( "" )
+	, dstPort( "" )
+	, tcpPort( "" )
+    , _connections( connections )
+	, sentPacketCount( 0 )
+	, sentBytesCount( 0 )
+	, recvPacketCount( 0 )
+	, recvBytesCount( 0 )
+	, ackCount( 0 )
+	, max_payload_size( 0 )
+{
+	timerclear(&first_sent_time);
 }
 
 /*
@@ -49,7 +73,8 @@ string getConnKey(const struct in_addr *srcIp, const struct in_addr *dstIp, cons
 	return connKeyTmp.str();
 }
 
-Connection* Dump::getConn(const struct in_addr *srcIp, const struct in_addr *dstIp, const uint16_t *srcPort, const uint16_t *dstPort, const uint32_t *seq) {
+Connection* Dump::getConn(const struct in_addr *srcIp, const struct in_addr *dstIp, const uint16_t *srcPort, const uint16_t *dstPort, const uint32_t *seq)
+{
 	static struct ConnectionMapKey connKey;
 	map<ConnectionMapKey*, Connection*>::iterator it;
 	static char src_ip_buf[INET_ADDRSTRLEN];
@@ -86,7 +111,8 @@ Connection* Dump::getConn(const struct in_addr *srcIp, const struct in_addr *dst
 
 /* Traverse the pcap dump and call methods for processing the packets
    This generates initial one-pass statistics from sender-side dump. */
-void Dump::analyseSender() {
+void Dump::analyseSender()
+{
 	int packetCount = 0;
 	char errbuf[PCAP_ERRBUF_SIZE];
 	struct pcap_pkthdr header;
@@ -99,31 +125,56 @@ void Dump::analyseSender() {
 		exit_with_file_and_linenum(1, __FILE__, __LINE__);
 	}
 
-	/* Set up pcap filter to include only outgoing tcp
-	   packets with correct ip and port numbers.
-	*/
-	bool src_port_range = !isNumeric(srcPort.c_str(), 10);
-	bool dst_port_range = !isNumeric(dstPort.c_str(), 10);
-
+	stringstream       filterExp;
 	struct bpf_program compFilter;
-	stringstream filterExp;
 
-	filterExp << "tcp";
-	if (!srcIp.empty())
-		filterExp << " && src host " << srcIp;
-	if (!srcPort.empty()) {
-		filterExp << " && src " << (src_port_range ? "portrange " : "port ") << srcPort;
-	}
-	if (!dstIp.empty())
-		filterExp << " && dst host " << dstIp;
-	if (!dstPort.empty())
-		filterExp << " && dst " << (dst_port_range ? "portrange " : "port ") << dstPort;
+	bool src_port_range;
+	bool dst_port_range;
 
-    if (!tcpPort.empty())
-		filterExp << " && tcp port " << tcpPort;
+    if( _connections.size() == 0 )
+    {
+	    /* Set up pcap filter to include only outgoing tcp
+	     * packets with correct ip and port numbers.
+	     */
+	    src_port_range = !isNumeric(srcPort.c_str(), 10);
+	    dst_port_range = !isNumeric(dstPort.c_str(), 10);
 
-	// Earlier, only packets with TCP payload were used.
-	//filterExp << " && (ip[2:2] - ((ip[0]&0x0f)<<2) - (tcp[12]>>2)) >= 1";
+	    filterExp << "tcp";
+	    if (!srcIp.empty())
+		    filterExp << " && src host " << srcIp;
+	    if (!srcPort.empty()) {
+		    filterExp << " && src " << (src_port_range ? "portrange " : "port ") << srcPort;
+	    }
+	    if (!dstIp.empty())
+		    filterExp << " && dst host " << dstIp;
+	    if (!dstPort.empty())
+		    filterExp << " && dst " << (dst_port_range ? "portrange " : "port ") << dstPort;
+
+        if (!tcpPort.empty())
+		    filterExp << " && tcp port " << tcpPort;
+
+	    // Earlier, only packets with TCP payload were used.
+	    //filterExp << " && (ip[2:2] - ((ip[0]&0x0f)<<2) - (tcp[12]>>2)) >= 1";
+    }
+    else
+    {
+	    src_port_range = false;
+	    dst_port_range = false;
+
+        auto it  = _connections.begin();
+        auto end = _connections.end();
+        for( ; it!=end; it++ )
+        {
+            filterExp << "( tcp "
+                      << "&& src host " << it->ip_left() << " && src port " << it->port_left()
+                      << "&& dst host " << it->ip_right() << " && dst port " << it->port_right()
+                      << " ) || ( tcp "
+                      << "&& src host " << it->ip_right() << " && src port " << it->port_right()
+                      << "&& dst host " << it->ip_left() << " && dst port " << it->port_left()
+                      << " )";
+            if( it+1 != end ) filterExp << " || ";
+        }
+    }
 
 	if (GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5)
 		cerr << "pcap filter expression: " << (char*)((filterExp.str()).c_str()) << endl;
