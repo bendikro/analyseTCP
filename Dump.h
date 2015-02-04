@@ -88,10 +88,19 @@ private:
 	void registerRecvd(const pcap_pkthdr* header, const u_char *data);
 	void printAggStats(string prefix, string unit, connStats *cs, BaseStats& bs, BaseStats& aggregatedMin, BaseStats& aggregatedMax);
 	void printStats(string prefix, string unit, BaseStats& bs);
-	void printPacketStats(connStats *cs, byteStats *bs, bool aggregated, byteStats* aggregatedMin, byteStats* aggregatedMax);
-	void printBytesLatencyStats(connStats *cs, byteStats* bs, bool aggregated, byteStats* aggregatedMin, byteStats* aggregatedMax);
-	void printPacketITTStats(connStats *cs, byteStats* bs, bool aggregated, byteStats* aggregatedMin, byteStats* aggregatedMax);
 	void writeITT(ofstream& stream, vector<SentTime>& sent_times);
+	void printStatsAggr(string prefix, string unit, connStats *cs, BaseStats& bs, BaseStats& aggregatedMin,
+						BaseStats& aggregatedAvg, BaseStats& aggregatedMax);
+	void printBytesLatencyStatsAggr(connStats *cs, AggrPacketStats &aggrStats);
+	void printBytesLatencyStatsConn(PacketStats* bs);
+	void printBytesLatencyStats(PacketStats* bs);
+	void printPayloadStats(PacketStats *ps);
+	void printPayloadStatsAggr(connStats *cs, AggrPacketStats &aggrStats);
+	void printPacketStats(connStats *cs);
+	void printPacketITTStats(PacketStats* bs);
+	void printPacketITTStatsAggr(connStats *cs, AggrPacketStats &aggrStats);
+	void writeITT(ofstream& stream, vector<SentTime>& sent_times);
+
 public:
     /** Version used by analyseTCP
      *  It may represent an entire trace, or one that is retricted to a set of given src and dest

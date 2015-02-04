@@ -281,7 +281,7 @@ void Connection::set_analyse_range_interval() {
 
 /* Generate statistics for each connection.
    update aggregate stats if requested */
-void Connection::addPacketStats(struct connStats* cs) {
+void Connection::addConnStats(struct connStats* cs) {
 	cs->duration += getDuration(true);
 	cs->analysed_duration_sec += rm->analyse_time_sec_end - rm->analyse_time_sec_start;
 	cs->analysed_start_sec += rm->analyse_time_sec_start;
@@ -334,7 +334,7 @@ void Connection::addPacketStats(struct connStats* cs) {
 }
 
 /* Generate statistics for bytewise latency */
-void Connection::genBytesLatencyStats(struct byteStats* bs){
+void Connection::genBytesLatencyStats(struct PacketStats* bs){
 	/* Iterate through vector and gather data */
 	rm->genStats(bs);
 }

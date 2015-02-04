@@ -1,8 +1,6 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-#define EXTENDED_STATS 1
-
 #include "config.h"
 
 #include <sys/types.h>
@@ -74,10 +72,12 @@ ofstream& operator<<(ofstream& ouput_stream, const LossInterval& value);
 struct LatencyItem {
 	long time_ms;
 	int latency;
-	LatencyItem(long time_ms, int latency)
-		: time_ms(time_ms), latency(latency) { }
+	string stream_id;
+	LatencyItem(long time_ms, int latency, string stream_id)
+		: time_ms(time_ms), latency(latency), stream_id(stream_id) { }
 
 	string str() const;
+	string header() { return "time,latency,stream_id"; }
 	operator string() const { return str(); }
 };
 
@@ -209,10 +209,8 @@ struct Percentiles
 	int max_char_length;
 
 	void init();
-
     void compute( const vector<double>& v );
-
-	void print(string fmt, bool show_quartiles);
+	void print(string fmt, bool show_quartiles = true);
 };
 
 struct SentTime
@@ -229,7 +227,7 @@ struct SentTime
 
 class BaseStats
 {
-    bool    _is_aggregate;
+	bool _is_aggregate;
     int32_t _counter;
 public:
 	int64_t min;
@@ -237,7 +235,7 @@ public:
 	int64_t cum;
     bool    valid;
 
-	BaseStats( bool is_aggregate = false );
+	BaseStats(bool is_aggregate);
 
     void add_to_aggregate( const BaseStats &rhs );
 
@@ -246,26 +244,13 @@ public:
 
     double   get_avg( ) const;
     uint32_t get_counter( ) const;
-
-private:
-	BaseStats& operator+=(const BaseStats &rhs) {
-		if (rhs.min != -1 && rhs.min != LONG_MAX)
-			min += rhs.min;
-		// if (rhs.avg != -1) avg += rhs.avg;
-		if (rhs.max != -1)
-			max += rhs.max;
-		if (rhs.cum != -1)
-			cum += rhs.cum;
-		return *this;
-	}
 };
 
-#ifdef EXTENDED_STATS
 class ExtendedStats : public BaseStats
 {
 public:
-    ExtendedStats( )
-        : BaseStats( false )
+    ExtendedStats(bool _is_aggregate = false)
+        : BaseStats(_is_aggregate)
     { }
 
     void add_to_aggregate( const ExtendedStats &rhs );
@@ -275,53 +260,64 @@ public:
 
     // derive _std_dev and _percentiles from _values
     void makeStats( );
-
     void sortValues( );
     void computePercentiles( );
 
-private:
-    vector<double> _values;
-public:
     Percentiles    _percentiles;
     double         _std_dev;
+
+private:
+    vector<double> _values;
 };
-#endif
 
-/* Struct used to keep track of bytewise latency stats */
-struct byteStats {
-	int nrRanges;   /* Number of ranges in conn */
-
-#ifdef EXTENDED_STATS
+class ExtendedPacketStats {
+public:
 	ExtendedStats latency;
 	ExtendedStats packet_length;
 	ExtendedStats itt;
-#else
-	BaseStats latency;
-	BaseStats packet_length;
-	BaseStats itt;
 
-	double stdevLat;
-	double stdevLength;
+	void init() {
+		latency._percentiles.init();
+		packet_length._percentiles.init();
+		itt._percentiles.init();
+	}
+	ExtendedPacketStats(bool is_aggregate) :
+		latency(is_aggregate),
+		packet_length(is_aggregate),
+		itt(is_aggregate)
+	{}
+};
 
-	Percentiles percentiles_latencies;
-	Percentiles percentiles_lengths;
-	Percentiles percentiles_itt;
 
-	vector<double> latencies;
-	vector<double> payload_lengths;
-	vector<double> intertransmission_times;
-#endif
+/* Struct used to keep track of bytewise latency stats */
+class PacketStats : public ExtendedPacketStats {
+public:
 	vector<SentTime> sent_times;
 	vector<int> retrans;
 	vector<int> dupacks;
-#ifdef EXTENDED_STATS
-	byteStats() : nrRanges(0)
-    { }
-#else
-	byteStats() : nrRanges(0), stdevLength(0) {
-	}
-#endif
+
+	PacketStats(bool _is_aggregate = false) : ExtendedPacketStats(_is_aggregate) {}
 };
+
+class AggrPacketStats {
+public:
+	PacketStats aggregated;
+	ExtendedPacketStats minimum;
+	ExtendedPacketStats average;
+	ExtendedPacketStats maximum;
+
+	void init() {
+		aggregated.init();
+		minimum.init();
+		maximum.init();
+	}
+
+	AggrPacketStats() : aggregated(true), minimum(false), average(false), maximum(false) {
+		init();
+	}
+	void add(PacketStats &bs);
+};
+
 
 struct DataSeg {
 	uint64_t seq;

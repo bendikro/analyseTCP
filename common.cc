@@ -60,7 +60,7 @@ bool endsWith(const string& s, const string& suffix) {
  *****************************************/
 string LatencyItem::str() const {
 	ostringstream buffer;
-	buffer << time_ms << "," << latency;
+	buffer << time_ms << "," << latency << "," << stream_id;
 	return buffer.str();
 }
 
@@ -105,6 +105,9 @@ void Percentiles::compute( const vector<double>& v )
 
 void Percentiles::print(string fmt, bool show_quartiles)
 {
+	if (!percentiles.size())
+		return;
+
 	map<string, double>::iterator it;
 	for (it = percentiles.begin(); it != percentiles.end(); it++) {
 		if (show_quartiles) {
@@ -125,35 +128,18 @@ void Percentiles::print(string fmt, bool show_quartiles)
 /*****************************************
  * BaseStats
  *****************************************/
-BaseStats::BaseStats( bool is_aggregate )
-    : _is_aggregate( is_aggregate )
+BaseStats::BaseStats(bool is_aggregate)
+    : _is_aggregate(is_aggregate)
     , _counter( 0 )
     , min( std::numeric_limits<int64_t>::max() )
     , max(0)
     , cum(0)
     , valid( true )
-{
-}
-
-void BaseStats::add_to_aggregate( const BaseStats &rhs )
-{
-    assert( _is_aggregate );
-    assert( valid );
-    if( not rhs.valid )
-    {
-        cerr << "WARNING: rhs is invalid in " << __FILE__ << ":" << __LINE__ << endl;
-        return;
-    }
-
-    _counter++;
-    this->min = std::min<int64_t>( this->min, rhs.min );
-    this->max = std::max<int64_t>( this->max, rhs.max );
-    this->cum += rhs.cum;
-}
+{}
 
 void BaseStats::add( uint64_t val )
 {
-    assert( not _is_aggregate );
+    assert( _is_aggregate == false );
     assert( valid );
     _counter++;
     this->min = std::min<int64_t>( this->min, val );
@@ -172,19 +158,83 @@ uint32_t BaseStats::get_counter( ) const
     return _counter;
 }
 
-#ifdef EXTENDED_STATS
+void BaseStats::add_to_aggregate(const BaseStats &rhs)
+{
+    assert( _is_aggregate == true );
+    assert( valid );
+    if( not rhs.valid )
+    {
+        cerr << "WARNING: rhs is invalid in " << __FILE__ << ":" << __LINE__ << endl;
+        return;
+    }
+    this->min = std::min<int64_t>( this->min, rhs.min );
+    this->max = std::max<int64_t>( this->max, rhs.max );
+    this->cum += rhs.cum;
+    _counter++;
+}
+
+/*****************************************
+ * AggrPacketStats
+ *****************************************/
+void AggrPacketStats::add(PacketStats &bs)
+{
+	int64_t max_value = (numeric_limits<int64_t>::max)();
+
+	aggregated.latency.add_to_aggregate(bs.latency);
+	average.latency.add(bs.latency.get_avg());
+	minimum.latency.add(bs.latency.min);
+	maximum.latency.add(bs.latency.max);
+
+	aggregated.packet_length.add_to_aggregate(bs.packet_length);
+	average.packet_length.add(bs.packet_length.get_avg());
+	minimum.packet_length.add(bs.packet_length.min);
+	maximum.packet_length.add(bs.packet_length.max);
+
+	aggregated.itt.add_to_aggregate(bs.itt);
+	average.itt.add(bs.itt.get_avg());
+	minimum.itt.add(bs.itt.min);
+	maximum.itt.add(bs.itt.max);
+
+	if (bs.itt.min == max_value) {
+		fprintf(stderr, "ERROR!!\n");
+	}
+
+	// Add retrans stats
+	if ((ulong) bs.retrans.size() > aggregated.retrans.size()) {
+		for (ulong i = aggregated.retrans.size(); i < bs.retrans.size(); i++) {
+			aggregated.retrans.push_back(0);
+		}
+	}
+
+	for (ulong i = 0; i < bs.retrans.size(); i++) {
+		aggregated.retrans[i] += bs.retrans[i];
+	}
+
+	// Add dupack stats
+	if ((ulong) bs.dupacks.size() > aggregated.dupacks.size()) {
+		for (ulong i = aggregated.dupacks.size(); i < bs.dupacks.size(); i++) {
+			aggregated.dupacks.push_back(0);
+		}
+	}
+
+	for (ulong i = 0; i < bs.dupacks.size(); i++) {
+		aggregated.dupacks[i] += bs.dupacks[i];
+	}
+}
+
+
 /*****************************************
  * ExtendedStats
  *****************************************/
 void ExtendedStats::add_to_aggregate( const ExtendedStats &rhs )
 {
-    BaseStats::add_to_aggregate( rhs );
+BaseStats::add_to_aggregate( rhs );
     _values.insert( _values.end(), rhs._values.begin(), rhs._values.end() );
 }
 
 void ExtendedStats::add( uint64_t val )
 {
-    BaseStats::add( val );
+BaseStats::add( val );
     _values.push_back( val );
 }
 
@@ -200,7 +250,6 @@ void ExtendedStats::makeStats( )
             assert( _values.size() == BaseStats::get_counter() );
         }
 
-        // double sumLat = BaseStats::cum;
         double mean   = BaseStats::get_avg();
         double temp   = 0;
 
@@ -214,9 +263,7 @@ void ExtendedStats::makeStats( )
         _std_dev = sqrt( temp / BaseStats::get_counter() );
 
         std::sort( _values.begin(), _values.end() );
-
         _percentiles.compute( _values );
-        // percentiles( _values, _percentiles );
     }
     else
     {
@@ -233,6 +280,3 @@ void ExtendedStats::computePercentiles( )
 {
     _percentiles.compute( _values );
 }
-
-#endif
-

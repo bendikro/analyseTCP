@@ -964,7 +964,7 @@ double median(vector<double>::const_iterator begin,
     return m;
 }
 
-void RangeManager::genStats(struct byteStats *bs) {
+void RangeManager::genStats(struct PacketStats *bs) {
 	map<ulong, ByteRange*>::iterator it, it_end;
 	it = analyse_range_start;
 	it_end = analyse_range_end;
@@ -976,21 +976,13 @@ void RangeManager::genStats(struct byteStats *bs) {
 	for (; it != it_end; it++) {
 		// Skip if invalid (negative) latency
 		tmp_byte_count = it->second->getOrinalPayloadSize();
-#ifdef EXTENDED_STATS
-		bs->packet_length.add(tmp_byte_count);
-		for (int i = 0; i < it->second->getNumRetrans(); i++) {
+
+		if (tmp_byte_count) {
 			bs->packet_length.add(tmp_byte_count);
+			for (int i = 0; i < it->second->getNumRetrans(); i++) {
+				bs->packet_length.add(tmp_byte_count);
+			}
 		}
-#else
-        // griff: What is happening here??? How can this make sense?
-        //        Bendik, please explain if this is not a bug.
-		bs->payload_lengths.push_back(tmp_byte_count);
-		bs->latency.cum += tmp_byte_count;
-		for (int i = 0; i < it->second->getNumRetrans(); i++) {
-			bs->payload_lengths.push_back(tmp_byte_count);
-			bs->latency.cum += tmp_byte_count;
-		}
-#endif
 
 		for (size_t i = 0; i < it->second->sent_tstamp_pcap.size(); i++) {
 			if (it->second->sent_tstamp_pcap[i].second) {
@@ -1030,28 +1022,8 @@ void RangeManager::genStats(struct byteStats *bs) {
 			bs->dupacks[i]++;
 		}
 
-		if (tmp_byte_count) {
-			if (tmp_byte_count > bs->packet_length.max)
-				bs->packet_length.max = tmp_byte_count;
-			if (tmp_byte_count < bs->packet_length.min) {
-				bs->packet_length.min = tmp_byte_count;
-			}
-		}
-
 		if ((latency = it->second->getSendAckTimeDiff(this))) {
-#ifdef EXTENDED_STATS
 			bs->latency.add( latency );
-#else
-			bs->latencies.push_back(latency);
-			bs->latency.cum += latency;
-			if (latency > bs->latency.max) {
-				bs->latency.max = latency;
-			}
-			if (latency < bs->latency.min) {
-				bs->latency.min = latency;
-			}
-#endif
-			bs->nrRanges++;
 		} else {
 			if (!it->second->isAcked())
 				continue;
@@ -1072,92 +1044,14 @@ void RangeManager::genStats(struct byteStats *bs) {
 	SentTime prev = bs->sent_times[0];
 	for (size_t i = 1; i < bs->sent_times.size(); i++) {
 		itt = (bs->sent_times[i].time - prev.time) / 1000L;
-#ifdef EXTENDED_STATS
 		bs->itt.add( itt );
 		bs->sent_times[i].itt = itt;
 		prev = bs->sent_times[i];
-#else
-		bs->intertransmission_times.push_back(itt);
-		bs->sent_times[i].itt = itt;
-		prev = bs->sent_times[i];
-		bs->itt.cum += itt;
-
-		if (itt > bs->itt.max)
-			bs->itt.max = itt;
-
-		if (itt < bs->itt.min) {
-			bs->itt.min = itt;
-		}
-#endif
 	}
 
-#ifdef EXTENDED_STATS
     bs->latency.makeStats( );
     bs->packet_length.makeStats( );
     bs->itt.makeStats( );
-#else
-	double temp;
-	double stdev;
-	if (bs->latencies.size()) {
-		double sumLat = bs->latency.cum;
-		double mean =  sumLat / bs->latencies.size();
-		temp = 0;
-
-		for (unsigned int i = 0; i < bs->latencies.size(); i++) {
-			temp += (bs->latencies[i] - mean) * (bs->latencies[i] - mean);
-		}
-		stdev = sqrt(temp / (bs->latencies.size()));
-
-		std::sort(bs->latencies.begin(), bs->latencies.end());
-		bs->stdevLat = stdev;
-		// bs->latency.avg = mean;
-		percentiles(&bs->latencies, &bs->percentiles_latencies);
-	}
-	else
-		// bs->latency.min = bs->latency.avg = bs->latency.max = -1;
-        bs->latency.valid = false;
-
-	if (bs->payload_lengths.size()) {
-		// Payload size stats
-		double sumLen = analysed_bytes_sent;
-		double meanLen = sumLen / bs->payload_lengths.size();
-		// bs->packet_length.avg = meanLen;
-		temp = 0;
-		for (unsigned int i = 0; i < bs->payload_lengths.size(); i++) {
-			temp += (bs->payload_lengths[i] - meanLen) * (bs->payload_lengths[i] - meanLen);
-		}
-
-		std::sort(bs->payload_lengths.begin(), bs->payload_lengths.end());
-		stdev = sqrt(temp / (bs->payload_lengths.size()));
-		bs->stdevLength = stdev;
-		percentiles(&bs->payload_lengths, &bs->percentiles_lengths);
-	}
-	else
-		// bs->packet_length.min = bs->packet_length.avg = bs->packet_length.max = -1;
-		bs->packet_length.valid = false;
-
-	if (bs->intertransmission_times.size()) {
-		// Payload size stats
-		//double sumLen = analysed_bytes_sent;
-		//double meanLen =  sumLen / bs->payload_lengths.size();
-		//bs->avgLength = meanLen;
-		//temp = 0;
-		//for (unsigned int i = 0; i < bs->payload_lengths.size(); i++) {
-		//	temp += (bs->payload_lengths[i] - meanLen) * (bs->payload_lengths[i] - meanLen);
-		//}
-
-		//std::sort(bs->payload_lengths.begin(), bs->payload_lengths.end());
-		//stdev = sqrt(temp / (bs->payload_lengths.size()));
-		//bs->stdevLength = stdev;
-
-		// bs->itt.avg = (double) bs->itt.cum / bs->sent_times.size();
-        assert( bs->itt.get_avg() == (double) bs->itt.cum / bs->sent_times.size() );
-		percentiles(&bs->intertransmission_times, &bs->percentiles_lengths);
-	}
-	else
-		// bs->itt.min = bs->itt.avg = bs->itt.max = -1;
-		bs->itt.valid = false;
-#endif
 }
 
 /* Check that every byte from firstSeq to lastSeq is present.
@@ -1197,9 +1091,10 @@ void RangeManager::validateContent() {
 	}
 
 	if (conn->totBytesSent != (conn->totNewDataSent + conn->totRDBBytesSent + conn->totRetransBytesSent)) {
-		printf("conn->totBytesSent(%lu) does not equal (totNewDataSent + totRDBBytesSent + totRetransBytesSent) (%lu)\n",
-		       (ulong)conn->totBytesSent, (ulong)(conn->totNewDataSent + conn->totRDBBytesSent + conn->totRetransBytesSent));
-		printf("Conn: %s\n", conn->getConnKey().c_str());
+		uint64_t totBytesSentCalculated = conn->totNewDataSent + conn->totRDBBytesSent + conn->totRetransBytesSent;
+		fprintf(stderr, "conn->totBytesSent(%9lu) != %-9lu (Diff: %lu) (totNewDataSent + totRDBBytesSent + totRetransBytesSent) \n",
+				(ulong)conn->totBytesSent, (ulong) totBytesSentCalculated, (ulong) totBytesSentCalculated - conn->totBytesSent);
+		fprintf(stderr, "Conn: %s\n", conn->getConnKey().c_str());
 		warn_with_file_and_linenum(__FILE__, __LINE__);
 	}
 
@@ -1726,6 +1621,7 @@ void RangeManager::writeSentTimesAndQueueingDelayVariance(const uint64_t first_t
 	map<ulong, ByteRange*>::iterator it, it_end;
 	it = analyse_range_start;
 	it_end = analyse_range_end;
+	string connKey = conn->getConnKey();
 
 	for (; it != it_end; it++) {
 		long diff = it->second->getRecvDiff() - lowestRecvDiff;
@@ -1733,7 +1629,7 @@ void RangeManager::writeSentTimesAndQueueingDelayVariance(const uint64_t first_t
 
 		//assert(diff >= 0 && "Negative diff, this shouldn't happen!");
 		if (diff >= 0) {
-			LatencyItem lat(((uint64_t) ts) - first_tstamp, diff);
+			LatencyItem lat(((uint64_t) ts) - first_tstamp, diff, connKey);
 			stream << lat << endl;
 		}
 	}
@@ -1903,10 +1799,10 @@ void RangeManager::genAckLatencyFiles(long first_tstamp, const string& connKey) 
 				globStats->update_retrans_filenames(num_retr_tmp + 1);
 			}
 			// all
-			GlobStats::ack_latency_vectors[0]->push_back(LatencyItem(send_time_ms, diff_tmp));
+			GlobStats::ack_latency_vectors[0]->push_back(LatencyItem(send_time_ms, diff_tmp, connKey));
 			if (num_retr_tmp) {
 				// Retrans vector for that number of retransmissions
-				GlobStats::ack_latency_vectors[num_retr_tmp]->push_back(LatencyItem(send_time_ms, diff_tmp));
+				GlobStats::ack_latency_vectors[num_retr_tmp]->push_back(LatencyItem(send_time_ms, diff_tmp, connKey));
 			}
 
 			// Add value to be written to file
@@ -1914,9 +1810,9 @@ void RangeManager::genAckLatencyFiles(long first_tstamp, const string& connKey) 
 				if (num_retr_tmp >= diff_times.size()) {
 					globStats->update_vectors_size(diff_times, num_retr_tmp +1);
 				}
-				diff_times[0]->push_back(LatencyItem(send_time_ms, diff_tmp));
+				diff_times[0]->push_back(LatencyItem(send_time_ms, diff_tmp, connKey));
 				if (num_retr_tmp) {
-					diff_times[num_retr_tmp]->push_back(LatencyItem(send_time_ms, diff_tmp));
+					diff_times[num_retr_tmp]->push_back(LatencyItem(send_time_ms, diff_tmp, connKey));
 				}
 			}
 		}
@@ -1941,7 +1837,12 @@ void RangeManager::genAckLatencyFiles(long first_tstamp, const string& connKey) 
             stream << "# Timestamp/ms, Latency/ms" << endl;
 
 			vector<LatencyItem>& vec_retr = *diff_times[num_retr_tmp];
-			for (unsigned long int i = 0; i < diff_times[num_retr_tmp]->size(); i++) {
+
+			// Write the header
+			if (vec_retr.size() > 0)
+				stream << vec_retr[0].header() << endl;
+
+			for (unsigned long int i = 0; i < vec_retr.size(); i++) {
 				stream << vec_retr[i] << endl;
 			}
 			stream.close();

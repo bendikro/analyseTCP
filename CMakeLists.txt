@@ -6,41 +6,24 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
 #SET (INCLUDE_DIRS /work/include)
 #SET (LIB_DIRS /work/lib)
 
+# Available compile options:
+# * WITH_DASH               - Compile with DASH
+# * ONLY_DASH               - Only compile DASH
+# * TESTS                   - Compile test executable
+#
+# Compile with dash:
+# cmake .. -DWITH_DASH=1
+#
+
 LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 INCLUDE (CheckTypeSize)
-
-SET (INCLUDE_DIRS tests/ tests/cxxtest-4.4)
 
 # Put executable files in custom dir
 #SET(EXECUTABLE_OUTPUT_PATH dir)
 
 #Added work/include to enable building with locally installed libs on
 INCLUDE_DIRECTORIES (${INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR})
-
-# Prepare sources for app.
-SET (APP_SRCS common.cc common.h
-    	      Dump.cc Dump.h
-              fourTuple.cc fourTuple.h
-              Connection.h Connection.cc
-              RangeManager.cc RangeManager.h
-              ByteRange.cc ByteRange.h
-              color_print.cc color_print.h
-              time_util.cc time_util.h
-              util.cc util.h)
-
-SET (TEST_FILES tests/TestAnalyseTCP.h)
-# SET (TESTS_SRCS ${APP_SRCS} tests/testrunner.cpp ${TEST_FILES})
-SET (APP_SRCS ${APP_SRCS} analyseTCP.cc)
-
-ADD_EXECUTABLE (analyseTCP ${APP_SRCS})
-# ADD_EXECUTABLE (test EXCLUDE_FROM_ALL ${TESTS_SRCS})
-
-# add_custom_target(buildTestRunner
-#   COMMAND ./cxxtest-4.4/bin/cxxtestgen --error-printer -o testrunner.cpp TestAnalyseTCP.h
-#   WORKING_DIRECTORY ../tests
-#   COMMENT "Build test runner" VERBATIM)
-# add_dependencies(test buildTestRunner)
 
 # Some problem with this check on OS X
 IF (NOT APPLE)
@@ -80,9 +63,6 @@ SET (INCLUDE_FILES arpa/inet.h netinet/in.h sys/socket.h getopt.h)
 
 CHECK_TYPE_SIZE(ulong HAVE_ULONG)
 
-TARGET_LINK_LIBRARIES (analyseTCP pcap)
-# TARGET_LINK_LIBRARIES (test pcap)
-
 # Set compiler flags for all configurations
 # SET (CMAKE_CXX_FLAGS "-std=gnu++11 -lm -Wall -Wno-long-long -Wno-variadic-macros") # -Werror?
 SET (CMAKE_CXX_FLAGS "-Wall -Wno-long-long -Wno-variadic-macros") # -Werror?
@@ -102,21 +82,46 @@ SET (CMAKE_CXX_FLAGS_DEBUG "-g3 -Wall -DDEBUG -Wextra -pedantic")
 
 CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 
-SET(USE_ANALYSE_DASH false)
-IF(USE_ANALYSE_DASH)
-  ADD_EXECUTABLE (analyseDASH
-	  analyseDASH.cc analyseDASH.h
-	  common.cc common.h
-	  Dump.cc Dump.h
-	  Connection.h Connection.cc
-	  RangeManager.cc RangeManager.h
-	  util.cc util.h
-	  ByteRange.cc ByteRange.h
-	  fourTuple.cc fourTuple.h
-	  color_print.cc color_print.h
-	  )
+SET (BASE_SRC
+  Dump.cc Dump.h
+  Connection.cc Connection.h
+  RangeManager.cc RangeManager.h
+  ByteRange.cc ByteRange.h
+  common.cc common.h
+  fourTuple.cc fourTuple.h
+  color_print.cc color_print.h
+  util.cc util.h)
+
+# Prepare sources for app.
+SET (TCP_SRC ${BASE_SRC}
+  analyseTCP.cc
+  time_util.cc time_util.h)
+
+SET (DASH_SRC ${BASE_SRC}
+  analyseDASH.cc analyseDASH.h)
+
+IF (NOT ONLY_DASH)
+  ADD_EXECUTABLE (analyseTCP ${TCP_SRC})
+  TARGET_LINK_LIBRARIES (analyseTCP pcap)
+ENDIF(NOT ONLY_DASH)
+
+IF (WITH_DASH)
+  ADD_EXECUTABLE (analyseDASH ${DASH_SRC})
   TARGET_LINK_LIBRARIES (analyseDASH pcap)
-ENDIF(USE_ANALYSE_DASH)
+ENDIF(WITH_DASH)
+
+IF (TESTS)
+  SET (TEST_FILES tests/TestAnalyseTCP.h)
+  SET (INCLUDE_DIRS tests/ tests/cxxtest-4.4)
+  SET (TESTS_SRCS ${TCP_SRC} tests/testrunner.cpp ${TEST_FILES})
+  ADD_EXECUTABLE (test EXCLUDE_FROM_ALL ${TESTS_SRCS})
+  add_custom_target(buildTestRunner
+	COMMAND ./cxxtest-4.4/bin/cxxtestgen --error-printer -o testrunner.cpp TestAnalyseTCP.h
+	WORKING_DIRECTORY ../tests
+	COMMENT "Build test runner" VERBATIM)
+  add_dependencies(test buildTestRunner)
+  TARGET_LINK_LIBRARIES (test pcap)
+ENDIF(TESTS)
 
 # Distclean functionality (Remove cmake generated files)
 IF (UNIX OR APPLE)

@@ -72,8 +72,8 @@ public:
 	void registerRange(struct sendData* sd);
 	void registerRecvd(struct sendData *sd);
 	bool registerAck(struct DataSeg *seg);
-	void addPacketStats(struct connStats* cs);
-	void genBytesLatencyStats(struct byteStats* bs);
+	void addConnStats(struct connStats* cs);
+	void genBytesLatencyStats(struct PacketStats* bs);
 	void validateRanges();
 	timeval get_duration() ;
 	void calculateLatencyVariation() { rm->calculateLatencyVariation(); }

@@ -96,7 +96,7 @@ public:
 	void insertSentRange(struct sendData *sd);
 	void insertReceivedRange(struct sendData *sd);
 	bool processAck(struct DataSeg *seg);
-	void genStats(struct byteStats* bs);
+	void genStats(struct PacketStats* bs);
 	ByteRange* getLastRange() {	return ranges.rbegin()->second;	}
 	ByteRange* getHighestAcked();
 	uint32_t getDuration();
