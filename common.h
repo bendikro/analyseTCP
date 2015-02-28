@@ -25,6 +25,7 @@
 #include <fstream>
 #include <limits.h>
 #include <deque>
+
 #ifdef HAVE_STD_MEMORY_HEADER
   #include <memory>
 #elif defined(HAVE_TR1_MEMORY_HEADER)

@@ -313,7 +313,7 @@ void print_stats_separator(bool final) {
 		printf("\n");
 }
 
-void Dump::writeITT(ofstream& stream, vector<struct SentTime>& sent_times) {
+void Dump::writeITT(ofstream& stream, vector<SentTime>& sent_times) {
 	for (size_t i = 0; i < sent_times.size(); i++) {
 		stream << (sent_times[i].time) << "," << sent_times[i].itt << "," << sent_times[i].size << endl;
 	}

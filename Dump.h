@@ -99,7 +99,6 @@ private:
 	void printPacketStats(connStats *cs);
 	void printPacketITTStats(PacketStats* bs);
 	void printPacketITTStatsAggr(connStats *cs, AggrPacketStats &aggrStats);
-	void writeITT(ofstream& stream, vector<SentTime>& sent_times);
 
 public:
     /** Version used by analyseTCP

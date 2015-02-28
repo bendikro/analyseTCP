@@ -1,7 +1,6 @@
 PROJECT (analyseTCP CXX)
 SET(CMAKE_VERBOSE_MAKEFILE off)
 ENABLE_LANGUAGE(C)
-
 CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
 #SET (INCLUDE_DIRS /work/include)
 #SET (LIB_DIRS /work/lib)
@@ -34,19 +33,6 @@ IF (NOT APPLE)
    CHECK_INCLUDE_FILES ("getopt.h" GETOPT_H)
 ENDIF (NOT APPLE)
 
-INCLUDE(FindSharedPtr)
-FIND_SHARED_PTR()
-IF (SHARED_PTR_FOUND)
-  IF (SHARED_PTR_TR1_MEMORY_HEADER)
-    SET(HAVE_TR1_MEMORY)
-  ENDIF (SHARED_PTR_TR1_MEMORY_HEADER)
-  IF (SHARED_PTR_TR1_NAMESPACE)
-    SET(HAVE_TR1_NAMESPACE)
-  ENDIF (SHARED_PTR_TR1_NAMESPACE)
-ELSE (SHARED_PTR_FOUND)
-  MESSAGE(FATAL_ERROR "Unable to find shared_ptr.")
-ENDIF (SHARED_PTR_FOUND)
-
 # Check for library pcap
 # If found, initialize include path and link path with correct values
 FIND_LIBRARY (PCAP pcap ${LIB_DIRS})
@@ -63,13 +49,15 @@ SET (INCLUDE_FILES arpa/inet.h netinet/in.h sys/socket.h getopt.h)
 
 CHECK_TYPE_SIZE(ulong HAVE_ULONG)
 
-# Set compiler flags for all configurations
 # SET (CMAKE_CXX_FLAGS "-std=gnu++11 -lm -Wall -Wno-long-long -Wno-variadic-macros") # -Werror?
+
+# Set compiler flags for all configurations
+#SET (CMAKE_CXX_FLAGS "-std=gnu++11 -lm -Wall -Wno-long-long -Wno-variadic-macros") # -Werror?
+
 SET (CMAKE_CXX_FLAGS "-Wall -Wno-long-long -Wno-variadic-macros") # -Werror?
 IF (CMAKE_COMPILER_IS_GNUCXX)
-  SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
+  SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 ENDIF (CMAKE_COMPILER_IS_GNUCXX)
-
 
 # Add NDEBUG only for release version
 # To activate: cmake -DCMAKE_BUILD_TYPE=Release ..
@@ -78,7 +66,21 @@ SET (CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 # Set debug compiler flags
 # To activate: cmake -DCMAKE_BUILD_TYPE=Debug ..
 SET (CMAKE_CXX_FLAGS_DEBUG "-g3 -Wall -DDEBUG -Wextra -pedantic")
-# Platform specific debug flags
+
+# Must be below the compiler flags
+INCLUDE(FindSharedPtr)
+FIND_SHARED_PTR()
+IF (SHARED_PTR_FOUND)
+  IF (SHARED_PTR_TR1_MEMORY_HEADER)
+    SET(HAVE_TR1_MEMORY)
+  ENDIF (SHARED_PTR_TR1_MEMORY_HEADER)
+  IF (SHARED_PTR_TR1_NAMESPACE)
+    SET(HAVE_TR1_NAMESPACE)
+  ENDIF (SHARED_PTR_TR1_NAMESPACE)
+ELSE (SHARED_PTR_FOUND)
+  MESSAGE(FATAL_ERROR "Unable to find shared_ptr.")
+ENDIF (SHARED_PTR_FOUND)
+
 
 CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 
