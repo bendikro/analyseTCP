@@ -1,11 +1,12 @@
 /*************************************************************************************
 **************************************************************************************
 **                                                                                  **
-**  analyseTCP - Tool for analysing sender side tcpdump                             **
-**               files with regard to latency.                                      **
+**  analyseTCP - Tool for analysing tcpdump files with regard to latency.           **
 **                                                                                  **
-**  Copyright (C) 2007     Andreas Petlund  - andreas@petlund.no                    **
-**                     and Kristian Evensen - kristrev@ifi.uio.no                   **
+**  Copyright (C) 2007       Andreas Petlund        - andreas@petlund.no            **
+**                           Kristian Evensen       - kristrev@ifi.uio.no           **
+**                2012-2015  Bendik Rønning Opstad  - bendikro@gmail.com            **
+**                           Jonas Sæther Markussen - jonassm@ifi.uio.no            **
 **                                                                                  **
 **     This program is free software; you can redistribute it and/or modify         **
 **     it under the terms of the GNU General Public License as published by         **
@@ -24,13 +25,13 @@
 **************************************************************************************
 *************************************************************************************/
 
-#include "analyseTCP.h"
 #include "common.h"
 #include "Dump.h"
+#include "Statistics.h"
 #include "color_print.h"
+#include "util.h"
 #include <getopt.h>
 #include <sys/stat.h>
-#include <sstream>
 
 static struct option long_options[] = {
 	{"sender-dump",              	required_argument, 0, 'f'},
@@ -70,42 +71,6 @@ static struct option long_options[] = {
 string OPTSTRING;
 string usage_str;
 
-void parse_print_packets(char* optarg) {
-	std::istringstream ss(optarg);
-	std::string token;
-	uint64_t last_range_seq = 0;
-	uint64_t num;
-	size_t range_i;
-	while (std::getline(ss, token, ',')) {
-		range_i = token.find("-");
-		if (range_i == string::npos) {
-			// Add just this seqnum
-			istringstream(token) >> num;
-			GlobOpts::print_packets_pairs.push_back(pair<uint64_t, uint64_t>(num, num));
-		}
-		else {
-			// e.g. '-1000'
-			if (range_i == 0) {
-				istringstream(token.substr(1, string::npos)) >> num;
-				GlobOpts::print_packets_pairs.push_back(make_pair(last_range_seq, num));
-				last_range_seq = num + 1;
-			}
-			else if (range_i == token.size() - 1) {
-				string f1 = token.substr(0, range_i);
-				GlobOpts::print_packets_pairs.push_back(make_pair(std::stoul(f1), (numeric_limits<uint64_t>::max)()));
-			}
-			else {
-				// We have a range with two values
-				string f1 = token.substr(0, token.find("-"));
-				string f2 = token.substr(token.find("-")+1, string::npos);
-				istringstream(token.substr(1, string::npos)) >> num;
-				GlobOpts::print_packets_pairs.push_back(make_pair(std::stoul(f1), std::stoul(f2)));
-				last_range_seq = std::stoul(f2) + 1;
-			}
-		}
-		istringstream(token) >> num;
-	}
-}
 
 void make_optstring() {
 /*
@@ -460,7 +425,6 @@ int main(int argc, char *argv[]){
 
 	/* Create Dump - object */
 	Dump *senderDump = new Dump(src_ip, dst_ip, src_port, dst_port, tcp_port, sendfn);
-	//test(senderDump);
 	senderDump->analyseSender();
 
 	if (GlobOpts::withRecv) {
@@ -472,6 +436,8 @@ int main(int argc, char *argv[]){
 	   place timestamp diffs in buckets */
 	senderDump->calculateRetransAndRDBStats();
 
+	Statistics stats(*senderDump);
+
 	if (GlobOpts::withRecv && (GlobOpts::withCDF || GlobOpts::oneway_delay_variance || GlobOpts::print_packets)) {
 
 		assert((!GlobOpts::oneway_delay_variance || (GlobOpts::oneway_delay_variance && GlobOpts::transport))
@@ -480,35 +446,36 @@ int main(int argc, char *argv[]){
 		senderDump->calculateLatencyVariation();
 
 		if (GlobOpts::withCDF) {
-			senderDump->makeByteLatencyVariationCDF();
+			stats.makeByteLatencyVariationCDF();
 
 			if (!GlobOpts::aggOnly) {
-				senderDump->writeByteLatencyVariationCDF();
+				stats.writeByteLatencyVariationCDF();
+				//senderDump->writeByteLatencyVariationCDF();
 			}
 
 			if (GlobOpts::aggregate){
-				senderDump->writeAggByteLatencyVariationCDF();
+				stats.writeAggByteLatencyVariationCDF();
 			}
 		}
 
 		if (GlobOpts::oneway_delay_variance) {
-			senderDump->writeSentTimesAndQueueingDelayVariance();
+			stats.writeSentTimesAndQueueingDelayVariance();
 		}
 	}
 
 	if (GlobOpts::genAckLatencyFiles)
-		senderDump->genAckLatencyFiles();
+		stats.genAckLatencyFiles();
 
 	if (GlobOpts::withThroughput) {
-		senderDump->writeByteCountGroupedByInterval();
-		senderDump->writePacketByteCountAndITT();
+		stats.writeByteCountGroupedByInterval();
+		stats.writePacketByteCountAndITT();
 	}
 
 	if (GlobOpts::withLoss)
-		senderDump->write_loss_to_file();
+		stats.write_loss_to_file();
 
 	if (GlobOpts::connDetails) {
-		senderDump->printConns();
+		stats.printConns();
 		return 0;
 	}
 
@@ -516,12 +483,10 @@ int main(int argc, char *argv[]){
 		senderDump->printPacketDetails();
 	}
 
-	senderDump->printStatistics();
-	senderDump->printDumpStats();
-	senderDump->free_resources();
+	stats.printStatistics();
+	stats.printDumpStats();
 
 	delete senderDump;
-
 	return 0;
 }
 

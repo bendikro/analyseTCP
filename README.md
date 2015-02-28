@@ -30,7 +30,7 @@ A utility for analysing tcpdump traces with regard to latency and loss. It suppo
     :~/analysetcp/build$ make
 
 ##Example output
-    :~/analysetcp/build$./analyseTCP -s 10.0.0.12 -r 10.0.0.22 -p 5000 -q 22000 -f sender.pcap -g receiver.pcap 
+    :~/analysetcp/build$./analyseTCP -s 10.0.0.12 -r 10.0.0.22 -p 5000 -q 22000 -f sender.pcap -g receiver.pcap
     
     STATS FOR CONN: 10.0.0.12:22000 -> 10.0.0.22:5000
       Duration: 602 seconds (0.167222 hours)
@@ -115,3 +115,11 @@ Total bytes sent (payload) and Number of retransmitted bytes might differ slight
     15103","COUNT(tcp.analysis.retransmission)ip.addr==10.0.0.10 && tcp.srcport == 15102 &&\
     tcp.analysis.retransmission","SUM(tcp.len)tcp.len && ip.addr==10.0.0.10 && tcp.srcport ==\
     15102","SUM(tcp.len)tcp.len && ip.addr==10.0.0.10 && tcp.srcport == 15102 && tcp.analysis.retransmission"
+
+####Tests
+
+Run cmake with
+mkdir build && cd build
+cmake .. -DTESTS=1
+make test
+./test

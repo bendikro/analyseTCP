@@ -2,7 +2,7 @@
 #define CONNECTION_H
 
 #include "RangeManager.h"
-#include <math.h>
+#include <cmath>
 #include <netinet/in.h>
 
 struct PacketSize {

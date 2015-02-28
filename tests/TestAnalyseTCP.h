@@ -1,12 +1,13 @@
 #include <cxxtest/TestSuite.h>
 #include "../Dump.h"
 
+#define UINT_MAX (std::numeric_limits<ulong>::max())
 
 class TestSuite : public CxxTest::TestSuite
 {
 public:
 	void testAddition(void) {
-		Dump *senderDump = new Dump("", "", "", "", "");
+		Dump *senderDump = new Dump("", "", "", "", "", "");
 		test(senderDump);
 
 		TS_ASSERT( 1 + 1 > 1 );

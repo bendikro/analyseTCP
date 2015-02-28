@@ -1518,8 +1518,8 @@ void RangeManager::doDriftCompensation() {
 int RangeManager::calculateClockDrift() {
 	map<ulong, ByteRange*>::iterator startIt, startDriftRange;
 	map<ulong, ByteRange*>::reverse_iterator endIt, endDriftRange;
-	long minDiffStart = LONG_MAX;
-	long minDiffEnd = LONG_MAX;
+	long minDiffStart = std::numeric_limits<long>::max();
+	long minDiffEnd = std::numeric_limits<long>::max();
 	struct timeval minTimeStart, minTimeEnd, tv;
 	double durationSec, tmpDrift;
 	timerclear(&minTimeStart);

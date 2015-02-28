@@ -2,8 +2,6 @@ PROJECT (analyseTCP CXX)
 SET(CMAKE_VERBOSE_MAKEFILE off)
 ENABLE_LANGUAGE(C)
 CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
-#SET (INCLUDE_DIRS /work/include)
-#SET (LIB_DIRS /work/lib)
 
 # Available compile options:
 # * WITH_DASH               - Compile with DASH
@@ -14,15 +12,12 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
 # cmake .. -DWITH_DASH=1
 #
 
+# Add more test files here when needed
+SET (TEST_FILES tests/TestAnalyseTCP.h)
+
 LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 INCLUDE (CheckTypeSize)
-
-# Put executable files in custom dir
-#SET(EXECUTABLE_OUTPUT_PATH dir)
-
-#Added work/include to enable building with locally installed libs on
-INCLUDE_DIRECTORIES (${INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR})
 
 # Some problem with this check on OS X
 IF (NOT APPLE)
@@ -86,6 +81,8 @@ CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DI
 
 SET (BASE_SRC
   Dump.cc Dump.h
+  Statistics.cc Statistics.h
+  statistics_common.cc statistics_common.h
   Connection.cc Connection.h
   RangeManager.cc RangeManager.h
   ByteRange.cc ByteRange.h
@@ -112,11 +109,11 @@ IF (WITH_DASH)
   TARGET_LINK_LIBRARIES (analyseDASH pcap)
 ENDIF(WITH_DASH)
 
+# Please write more tests. Very important!!
 IF (TESTS)
-  SET (TEST_FILES tests/TestAnalyseTCP.h)
-  SET (INCLUDE_DIRS tests/ tests/cxxtest-4.4)
-  SET (TESTS_SRCS ${TCP_SRC} tests/testrunner.cpp ${TEST_FILES})
-  ADD_EXECUTABLE (test EXCLUDE_FROM_ALL ${TESTS_SRCS})
+  SET (INCLUDE_DIRS tests/ tests/cxxtest-4.4/)
+  SET (TESTS_SRC ${BASE_SRC} time_util.cc time_util.h tests/testrunner.cpp ${TEST_FILES})
+  ADD_EXECUTABLE (test EXCLUDE_FROM_ALL ${TESTS_SRC})
   add_custom_target(buildTestRunner
 	COMMAND ./cxxtest-4.4/bin/cxxtestgen --error-printer -o testrunner.cpp TestAnalyseTCP.h
 	WORKING_DIRECTORY ../tests
@@ -124,6 +121,8 @@ IF (TESTS)
   add_dependencies(test buildTestRunner)
   TARGET_LINK_LIBRARIES (test pcap)
 ENDIF(TESTS)
+
+INCLUDE_DIRECTORIES (${INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR})
 
 # Distclean functionality (Remove cmake generated files)
 IF (UNIX OR APPLE)

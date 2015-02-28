@@ -1,20 +1,9 @@
 #ifndef RANGEMANAGER_H
 #define RANGEMANAGER_H
 
-#include <vector>
-#include <iostream>
-#include <string>
-#include <fstream>
-#include <limits.h>
-#include <map>
-#include <deque>
-#include <algorithm>
-#include <string.h>
-#include <stdint.h>
-#include <assert.h>
-
 #include "common.h"
 #include "time_util.h"
+#include "statistics_common.h"
 
 using namespace std;
 
@@ -84,9 +73,9 @@ public:
 		                                              analysed_ranges_count(0), analysed_sent_pure_ack_count(0), analysed_data_packet_count(0),
 		                                              analysed_syn_count(0), analysed_fin_count(0), analysed_rst_count(0), analysed_pure_acks_count(0)
 	{
-		conn = c;
-		firstSeq = first_seq;
-		lowestRecvDiff = LONG_MAX;
+        conn = c;
+        firstSeq = first_seq;
+        lowestRecvDiff = std::numeric_limits<long>::max();
 		highestAckedByteRangeIt = ranges.end();
 		memset(&highestRecvd, 0, sizeof(highestRecvd));
 	};

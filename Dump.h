@@ -14,6 +14,7 @@
 
 /* Forward declarations */
 class Connection;
+class Statistics;
 
 struct ConnectionMapKey {
 	struct in_addr ip_src, ip_dst;
@@ -86,19 +87,6 @@ private:
 	void processRecvd(const pcap_pkthdr* header, const u_char *data);
 	void processAcks(const pcap_pkthdr* header, const u_char *data);
 	void registerRecvd(const pcap_pkthdr* header, const u_char *data);
-	void printAggStats(string prefix, string unit, connStats *cs, BaseStats& bs, BaseStats& aggregatedMin, BaseStats& aggregatedMax);
-	void printStats(string prefix, string unit, BaseStats& bs);
-	void writeITT(ofstream& stream, vector<SentTime>& sent_times);
-	void printStatsAggr(string prefix, string unit, connStats *cs, BaseStats& bs, BaseStats& aggregatedMin,
-						BaseStats& aggregatedAvg, BaseStats& aggregatedMax);
-	void printBytesLatencyStatsAggr(connStats *cs, AggrPacketStats &aggrStats);
-	void printBytesLatencyStatsConn(PacketStats* bs);
-	void printBytesLatencyStats(PacketStats* bs);
-	void printPayloadStats(PacketStats *ps);
-	void printPayloadStatsAggr(connStats *cs, AggrPacketStats &aggrStats);
-	void printPacketStats(connStats *cs);
-	void printPacketITTStats(PacketStats* bs);
-	void printPacketITTStatsAggr(connStats *cs, AggrPacketStats &aggrStats);
 
 public:
     /** Version used by analyseTCP
@@ -113,27 +101,19 @@ public:
      */
 	Dump( const vector<four_tuple_t>& connections, string fn );
 
+	~Dump();
+
 	uint64_t get_relative_sequence_number(uint32_t ack, uint32_t firstSeq, ulong largestAckSeq, uint32_t largestAckSeqAbsolute, Connection *conn);
 	void analyseSender();
 	void processRecvd(string fn);
 	void calculateRetransAndRDBStats();
 	void printPacketDetails();
-	void printDumpStats();
-	void printConns();
-	void printStatistics();
-	void genAckLatencyFiles();
-	void writePacketByteCountAndITT();
-	void write_loss_to_file();
-	void calculateLatencyVariation();
-	void makeByteLatencyVariationCDF();
-	void writeByteLatencyVariationCDF();
-	void writeAggByteLatencyVariationCDF();
 	void free_resources();
 	void findTCPTimeStamp(DataSeg* data, uint8_t* opts, int option_length);
 	Connection* getConn(const in_addr *srcIp, const in_addr *dstIp, const uint16_t *srcPort, const uint16_t *dstPort, const uint32_t *seq);
-	void fillWithSortedConns(map<ConnectionMapKey*, Connection*, SortedConnectionKeyComparator> &sortedConns);
-	void writeSentTimesAndQueueingDelayVariance();
-	void writeByteCountGroupedByInterval(); // throughput
+	void calculateLatencyVariation();
+
+	friend class Statistics;
 };
 
 #endif /* DUMP_H */

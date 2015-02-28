@@ -1,7 +1,10 @@
 #include "Dump.h"
 #include "color_print.h"
+#include "util.h"
 #include <memory>
 #include <string.h>
+
+#include "Statistics.h"
 
 // griff: temporary, meant to become a CLI option
 //        idea of the option is to split a connection into individual HTTP GETs
@@ -10,8 +13,6 @@
 static void look_for_get_request( const struct pcap_pkthdr* header, const u_char *data );
 #endif
 
-extern GlobStats *globStats;
-int GlobStats::totNumBytes;
 
 /* Methods for class Dump */
 Dump::Dump(string src_ip, string dst_ip, string src_port, string dst_port, string tcp_port, string fn)
@@ -54,14 +55,18 @@ Dump::Dump( const vector<four_tuple_t>& connections, string fn )
 	timerclear(&first_sent_time);
 }
 
-/*
-  Checks if a char buf is a string
-*/
-bool isNumeric(const char* pszInput, int nNumberBase) {
-	string base = "0123456789ABCDEF";
-	string input = pszInput;
-	return (input.find_first_not_of(base.substr(0, nNumberBase)) == string::npos);
+Dump::~Dump() {
+	free_resources();
 }
+void Dump::free_resources() {
+	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
+	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
+		delete cIt->first;
+		delete cIt->second;
+	}
+	conns.clear();
+}
+
 
 string getConnKey(const struct in_addr *srcIp, const struct in_addr *dstIp, const uint16_t *srcPort, const uint16_t *dstPort) {
 	static char src_ip_buf[INET_ADDRSTRLEN];
@@ -300,313 +305,6 @@ void Dump::analyseSender()
 	}
 }
 
-void print_stats_separator(bool final) {
-	char c = '-';
-	if (final)
-		c = '=';
-
-	for (int i = 0; i < 63; i++)
-		printf("%c", c);
-
-	printf("\n");
-	if (final)
-		printf("\n");
-}
-
-void Dump::writeITT(ofstream& stream, vector<SentTime>& sent_times) {
-	for (size_t i = 0; i < sent_times.size(); i++) {
-		stream << (sent_times[i].time) << "," << sent_times[i].itt << "," << sent_times[i].size << endl;
-	}
-}
-
-
-/* Traverse the pcap dump and call methods for processing the packets
-   This generates initial one-pass statistics from sender-side dump. */
-void Dump::printStatistics() {
-	/* Initiate struct for aggregate stats */
-	struct connStats cs, csAggregated;
-	memset(&cs, 0, sizeof(struct connStats));
-	memset(&csAggregated, 0, sizeof(struct connStats));
-
-	csAggregated.rdb_byte_hits = 0;
-	csAggregated.rdb_byte_misses = 0;
-	csAggregated.rdb_bytes_sent = 0;
-
-	AggrPacketStats psAggregated;
-
-	vector<string> itt_fnames;
-	itt_fnames.push_back("itt-all.dat");
-	globStats->prefix_filenames(itt_fnames);
-	ofstream itt_stream;
-	itt_stream.open(itt_fnames[0].c_str(), ios::out);
-	itt_stream << "# time (usec), itt (msec), payload_size (bytes)" << endl;
-
-	// Print stats for each connection or aggregated
-	map<ConnectionMapKey*, Connection*, SortedConnectionKeyComparator> sortedConns;
-	fillWithSortedConns(sortedConns);
-	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
-	for (cIt = sortedConns.begin(); cIt != sortedConns.end(); cIt++) {
-		memset(&cs, 0, sizeof(struct connStats));
-		cIt->second->addConnStats(&cs);
-		cIt->second->addConnStats(&csAggregated);
-
-		/* Initialize bs struct */
-		PacketStats bs;
-
-		if (!GlobOpts::aggOnly) {
-			bs.init();
-		}
-
-		cIt->second->genBytesLatencyStats(&bs);
-
-		writeITT(itt_stream, bs.sent_times);
-
-		if (!GlobOpts::aggOnly) {
-			colored_printf(YELLOW, "STATS FOR CONN: %s:%u -> %s:%u", cIt->second->getSrcIp().c_str(), cIt->second->srcPort,
-			       cIt->second->getDstIp().c_str(), cIt->second->dstPort);
-
-			if (GlobOpts::analyse_start || GlobOpts::analyse_end || GlobOpts::analyse_duration) {
-				colored_printf(YELLOW, " (Interval alalysed (sec): %d-%d)", cIt->second->rm->analyse_time_sec_start, cIt->second->rm->analyse_time_sec_end);
-			}
-			printf("\n");
-			printPacketStats(&cs);
-			printPayloadStats(&bs);
-		}
-
-		if (!GlobOpts::aggOnly) {
-			printBytesLatencyStatsConn(&bs);
-
-			// ITT stats
-			printPacketITTStats(&bs);
-			print_stats_separator(true);
-		}
-
-		if (GlobOpts::aggregate) {
-			psAggregated.add(bs);
-		}
-	}
-
-	if (GlobOpts::aggregate) {
-		if (csAggregated.nrPacketsSent) { /* To avoid division by 0 */
-			csAggregated.duration /= sortedConns.size();
-
-			cout << "\nAggregated Statistics for " << sortedConns.size() << " connections:" << endl;
-			printPacketStats(&csAggregated);
-			printPayloadStatsAggr(&csAggregated, psAggregated);
-
-			/* Print Aggregate bytewise latency */
-			printBytesLatencyStatsAggr(&csAggregated, psAggregated);
-
-			// ITT stats
-			printPacketITTStatsAggr(&csAggregated, psAggregated);
-			print_stats_separator(true);
-		}
-	}
-	itt_stream.close();
-}
-
-
-void Dump::printPayloadStats(PacketStats *ps) {
-	printf("Payload size stats:\n");
-	printStats("payload", "bytes", ps->packet_length);
-	ps->packet_length._percentiles.print("P  %*sth percentile %-26s    : %10.0f\n");
-}
-
-void Dump::printPayloadStatsAggr(connStats *cs, AggrPacketStats &aggrStats) {
-	printf("Payload size stats:\n");
-	printStatsAggr("payload", "bytes", cs, aggrStats.aggregated.packet_length, aggrStats.minimum.packet_length,
-				   aggrStats.average.packet_length, aggrStats.maximum.packet_length);
-	aggrStats.aggregated.packet_length._percentiles.print("P  %*sth percentile %-26s    : %10.0f\n");
-}
-
-void Dump::printPacketITTStats(struct PacketStats* bs)
-{
-	print_stats_separator(false);
-	printf("ITT stats:\n");
-	printStats("itt", "ms", bs->itt);
-	bs->itt._percentiles.print("  %*sth percentile %-26s    : %10.0f ms\n");
-}
-
-void Dump::printPacketITTStatsAggr(struct connStats *cs, AggrPacketStats &aggrStats)
-{
-	print_stats_separator(false);
-	printf("ITT stats (Average for all the connections)\n");
-	printStatsAggr("ITT", "ms", cs, aggrStats.aggregated.itt, aggrStats.minimum.itt, aggrStats.average.itt, aggrStats.maximum.itt);
-	aggrStats.aggregated.itt._percentiles.print("  %*sth percentile %-26s    : %10.0f ms\n");
-}
-
-
-void Dump::printPacketStats(connStats *cs) {
-	printf("  Duration: %u seconds (%f hours)\n", cs->duration, ((double) cs->duration / 60 / 60));
-
-	if (cs->nrPacketsSent != cs->nrPacketsSentFoundInDump) {
-		printf("  Total packets sent (adj. for fragmentation)   : %10d\n", cs->nrPacketsSent);
-		printf("  Total packets sent (found in dump)            : %10d\n", cs->nrPacketsSentFoundInDump);
-		printf("  Total data packets sent (adj.)                : %10d\n", cs->nrDataPacketsSent);
-		printf("  Total data packets sent (found)               : %10d\n", cs->nrDataPacketsSent - (cs->nrPacketsSent - cs->nrPacketsSentFoundInDump));
-	}
-	else {
-		printf("  Total packets sent                            : %10d\n", cs->nrPacketsSent);
-		printf("  Total data packets sent                       : %10d\n", cs->nrDataPacketsSent);
-	}
-	char syn_fin_rst[30];
-	sprintf(syn_fin_rst, "%d/%d/%d", cs->synCount, cs->finCount, cs->rstCount);
-
-	printf("  Total pure acks (no payload)                  : %10d\n"	\
-	       "  SYN/FIN/RST packets sent                      : %10s\n"	\
-	       "  Number of retransmissions                     : %10d\n"	\
-	       "  Number of packets with bundled segments       : %10d\n"	\
-		   "  Number of packets with redundant data         : %10d\n"	\
-		   "  Number of received acks                       : %10d\n"   \
-	       "  Total bytes sent (payload)                    : %10lu\n"	\
-	       "  Number of unique bytes                        : %10lu\n"   \
-	       "  Number of retransmitted bytes                 : %10d\n"	\
-		   "  Redundant bytes (bytes already sent)          : %10lu (%.2f %%)\n",
-		   cs->pureAcksCount, syn_fin_rst,
-		   cs->nrRetrans, cs->bundleCount, cs->nrRetrans - cs->nrRetransNoPayload + cs->bundleCount, cs->ackCount,
-           (ulong)cs->totBytesSent,
-	       (ulong)cs->totUniqueBytesSent, cs->totRetransBytesSent,
-           (ulong)(cs->totBytesSent - cs->totUniqueBytesSent),
-	       safe_div((cs->totBytesSent - cs->totUniqueBytesSent), cs->totBytesSent) * 100);
-
-	if (cs->totUniqueBytesSent != cs->totUniqueBytes) {
-		colored_printf(RED, "  Trace is missing segments. Bytes missing      : %10d\n", cs->totUniqueBytes - cs->totUniqueBytesSent);
-	}
-
-	if (cs->nrPacketsSent != cs->nrPacketsSentFoundInDump) {
-		printf("  Estimated loss rate based on retransmission\n");
-		printf("    Based on sent pkts (adj. for fragmentation) : %10.2f %%\n",
-			   safe_div(cs->nrRetrans, cs->nrPacketsSent) * 100);
-		printf("    Based on sent pkts (found in dump)          : %10.2f %%\n",
-			   safe_div(cs->nrRetrans, cs->nrPacketsSentFoundInDump) * 100);
-
-	}
-	else {
-		printf("  Estimated loss rate based on retransmissions  : %10.2f %%\n",
-			   safe_div(cs->nrRetrans, cs->nrPacketsSent) * 100);
-	}
-
-	if (GlobOpts::withRecv && cs->ranges_sent) {
-		print_stats_separator(false);
-		printf("Receiver side loss stats:\n");
-		printf("  Number of packets received                    : %10d\n", cs->nrPacketsReceivedFoundInDump);
-		printf("  Packets lost                                  : %10d\n", (cs->nrPacketsSentFoundInDump - cs->nrPacketsReceivedFoundInDump));
-		printf("  Packet loss                                   : %10.2f %%\n",  safe_div((cs->nrPacketsSentFoundInDump - cs->nrPacketsReceivedFoundInDump), cs->nrPacketsSentFoundInDump) * 100);
-
-		printf("  Bytes Lost (actual loss on receiver side)     : %10lu\n", (ulong)cs->bytes_lost);
-		printf("  Bytes Loss                                    : %10.2f %%\n", safe_div(cs->bytes_lost, cs->totBytesSent) * 100);
-		printf("  Ranges Lost (actual loss on receiver side)    : %10lu\n", (ulong)cs->ranges_lost);
-		printf("  Ranges Loss                                   : %10.2f %%\n", safe_div(cs->ranges_lost, cs->ranges_sent) * 100);
-	}
-
-	print_stats_separator(false);
-
-	if (cs->rdb_bytes_sent) {
-		print_stats_separator(false);
-		printf("RDB stats:\n");
-		printf("  RDB packets                                   : %10d (%.2f%% of data packets sent)\n", cs->bundleCount, safe_div(cs->bundleCount, cs->nrDataPacketsSent) * 100);
-		printf("  RDB bytes bundled                             : %10lu (%.2f%% of total bytes sent)\n", (ulong)cs->rdb_bytes_sent, safe_div(cs->rdb_bytes_sent, cs->totBytesSent) * 100);
-
-		if (GlobOpts::withRecv) {
-			printf("  RDB packet hits                               : %10d (%.2f%% of RDB packets sent)\n", cs->rdb_packet_hits, safe_div(cs->rdb_packet_hits, cs->bundleCount) * 100);
-			printf("  RDB packet misses                             : %10d (%.2f%% of RDB packets sent)\n", cs->rdb_packet_misses, safe_div(cs->rdb_packet_misses, cs->bundleCount) * 100);
-			printf("  RDB byte hits                                 : %10lu (%.2f%% of RDB bytes, %.2f%% of total bytes)\n",
-				   (ulong)cs->rdb_byte_hits, safe_div(cs->rdb_byte_hits, cs->rdb_bytes_sent) * 100, safe_div(cs->rdb_byte_hits, cs->totBytesSent) * 100);
-			printf("  RDB byte misses                               : %10lu (%.2f%% of RDB bytes, %.2f%% of total bytes)\n",
-				   (ulong)cs->rdb_byte_misses, safe_div(cs->rdb_byte_misses, cs->rdb_bytes_sent) * 100, safe_div(cs->rdb_byte_misses, cs->totBytesSent) * 100);
-		}
-	}
-}
-
-void Dump::printStats(string prefix, string unit, BaseStats& bs) {
-	printf("  Minimum %10s                            : %7lu %s\n", prefix.c_str(), (ulong)bs.min, unit.c_str());
-	printf("  Average %10s                            : %7.0f %s\n", prefix.c_str(), bs.get_avg(), unit.c_str());
-	printf("  Maximum %10s                            : %7lu %s\n", prefix.c_str(), (ulong)bs.max, unit.c_str());
-}
-
-void Dump::printStatsAggr(string prefix, string unit, struct connStats *cs, struct BaseStats& bs,
-						  struct BaseStats& aggregatedMin, struct BaseStats& aggregatedAvg, struct BaseStats& aggregatedMax) {
-	if (aggregatedMin.min == (numeric_limits<int64_t>::max)())
-		aggregatedMin.min = aggregatedMin.max = 0;
-
-	printf("  Minimum %10s (min, avg, max)            :    %7lu, %7.0f, %7lu %s\n",
-		   prefix.c_str(), (ulong)aggregatedMin.min, aggregatedMin.get_avg(), (ulong)aggregatedMin.max, unit.c_str());
-	printf("  Average %10s (min, avg, max)            :    %7lu, %7.0f, %7lu %s\n",
-		   prefix.c_str(), (ulong)aggregatedAvg.min, aggregatedAvg.get_avg(), (ulong)aggregatedAvg.max, unit.c_str());
-	printf("  Maximum %10s (min, avg, max)            :    %7lu, %7.0f, %7lu %s\n",
-		   prefix.c_str(), (ulong)aggregatedMax.min, aggregatedMax.get_avg(), (ulong)aggregatedMax.max, unit.c_str());
-	printf("  Average of all packets in all connections     : %10d %s\n",
-		   (int) floorf((double) safe_div(bs.cum, cs->nrDataPacketsSent)), unit.c_str());
-}
-
-void Dump::printBytesLatencyStatsAggr(connStats *cs, AggrPacketStats &aggrStats) {
-	print_stats_separator(false);
-	printf("Latency stats (Average for all the connections)\n");
-	printStatsAggr("latencies", "ms", cs, aggrStats.aggregated.latency, aggrStats.minimum.latency,
-				   aggrStats.average.latency, aggrStats.maximum.latency);
-
-	if (GlobOpts::verbose) {
-		printf("\nAggregated latency values explained:\n"
-			   "Minimum min: The smallest value of all the minimum latencies for each connection\n"
-			   "Minimum avg: The average of all the minimum latency values for all connections\n"
-			   "Minimum max: The biggest value of all the minimum latencies for each connection\n"
-			   "Average min: Calculate the average latency for each connection. This is the smallest calculated average\n"
-			   "Average avg: Calculate the average latency for each connection. This is the average of all the calculated averages\n"
-			   "Average max: Calculate the average latency for each connection. This is the biggest calculated average\n"
-			   "Maximum min: The smallest value of all the maximum latencies for each connection\n"
-			   "Maximum avg: The average of all the maximum latency values for all connections\n"
-			   "Maximum max: The biggest value of all the maximum latencies for each connection\n"
-			);
-	}
-	printBytesLatencyStats(&aggrStats.aggregated);
-}
-
-void Dump::printBytesLatencyStatsConn(struct PacketStats* bs) {
-	print_stats_separator(false);
-	printf("Latency stats:\n");
-	printStats("latency", "ms", bs->latency);
-	printBytesLatencyStats(bs);
-}
-
-/* Print latency statistics */
-void Dump::printBytesLatencyStats(struct PacketStats* bs) {
-
-	bs->latency._percentiles.print("L %*sth percentile %-26s    : %10.0f ms\n");
-
-	if (GlobOpts::verbose) {
-		vector<int>::reverse_iterator curr;
-		int value;
-
-		vector<int> retrans_accumed = bs->retrans;
-		for (value = 0, curr = retrans_accumed.rbegin(); curr != retrans_accumed.rend(); ++curr) {
-			*curr += value;
-			value = *curr;
-		}
-
-		print_stats_separator(false);
-		printf("  Max retransmissions                           : %10lu \n", bs->retrans.size());
-		for (ulong i = 0; i < bs->retrans.size(); i++) {
-			if ((GlobOpts::verbose < 2) && i > 2)
-				break;
-			if (bs->retrans[i] == 0)
-				break;
-			printf("  %2lu. retransmission (count / accumulated)      : %6d / %d\n", i+1, bs->retrans[i], retrans_accumed[i]);
-		}
-		print_stats_separator(false);
-
-		vector<int> dupacks_accumed = bs->dupacks;
-		for (value = 0, curr = dupacks_accumed.rbegin(); curr != dupacks_accumed.rend(); ++curr) {
-			*curr += value;
-			value = *curr;
-		}
-		printf("  Max dupacks                                   : %10lu \n", bs->dupacks.size());
-		for (ulong i = 0; i < bs->dupacks.size(); i++) {
-			if ((GlobOpts::verbose > 1) || i < 3)
-				printf("  %2lu. dupacks (count / accumulated)             : %6d / %d\n", i+1, bs->dupacks[i], dupacks_accumed[i]);
-			//printf("  Occurrences of %2lu. dupacks                   : %d\n", i + 1, bs->dupacks[i]);
-		}
-	}
-}
 
 void Dump::findTCPTimeStamp(struct DataSeg* data, uint8_t* opts, int option_length) {
 
@@ -671,7 +369,7 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 	sd.data.rdb_end_seq  = 0;
 	sd.data.flags        = tcp->th_flags;
 
-	if (sd.data.seq == ULONG_MAX) {
+	if (sd.data.seq == std::numeric_limits<ulong>::max()) {
 		if (sd.data.flags & TH_SYN) {
 			fprintf(stdout, "Found invalid sequence numbers in beginning of sender dump. Probably old SYN packets\n");
 			return;
@@ -710,19 +408,6 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 }
 
 
-/*
-  Used to test if a sequence number comes after another
-  These handle when the newest sequence number has wrapped
-*/
-static inline bool before(uint32_t seq1, uint32_t seq2) {
-	return (signed int) (seq1 - seq2) < 0;
-}
-
-static inline bool after_or_equal(uint32_t seq1, uint32_t seq2) {
-	return (signed int) (seq2 - seq1) >= 0;
-}
-
-
 /**
  * This function generates the relative sequence number of packets read from pcap files.
  *
@@ -731,7 +416,7 @@ static inline bool after_or_equal(uint32_t seq1, uint32_t seq2) {
  * largestSeq:         The largest relative sequence number that has been read for this stream
  * largestSeqAbsolute: The largest absolute (raw) sequence number that has been read for this stream
  *
- * Returns the relative sequence number or ULONG_MAX if it failed.
+ * Returns the relative sequence number or std::numeric_limits<ulong>::max() if it failed.
  **/
 uint64_t Dump::get_relative_sequence_number(uint32_t seq, uint32_t firstSeq, ulong largestSeq, uint32_t largestSeqAbsolute, Connection *conn) {
 	uint64_t wrap_index;
@@ -745,7 +430,7 @@ uint64_t Dump::get_relative_sequence_number(uint32_t seq, uint32_t firstSeq, ulo
 		// This is an earlier sequence number
 		if (before(seq, largestSeqAbsolute)) {
 			if (before(seq, firstSeq)) {
-				return ULONG_MAX;
+				return std::numeric_limits<ulong>::max();
 				//printf("Before first!\n");
 			}
 			wrap_index -= (largestSeqAbsolute - seq);
@@ -791,7 +476,7 @@ uint64_t Dump::get_relative_sequence_number(uint32_t seq, uint32_t firstSeq, ulo
 #endif
 
 		//assert(0 && "Incorrect sequence number calculation!\n");
-		return ULONG_MAX;
+		return std::numeric_limits<ulong>::max();
 	}
 	//printf("RETURN seq_relative: %lu\n", seq_relative);
 	return seq_relative;
@@ -832,7 +517,7 @@ void Dump::processAcks(const struct pcap_pkthdr* header, const u_char *data) {
 	seg.window = ntohs(tcp->th_win);
 	seg.flags  = tcp->th_flags;
 
-	if (seg.ack == ULONG_MAX) {
+	if (seg.ack == std::numeric_limits<ulong>::max()) {
 		fprintf(stdout, "Invalid sequence number for ACK! (SYN=%d)\n", !!(seg.flags & TH_SYN));
 		return;
 	}
@@ -998,7 +683,7 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data) {
 	sd.data.flags        = tcp->th_flags;
 	sd.data.window       = ntohs(tcp->th_win);
 
-	if (sd.data.seq == ULONG_MAX) {
+	if (sd.data.seq == std::numeric_limits<ulong>::max()) {
 		if (sd.data.flags & TH_SYN) {
 			fprintf(stdout, "Found invalid sequence numbers in beginning of receive dump. Probably an old SYN packet\n");
 			return;
@@ -1042,503 +727,10 @@ void Dump::printPacketDetails() {
 	}
 }
 
-
-void Dump::fillWithSortedConns(map<ConnectionMapKey*, Connection*, SortedConnectionKeyComparator> &sortedConns) {
-	map<ConnectionMapKey*, Connection*>::iterator it, it_end;
-	it_end = conns.end();
-	for (it = conns.begin(); it != it_end; it++) {
-		sortedConns.insert(pair<ConnectionMapKey*, Connection*>(it->first, it->second));
-	}
-}
-
-void Dump::printConns() {
-	map<ConnectionMapKey*, Connection*, SortedConnectionKeyComparator> sortedConns;
-	fillWithSortedConns(sortedConns);
-	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
-	struct connStats cs;
-	struct connStats csAggregated;
-	memset(&csAggregated, 0, sizeof(struct connStats));
-
-	if (!GlobOpts::withRecv) {
-		colored_printf(RED, "Loss statistics require reciver dump!\n");
-	}
-
-	printf("\nConnections in sender dump: %lu\n\n", conns.size());
-	printf("        %-30s   %-17s %-12s   %-12s   ", "Conn key", "Duration (sec)", "Loss (est)", "Packets sent");
-
-	if (GlobOpts::withRecv) {
-		printf(" %12s   %12s %12s  %12s", "Packets recv", "Packet loss", "Byte loss", "Range loss");
-	}
-	printf("\n");
-
-	char loss_estimated[50];
-
-	for (cIt = sortedConns.begin(); cIt != sortedConns.end(); cIt++) {
-		memset(&cs, 0, sizeof(struct connStats));
-		cIt->second->addConnStats(&cs);
-		cIt->second->addConnStats(&csAggregated);
-
-		if (cs.nrPacketsSent != cs.nrPacketsSentFoundInDump) {
-			sprintf(loss_estimated, "%.2f / %.2f", ((double) cs.nrRetrans / cs.nrPacketsSent) * 100, ((double) cs.nrRetrans / cs.nrPacketsSentFoundInDump) * 100);
-		}
-		else {
-			sprintf(loss_estimated, "%.2f / %.2f", ((double) cs.nrRetrans / cs.nrPacketsSent) * 100, ((double) cs.nrRetrans / cs.nrPacketsSentFoundInDump) * 100);
-		}
-		printf("   %-40s %-13d %-15s  %-14d", (cIt->second->getConnKey() + ":").c_str(), cs.duration, loss_estimated, cs.nrPacketsSentFoundInDump);
-
-		if (GlobOpts::withRecv) {
-			printf("  %-11d  %8.2f %%     %8.2f %%   %8.2f %%",
-				   cs.nrPacketsReceivedFoundInDump,
-				   (((double) ((cs.nrPacketsSentFoundInDump - cs.nrPacketsReceivedFoundInDump)) / cs.nrPacketsSentFoundInDump) * 100),
-				   (cs.bytes_lost / (double) cs.totBytesSent) * 100,
-				   (cs.ranges_lost / (double) cs.ranges_sent) * 100);
-		}
-		printf("\n");
-	}
-
-	if (GlobOpts::verbose >= 3) {
-		printf("\n   %-40s   %-17d   %-11d   %4.1f %%        %4.1f %%\n", "Average", 0,
-			   csAggregated.nrPacketsSentFoundInDump/(int)sortedConns.size(), (csAggregated.bytes_lost / (double) csAggregated.totBytesSent) * 100,
-			   (csAggregated.ranges_lost / (double) csAggregated.ranges_sent) * 100);
-	}
-
-	if (csAggregated.nrPacketsSentFoundInDump != csAggregated.nrPacketsSent) {
-		colored_printf(YELLOW, "Note: Packets in trace dumps may differ from actual packets due to offloading\n");
-	}
-
-	printf("\n");
-}
-
-
-/*
- * Writes number of bytes and packets sent aggregated over time slices to file (throughput)
- */
-void Dump::writeByteCountGroupedByInterval() {
-	map<ConnectionMapKey*, Connection*>::iterator conn;
-
-	if (GlobOpts::aggregate) {
-		auto_ptr< vector< pair<uint64_t,uint64_t> > > all_sizes(new vector< pair<uint64_t,uint64_t> >);
-
-		uint64_t idx, num;
-		for (conn = conns.begin(); conn != conns.end(); conn++) {
-			for (idx = 0, num = conn->second->packetSizes.size(); idx < num; ++idx) {
-
-				vector< pair<uint64_t,uint64_t> >& all = *all_sizes.get();
-				while (idx >= all.size()) {
-					all.push_back(pair<uint64_t, uint64_t>(0, 0));
-				}
-
-				const uint64_t count = conn->second->packetSizes[idx].size();
-				uint64_t bytes = 0;
-
-				vector<struct PacketSize>::iterator it, end;
-				it = conn->second->packetSizes[idx].begin();
-				end = conn->second->packetSizes[idx].end();
-
-				for (; it != end; ++it) {
-					bytes += it->packet_size;
-				}
-
-				const pair<uint64_t,uint64_t>& old = all[idx];
-				all[idx] = pair<uint64_t, uint64_t>(old.first + count, old.second + bytes);
-			}
-		}
-
-		ofstream stream;
-		stream.open((GlobOpts::prefix + "throughput-aggr.dat").c_str(), ios::out);
-		stream << "interval" << "," << "packet_count" << "," << "byte_count" << "," << "throughput" << endl;
-
-		for (idx = 0, num = all_sizes->size(); idx < num; ++idx) {
-			const pair<uint64_t, uint64_t>& value = all_sizes->at(idx);
-			stream << idx << "," << value.first << "," << value.second << ",";
-			stream << (value.second * 8.0) / (GlobOpts::throughputAggrMs / 1000.0) << endl;
-		}
-
-		stream.close();
-	}
-
-	if (!GlobOpts::aggOnly) {
-		for (conn = conns.begin(); conn != conns.end(); conn++) {
-			ofstream stream;
-			stream.open((GlobOpts::prefix + "throughput-" + conn->second->getConnKey() + ".dat").c_str(), ios::out);
-			stream << "interval" << "," << "packet_count" << "," << "byte_count" << "," << "throughput" << endl;
-
-			uint64_t idx, num;
-			for (idx = 0, num = conn->second->packetSizes.size(); idx < num; ++idx) {
-
-				const uint64_t count = conn->second->packetSizes[idx].size();
-				uint64_t bytes = 0;
-
-				vector<struct PacketSize>::iterator it, end;
-				it = conn->second->packetSizes[idx].begin();
-				end = conn->second->packetSizes[idx].end();
-
-				for (; it != end; ++it) {
-					bytes += it->packet_size;
-				}
-
-				stream << idx << "," << count << "," << bytes << ",";
-				stream << (bytes * 8.0) / (GlobOpts::throughputAggrMs / 1000.0) << endl;
-			}
-
-			stream.close();
-		}
-	}
-}
-
-
-/*
- * Output a loss interval value to an output file stream
- */
-ofstream& operator<<(ofstream& s, const LossInterval& v) {
-	// total sent during interval
-	s << v.tot_cnt_bytes << ",";
-	s << v.tot_all_bytes << ",";
-	s << (v.tot_all_bytes - v.tot_new_bytes) << ",";
-	s << v.tot_new_bytes << ",";
-
-	// total lost during interval
-	s << v.cnt_bytes << ",";
-    s << v.all_bytes << ",";
-	s << (v.all_bytes - v.new_bytes) << ",";
-	s << v.new_bytes << ",";
-
-	// total lost relative to sent within interval
-	if (v.tot_cnt_bytes != 0)
-		s << (v.cnt_bytes / v.tot_cnt_bytes) << ",";
-	else
-		s << 0 << ",";
-
-	if (v.tot_all_bytes != 0)
-		s << (v.all_bytes / v.tot_all_bytes) << ",";
-	else
-		s << 0 << ",";
-
-	if ((v.tot_all_bytes - v.tot_new_bytes) != 0)
-		s << ((v.all_bytes - v.new_bytes) / (v.tot_all_bytes - v.tot_new_bytes)) << ",";
-	else
-		s << 0 << ",";
-
-	if (v.tot_new_bytes != 0)
-		s << (v.new_bytes / v.tot_new_bytes) << ",";
-	else
-		s << 0 << ",";
-
-	// total lost relative to lost within interval
-	if (v.all_bytes != 0)
-		s << ((v.all_bytes - v.new_bytes) / v.all_bytes) << ",";
-	else
-		s << 0 << ",";
-
-	if (v.all_bytes != 0)
-		s << (v.new_bytes / v.all_bytes);
-	else
-		s << 0;
-
-	return s;
-}
-
-/*
- * Writes loss to file
- * The columns are ordered as follows:
- * 0  interval index
- * 1  byte ranges sent within interval
- * 2  all bytes sent (incl. retrans) within interval
- * 3  old bytes sent (retrans only) within interval
- * 4  new bytes sent (new data) within interval
- * 5  ranges lost within interval
- * 6  all bytes lost (incl. retrans) within interval
- * 7  old bytes lost (retrans) within interval
- * 8  new bytes lost (new data) within interval
- * 9  ranges lost relative to ranges sent within interval
- * 10 all bytes lost relative to all bytes sent within interval
- * 11 old bytes lost relative to old bytes sent within interval
- * 12 new bytes lost relative to new bytes sent within interval
- * 13 old bytes lost relative to all bytes lost within interval
- * 14 new bytes lost relative to all bytes lost within interval
- * 15 ranges lost relative to total ranges sent
- * 16 bytes lost relative to total bytes sent
- */
-void Dump::write_loss_to_file() {
-	assert(GlobOpts::withRecv && "Calculating loss is only possible with receiver dump");
-
-	auto_ptr< vector<LossInterval> > aggr( new vector<LossInterval>() );
-	double total_count = 0, total_bytes = 0;
-
-	const char* headers[] = {
-		"interval",
-		"ranges_sent", "all_bytes_sent", "old_bytes_sent", "new_bytes_sent",
-		"ranges_lost", "all_bytes_lost", "old_bytes_lost", "new_bytes_lost",
-		"ranges_lost_relative_to_interval", "all_bytes_lost_relative_to_interval", "old_bytes_lost_relative_to_interval", "new_bytes_lost_relative_to_interval",
-		"old_bytes_lost_relative_to_all_bytes_lost", "new_bytes_lost_relative_to_all_bytes_lost",
-		"ranges_lost_relative_to_total", "all_bytes_lost_relative_to_total"
-	};
-
-	// Extract (and print) loss values for each connection
-	map<ConnectionMapKey*, Connection*>::iterator conn;
-	for (conn = conns.begin(); conn != conns.end(); ++conn) {
-
-		unique_ptr< vector<LossInterval> > loss(new vector<LossInterval>());
-
-		conn->second->rm->calculateLossGroupedByInterval(TV_TO_MS(first_sent_time), *aggr, *loss);
-		total_count += conn->second->rm->analysed_sent_ranges_count;
-		total_bytes += conn->second->rm->analysed_bytes_sent;
-
-		// output to stream
-		if (!GlobOpts::aggOnly) {
-			string filename;
-			filename = GlobOpts::prefix + "loss-" + conn->second->getConnKey() + ".dat";
-
-			ofstream stream;
-			stream.open(filename.c_str(), ios::out);
-
-			stream << headers[0];
-			for (uint64_t idx = 1; idx < sizeof(headers) / sizeof(headers[0]); ++idx) {
-				stream << "," << headers[idx];
-			}
-			stream << endl;
-
-			for (uint64_t idx = 0, num = loss->size(); idx < num; ++idx) {
-
-				// lost ranges&bytes relative to total ranges&bytes
-				const double rel_count = loss->at(idx).cnt_bytes / (double) conn->second->rm->analysed_sent_ranges_count;
-				const double rel_bytes = loss->at(idx).all_bytes / (double) conn->second->rm->analysed_bytes_sent;
-
-				stream << idx << ",";
-				stream << loss->at(idx) << ",";
-				stream << rel_count << "," << rel_bytes << endl;
-			}
-
-			stream.close();
-		}
-	}
-
-	// Print values for all connections
-	if (GlobOpts::aggregate) {
-		ofstream stream;
-		stream.open((GlobOpts::prefix + "loss-aggr.dat").c_str(), ios::out);
-
-		stream << headers[0];
-		for (uint64_t idx = 1; idx < sizeof(headers) / sizeof(headers[0]); ++idx) {
-			stream << "," << headers[idx];
-		}
-		stream << endl;
-
-		for (uint64_t idx = 0, num = aggr->size(); idx < num; ++idx) {
-
-			// lost ranges&bytes relative to total ranges&bytes
-			const double rel_count = aggr->at(idx).cnt_bytes / total_count;
-			const double rel_bytes = aggr->at(idx).all_bytes / total_bytes;
-
-			// output to stream
-			stream << idx << ",";
-			stream << aggr->at(idx) << ",";
-			stream << rel_count << "," << rel_bytes << endl;
-		}
-
-		stream.close();
-	}
-}
-
-
 void Dump::calculateLatencyVariation() {
 	map<ConnectionMapKey*, Connection*>::iterator it;
 	for (it = conns.begin(); it != conns.end(); ++it) {
 		it->second->calculateLatencyVariation();
-	}
-}
-
-void Dump::makeByteLatencyVariationCDF() {
-	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
-	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
-		cIt->second->makeByteLatencyVariationCDF();
-	}
-}
-
-void Dump::writeSentTimesAndQueueingDelayVariance() {
-	map<ConnectionMapKey*, Connection*>::iterator it;
-	const uint64_t first_tstamp = TV_TO_MS(first_sent_time);
-
-	ofstream all_stream;
-	all_stream.open((GlobOpts::prefix + "queueing-delay-all.dat").c_str(), ios::out);
-
-	for (it = conns.begin(); it != conns.end(); ++it) {
-		it->second->writeSentTimesAndQueueingDelayVariance(first_tstamp, all_stream);
-
-		string filename;
-		filename = GlobOpts::prefix + "queueing-delay-" + it->second->getConnKey() + ".dat";
-
-		ofstream stream;
-		stream.open(filename.c_str(), ios::out);
-		it->second->writeSentTimesAndQueueingDelayVariance(first_tstamp, stream);
-		stream.close();
-	}
-	all_stream.close();
-}
-
-void Dump::writeByteLatencyVariationCDF() {
-	ofstream cdf_f;
-	stringstream cdffn;
-	cdffn << GlobOpts::prefix << "latency-variation-cdf.dat";
-	cdf_f.open((char*)((cdffn.str()).c_str()), ios::out);
-
-	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
-	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
-		cIt->second->writeByteLatencyVariationCDF(&cdf_f);
-	}
-	cdf_f.close();
-}
-
-void Dump::writeAggByteLatencyVariationCDF() {
-	char print_buf[300];
-	ofstream stream;
-	stringstream filename;
-	filename << GlobOpts::prefix << "latency-variation-aggr-cdf.dat";
-	stream.open((char*)((filename.str()).c_str()), ios::out);
-
-	map<const long, int>::iterator nit, nit_end;
-	double cdfSum = 0;
-	nit = GlobStats::byteLatencyVariationCDFValues.begin();
-	nit_end = GlobStats::byteLatencyVariationCDFValues.end();
-
-	stream << endl << endl << "#Aggregated CDF:" << endl;
-	stream << "#Relative delay      Percentage" << endl;
-	for(; nit != nit_end; nit++){
-		cdfSum += (double)(*nit).second / GlobStats::totNumBytes;
-		sprintf(print_buf, "time: %10ld    CDF: %.10f\n", (*nit).first, cdfSum);
-		stream << print_buf;
-	}
-}
-
-void Dump::printDumpStats() {
-	cout << endl;
-	colored_printf(YELLOW, "General info for entire dump:\n");
-	printf("  %s:%s -> %s:%s\n", srcIp.c_str(), srcPort.c_str(), dstIp.c_str(), dstPort.c_str());
-	cout << "  Filename: " << filename << endl;
-	cout << "  Sent Packet Count     : " << sentPacketCount << endl;
-	cout << "  Received Packet Count : " << recvPacketCount << endl;
-	cout << "  ACK Count             : " << ackCount << endl;
-	cout << "  Sent Bytes Count      : " << sentBytesCount << endl;
-	cout << "  Max payload size      : " << max_payload_size;
-	if (max_payload_size > 1460) {
-		colored_printf(YELLOW, "   (Max payload for a packet is bigger than 1460. This may be caused by GSO/TSO (see readme))");
-	}
-
-	cout << endl;
-
-	if (GlobOpts::withRecv) {
-		map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
-		long int ranges_count = 0;
-		long int ranges_lost = 0;
-		long int ranges_sent = 0;
-		for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
-			ranges_count += cIt->second->rm->getByteRangesCount();
-			ranges_sent += cIt->second->rm->getByteRangesSent();
-			ranges_lost += cIt->second->rm->getByteRangesLost();
-		}
-		cout << "  Received Bytes        : " << recvBytesCount << endl;
-		if ((sentPacketCount - recvPacketCount) < 0) {
-			colored_printf(YELLOW, "Negative loss values is probably caused by GSO/TSO on sender side (see readme)\n");
-		}
-		cout << "  Packets Lost          : " << (sentPacketCount - recvPacketCount) << endl;
-		cout << "  Packet Loss           : " << ((double) (sentPacketCount - recvPacketCount) / sentPacketCount) * 100 <<  " %" << endl;
-		cout << "  Ranges Count          : " << (ranges_count) << endl;
-		cout << "  Ranges Sent           : " << (ranges_sent) << endl;
-		cout << "  Ranges Lost           : " << (ranges_lost) << endl;
-	}
-}
-
-void Dump::genAckLatencyFiles() {
-	map<ConnectionMapKey*, Connection*>::iterator cIt = conns.begin();
-
-	const long first_ts = TV_TO_MS(first_sent_time);
-
-	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
-		cIt->second->genAckLatencyFiles(first_ts);
-	}
-
-	if (!GlobOpts::aggregate)
-		return;
-
-	vector<string> filenames = GlobStats::retrans_filenames;
-	filenames.push_back("durations-all-");
-
-	globStats->prefix_filenames(filenames);
-
-	for (unsigned long int i = 0; i < filenames.size(); i++) {
-		filenames[i] += "aggr.dat";
-	}
-
-	vector<LatencyItem>::iterator it, it_end;
-	unsigned long int i;
-	for (i = 0; i < GlobStats::ack_latency_vectors.size(); i++) {
-		ofstream stream;
-		stream.open(filenames[i].c_str(), ios::out);
-        stream << "# Timestamp/ms, Latency/ms" << endl;
-		it = GlobStats::ack_latency_vectors[i]->begin();
-		it_end = GlobStats::ack_latency_vectors[i]->end();
-		// Write the header
-		if (it != it_end)
-			stream << it->header() << endl;
-
-		for (; it != it_end; it++) {
-			stream << it->str() << endl;
-		}
-		stream.close();
-	}
-
-	ofstream stream;
-	stream.open(filenames[i].c_str(), ios::out);
-	// Handle duration data
-	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
-		stream << cIt->second->getDuration(true) << endl;
-	}
-	stream.close();
-	i++;
-}
-
-void Dump::writePacketByteCountAndITT() {
-	map<ConnectionMapKey*, Connection*>::iterator it;
-
-	ofstream* all_stream = NULL;
-	ofstream* conn_stream = NULL;
-	string header("timestamp,itt,payload_size,packet_size");
-
-	if (GlobOpts::aggregate) {
-		all_stream = new ofstream;
-		all_stream->open((GlobOpts::prefix + "packet-byte-count-and-itt-all.dat").c_str(), ios::out);
-		*all_stream << header << endl;
-	}
-
-	for (it = conns.begin(); it != conns.end(); ++it) {
-
-		if (!GlobOpts::aggOnly) {
-			string filename (GlobOpts::prefix + "packet-byte-count-and-itt-" + it->second->getConnKey() + ".dat");
-			conn_stream = new ofstream;
-			conn_stream->open(filename.c_str(), ios::out);
-			*conn_stream << header << endl;
-		}
-
-		it->second->writePacketByteCountAndITT(all_stream, conn_stream);
-
-		if (!GlobOpts::aggOnly) {
-			conn_stream->close();
-			delete conn_stream;
-		}
-	}
-
-	if (GlobOpts::aggregate) {
-		all_stream->close();
-		delete all_stream;
-	}
-}
-
-
-void Dump::free_resources() {
-	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
-	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
-		delete cIt->first;
-		delete cIt->second;
 	}
 }
 

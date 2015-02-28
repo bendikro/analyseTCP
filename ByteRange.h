@@ -1,20 +1,9 @@
 #ifndef BYTERANGE_H
 #define BYTERANGE_H
 
-#include <vector>
-#include <iostream>
-#include <string>
-#include <fstream>
-#include <limits.h>
-#include <map>
-#include <deque>
-#include <algorithm>
-#include <string.h>
-#include <stdint.h>
-#include <assert.h>
-
 #include "RangeManager.h"
 #include "time_util.h"
+#include "common.h"
 
 using namespace std;
 

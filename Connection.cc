@@ -1,6 +1,7 @@
 #include "Connection.h"
 #include "ByteRange.h"
 #include "util.h"
+#include "color_print.h"
 
 uint32_t Connection::getDuration(bool analyse_range_duration) {
 	if (analyse_range_duration)
@@ -8,9 +9,6 @@ uint32_t Connection::getDuration(bool analyse_range_duration) {
 	else
 		return rm->getDuration();
 }
-
-#define RELATIVE_SEQNUM_PAIR(seq_start, seq_end)
-
 
 /* Count bundled and retransmitted packets from sent data */
 bool Connection::registerSent(struct sendData* sd) {

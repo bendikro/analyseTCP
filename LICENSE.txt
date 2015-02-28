@@ -1,7 +1,6 @@
 /*************************************************************************************
 **************************************************************************************
 **                                                                                  **
-**  analyseTCP - Tool for analysing tcpdump files with regard to latency.           **
 **                                                                                  **
 **  Copyright (C) 2007       Andreas Petlund        - andreas@petlund.no            **
 **                           Kristian Evensen       - kristrev@ifi.uio.no           **
