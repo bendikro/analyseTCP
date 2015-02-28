@@ -5,8 +5,6 @@
 
 #include "config.h"
 
-using namespace std;
-
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <netinet/if_ether.h>
@@ -29,9 +27,22 @@ using namespace std;
 #include <fstream>
 #include <limits.h>
 #include <deque>
-#include <tr1/memory>
+#ifdef HAVE_STD_MEMORY_HEADER
+  #include <memory>
+#elif defined(HAVE_TR1_MEMORY_HEADER)
+  #include <tr1/memory>
+#else
+  #error no C++ memory header defined, perhaps boost?
+#endif
+#ifdef SHARED_PTR_TR1_NAMESPACE
+  #define SPNS std::tr1
+#else
+  #define SPNS std
+#endif
 
 #include "color_print.h"
+
+using namespace std;
 
 #define safe_div(x, y) ( (y) != 0 ? ((double) (x)) / (y) : 0.0 )
 //#define val_or_zero_s32_max(x) ( (x) != INT32_MAX ? (x) : 0 )
@@ -128,14 +139,14 @@ public:
 	// Index 2 contains latency data for all ranges retransmitted 2 times
 	// ...
 	//static vector<vector <int> *> ack_latency_vectors;
-	static vector<std::tr1::shared_ptr<vector <LatencyItem> > > ack_latency_vectors;
+	static vector<SPNS::shared_ptr<vector <LatencyItem> > > ack_latency_vectors;
 
 	GlobStats() {
 		retrans_filenames.push_back(string("latency-all-"));
 	}
-	void update_vectors_size(vector<std::tr1::shared_ptr<vector <LatencyItem> > > &vectors, ulong count) {
+	void update_vectors_size(vector<SPNS::shared_ptr<vector <LatencyItem> > > &vectors, ulong count) {
 		for (ulong i = vectors.size(); i < count; i++) {
-			vectors.push_back(std::tr1::shared_ptr<vector <LatencyItem> > (new vector<LatencyItem>()));
+			vectors.push_back(SPNS::shared_ptr<vector <LatencyItem> > (new vector<LatencyItem>()));
 		}
 	}
 	void update_retrans_filenames(ulong count) {

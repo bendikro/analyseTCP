@@ -82,16 +82,16 @@ private:
 	uint32_t max_payload_size;
 	map<ConnectionMapKey*, Connection*, ConnectionKeyComparator> conns;
 
-	void processSent(const struct pcap_pkthdr* header, const u_char *data);
-	void processRecvd(const struct pcap_pkthdr* header, const u_char *data);
-	void processAcks(const struct pcap_pkthdr* header, const u_char *data);
-	void registerRecvd(const struct pcap_pkthdr* header, const u_char *data);
-	void printAggStats(string prefix, string unit, struct connStats *cs, struct BaseStats& bs, struct BaseStats& aggregatedMin, struct BaseStats& aggregatedMax);
-	void printStats(string prefix, string unit, struct BaseStats& bs);
-	void printPacketStats(struct connStats *cs, struct byteStats *bs, bool aggregated, struct byteStats* aggregatedMin, struct byteStats* aggregatedMax);
-	void printBytesLatencyStats(struct connStats *cs, struct byteStats* bs, bool aggregated, struct byteStats* aggregatedMin, struct byteStats* aggregatedMax);
-	void printPacketITTStats(struct connStats *cs, struct byteStats* bs, bool aggregated, struct byteStats* aggregatedMin, struct byteStats* aggregatedMax);
-	void writeITT(ofstream& stream, vector<struct SentTime>& sent_times);
+	void processSent(const pcap_pkthdr* header, const u_char *data);
+	void processRecvd(const pcap_pkthdr* header, const u_char *data);
+	void processAcks(const pcap_pkthdr* header, const u_char *data);
+	void registerRecvd(const pcap_pkthdr* header, const u_char *data);
+	void printAggStats(string prefix, string unit, connStats *cs, BaseStats& bs, BaseStats& aggregatedMin, BaseStats& aggregatedMax);
+	void printStats(string prefix, string unit, BaseStats& bs);
+	void printPacketStats(connStats *cs, byteStats *bs, bool aggregated, byteStats* aggregatedMin, byteStats* aggregatedMax);
+	void printBytesLatencyStats(connStats *cs, byteStats* bs, bool aggregated, byteStats* aggregatedMin, byteStats* aggregatedMax);
+	void printPacketITTStats(connStats *cs, byteStats* bs, bool aggregated, byteStats* aggregatedMin, byteStats* aggregatedMax);
+	void writeITT(ofstream& stream, vector<SentTime>& sent_times);
 public:
     /** Version used by analyseTCP
      *  It may represent an entire trace, or one that is retricted to a set of given src and dest
@@ -121,8 +121,8 @@ public:
 	void writeByteLatencyVariationCDF();
 	void writeAggByteLatencyVariationCDF();
 	void free_resources();
-	void findTCPTimeStamp(struct DataSeg* data, uint8_t* opts, int option_length);
-	Connection* getConn(const struct in_addr *srcIp, const struct in_addr *dstIp, const uint16_t *srcPort, const uint16_t *dstPort, const uint32_t *seq);
+	void findTCPTimeStamp(DataSeg* data, uint8_t* opts, int option_length);
+	Connection* getConn(const in_addr *srcIp, const in_addr *dstIp, const uint16_t *srcPort, const uint16_t *dstPort, const uint32_t *seq);
 	void fillWithSortedConns(map<ConnectionMapKey*, Connection*, SortedConnectionKeyComparator> &sortedConns);
 	void writeSentTimesAndQueueingDelayVariance();
 	void writeByteCountGroupedByInterval(); // throughput

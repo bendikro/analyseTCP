@@ -1,7 +1,12 @@
 #pragma once
 
 #cmakedefine HAVE_ULONG 1
+#cmakedefine HAVE_STD_MEMORY_HEADER 1
+#cmakedefine HAVE_TR1_MEMORY_HEADER 1
+#cmakedefine SHARED_PTR_TR1_NAMESPACE 1
+#cmakedefine SHARED_PTR_TR1_MEMORY_HEADER 1
 
 #ifndef HAVE_ULONG
 typedef unsigned long ulong;
 #endif
+

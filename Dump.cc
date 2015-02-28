@@ -315,7 +315,7 @@ void print_stats_separator(bool final) {
 
 #if 0
 // Update minimum values
-void updateMinStats(struct BaseStats& aggStats, struct BaseStats& stats) {
+void updateMinStats(BaseStats& aggStats, BaseStats& stats) {
 	if (stats.min != -1 && (stats.min < aggStats.min))
 		aggStats.min = stats.min;
 	if (stats.max != -1 && stats.max < aggStats.max)
@@ -325,7 +325,7 @@ void updateMinStats(struct BaseStats& aggStats, struct BaseStats& stats) {
 }
 
 // Update minimum values
-void updateMaxStats(struct BaseStats& aggStats, struct BaseStats& stats) {
+void updateMaxStats(BaseStats& aggStats, BaseStats& stats) {
 	if (stats.min != -1 && stats.min > aggStats.min)
 		aggStats.min = stats.min;
 	if (stats.max != -1 && stats.max > aggStats.max)
@@ -677,13 +677,13 @@ void Dump::printPacketITTStats(struct connStats *cs, struct byteStats* bs, bool 
 }
 
 
-void Dump::printStats(string prefix, string unit, struct BaseStats& bs) {
+void Dump::printStats(string prefix, string unit, BaseStats& bs) {
 	printf("  Minimum %10s                            : %7lu %s\n", prefix.c_str(), (ulong)bs.min, unit.c_str());
 	printf("  Average %10s                            : %7.0f %s\n", prefix.c_str(), bs.get_avg(), unit.c_str());
 	printf("  Maximum %10s                            : %7lu %s\n", prefix.c_str(), (ulong)bs.max, unit.c_str());
 }
 
-void Dump::printAggStats(string prefix, string unit, struct connStats *cs, struct BaseStats& bs, struct BaseStats& aggregatedMin, struct BaseStats& aggregatedMax) {
+void Dump::printAggStats(string prefix, string unit, struct connStats *cs, BaseStats& bs, BaseStats& aggregatedMin, BaseStats& aggregatedMax) {
 	if (aggregatedMin.min == (numeric_limits<int64_t>::max)())
 		// aggregatedMin.min = aggregatedMin.avg = aggregatedMin.max = 0;
 		aggregatedMin.min = aggregatedMin.max = 0;

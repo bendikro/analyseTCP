@@ -1,8 +1,6 @@
 #ifndef BYTERANGE_H
 #define BYTERANGE_H
 
-using namespace std;
-
 #include <vector>
 #include <iostream>
 #include <string>
@@ -17,6 +15,8 @@ using namespace std;
 
 #include "RangeManager.h"
 #include "time_util.h"
+
+using namespace std;
 
 # define END_SEQ(seq_end) (seq_end)
 

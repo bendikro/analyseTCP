@@ -1,8 +1,6 @@
 #ifndef RANGEMANAGER_H
 #define RANGEMANAGER_H
 
-using namespace std;
-
 #include <vector>
 #include <iostream>
 #include <string>
@@ -17,6 +15,8 @@ using namespace std;
 
 #include "common.h"
 #include "time_util.h"
+
+using namespace std;
 
 enum received_type {DEF, DATA, RDB, RETR};
 enum sent_type {ST_NONE, ST_PKT, ST_RTR, ST_PURE_ACK, ST_RST};

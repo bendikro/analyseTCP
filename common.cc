@@ -1,10 +1,11 @@
 #include <assert.h>
+#include <math.h>
 #include <algorithm>
 
 #include "common.h"
 
 vector<string> GlobStats::retrans_filenames;
-vector<std::tr1::shared_ptr<vector <LatencyItem> > > GlobStats::ack_latency_vectors;
+vector<SPNS::shared_ptr<vector <LatencyItem> > > GlobStats::ack_latency_vectors;
 GlobStats *globStats;
 
 /* Initialize global options */

@@ -2,9 +2,11 @@ PROJECT (analyseTCP CXX)
 SET(CMAKE_VERBOSE_MAKEFILE off)
 ENABLE_LANGUAGE(C)
 
-CMAKE_MINIMUM_REQUIRED(VERSION 3.0)
+CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
 #SET (INCLUDE_DIRS /work/include)
 #SET (LIB_DIRS /work/lib)
+
+LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 INCLUDE (CheckTypeSize)
 
@@ -49,6 +51,19 @@ IF (NOT APPLE)
    CHECK_INCLUDE_FILES ("getopt.h" GETOPT_H)
 ENDIF (NOT APPLE)
 
+INCLUDE(FindSharedPtr)
+FIND_SHARED_PTR()
+IF (SHARED_PTR_FOUND)
+  IF (SHARED_PTR_TR1_MEMORY_HEADER)
+    SET(HAVE_TR1_MEMORY)
+  ENDIF (SHARED_PTR_TR1_MEMORY_HEADER)
+  IF (SHARED_PTR_TR1_NAMESPACE)
+    SET(HAVE_TR1_NAMESPACE)
+  ENDIF (SHARED_PTR_TR1_NAMESPACE)
+ELSE (SHARED_PTR_FOUND)
+  MESSAGE(FATAL_ERROR "Unable to find shared_ptr.")
+ENDIF (SHARED_PTR_FOUND)
+
 # Check for library pcap
 # If found, initialize include path and link path with correct values
 FIND_LIBRARY (PCAP pcap ${LIB_DIRS})
@@ -70,7 +85,7 @@ TARGET_LINK_LIBRARIES (analyseTCP pcap)
 
 # Set compiler flags for all configurations
 # SET (CMAKE_CXX_FLAGS "-std=gnu++11 -lm -Wall -Wno-long-long -Wno-variadic-macros") # -Werror?
-SET (CMAKE_CXX_FLAGS "-lm -Wall -Wno-long-long -Wno-variadic-macros") # -Werror?
+SET (CMAKE_CXX_FLAGS "-Wall -Wno-long-long -Wno-variadic-macros") # -Werror?
 IF (CMAKE_COMPILER_IS_GNUCXX)
   SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
 ENDIF (CMAKE_COMPILER_IS_GNUCXX)
@@ -87,18 +102,21 @@ SET (CMAKE_CXX_FLAGS_DEBUG "-g3 -Wall -DDEBUG -Wextra -pedantic")
 
 CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 
-ADD_EXECUTABLE (analyseDASH
-	analyseDASH.cc analyseDASH.h
-	common.cc common.h
-	Dump.cc Dump.h
-	Connection.h Connection.cc
-	RangeManager.cc RangeManager.h
-	util.cc util.h
-	ByteRange.cc ByteRange.h
-	fourTuple.cc fourTuple.h
-	color_print.cc color_print.h
-	)
-TARGET_LINK_LIBRARIES (analyseDASH pcap)
+SET(USE_ANALYSE_DASH false)
+IF(USE_ANALYSE_DASH)
+  ADD_EXECUTABLE (analyseDASH
+	  analyseDASH.cc analyseDASH.h
+	  common.cc common.h
+	  Dump.cc Dump.h
+	  Connection.h Connection.cc
+	  RangeManager.cc RangeManager.h
+	  util.cc util.h
+	  ByteRange.cc ByteRange.h
+	  fourTuple.cc fourTuple.h
+	  color_print.cc color_print.h
+	  )
+  TARGET_LINK_LIBRARIES (analyseDASH pcap)
+ENDIF(USE_ANALYSE_DASH)
 
 # Distclean functionality (Remove cmake generated files)
 IF (UNIX OR APPLE)

@@ -1886,7 +1886,7 @@ void RangeManager::genAckLatencyFiles(long first_tstamp, const string& connKey) 
 	it = analyse_range_start;
 	it_end = analyse_range_end;
 
-	vector<std::tr1::shared_ptr<vector <LatencyItem> > > diff_times;
+	vector<SPNS::shared_ptr<vector <LatencyItem> > > diff_times;
 	ulong num_retr_tmp;
 	int diff_tmp;
 	ulong send_time_ms;
