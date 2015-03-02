@@ -78,6 +78,7 @@ public:
 	static string prefix;
 	static string RFiles_dir;
 	static bool connDetails;
+	static bool writeConnDetails;
 	static int verbose;
 	static bool validate_ranges;
 	static int max_retrans_stats;

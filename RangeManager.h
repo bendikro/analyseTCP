@@ -31,7 +31,6 @@ private:
 
 	map<ulong, ByteRange*>::iterator highestAckedByteRangeIt;
 	map<const long, int> byteLatencyVariationCDFValues;
-	//multimap<const long, uint16_t> packetLatencyVariationValues;
 
 public:
 	map<ulong, ByteRange*> ranges;
@@ -85,7 +84,7 @@ public:
 	void insertSentRange(struct sendData *sd);
 	void insertReceivedRange(struct sendData *sd);
 	bool processAck(struct DataSeg *seg);
-	void genStats(struct PacketStats* bs);
+	void genStats(PacketStats* bs);
 	ByteRange* getLastRange() {	return ranges.rbegin()->second;	}
 	ByteRange* getHighestAcked();
 	uint32_t getDuration();
@@ -95,11 +94,13 @@ public:
 	void registerRecvDiffs();
 	void makeByteLatencyVariationCDF();
 	void writeByteLatencyVariationCDF(ofstream *stream);
-	void writeSentTimesAndQueueingDelayVariance(const uint64_t first_tstamp, ofstream& stream);
+	void writeSentTimesAndQueueingDelayVariance(const uint64_t first_tstamp, vector<ofstream*> streams);
 	int calculateClockDrift();
 	void doDriftCompensation();
 	void insert_byte_range(ulong start_seq, ulong end_seq, bool sent, struct DataSeg *data_seq, int level);
 	void genAckLatencyFiles(long first_tstamp, const string& connKey);
+	void genAckLatencyData(long first_tstamp, vector<SPNS::shared_ptr<vector <LatencyItem> > > &diff_times, const string& connKey);
+
 	int getNumBytes() { return lastSeq; } // lastSeq is the last relative seq number
 	long int getByteRangesCount() { return ranges.size(); }
 	long int getAnalysedByteRangesCount() { return ranges.size(); }

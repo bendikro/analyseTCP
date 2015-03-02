@@ -58,6 +58,7 @@ Dump::Dump( const vector<four_tuple_t>& connections, string fn )
 Dump::~Dump() {
 	free_resources();
 }
+
 void Dump::free_resources() {
 	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
 	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {

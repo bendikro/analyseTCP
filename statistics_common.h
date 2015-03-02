@@ -22,6 +22,7 @@ struct LossInterval {
 };
 ofstream& operator<<(ofstream& ouput_stream, const LossInterval& value);
 
+
 struct LatencyItem {
 	long time_ms;
 	int latency;
@@ -35,51 +36,18 @@ struct LatencyItem {
 };
 ofstream& operator<<(ofstream& stream, const LatencyItem& lat);
 
+void update_vectors_size(vector<SPNS::shared_ptr<vector <LatencyItem> > > &vectors, ulong count);
+
 class GlobStats
 {
 public:
 	static map<const long, int> byteLatencyVariationCDFValues;
-	static map<const long, int> packetLatencyVariationValues;
-    static int totNumBytes;
-	static vector<string> retrans_filenames;
-	// Filled with latency (acked_time - sent_time) data for all the byte ranges
-	// Index 0 contains all the data,
-	// Index 1 contains latency data for all ranges retransmitted 1 time
-	// Index 2 contains latency data for all ranges retransmitted 2 times
-	// ...
-	//static vector<vector <int> *> ack_latency_vectors;
-	static vector<SPNS::shared_ptr<vector <LatencyItem> > > ack_latency_vectors;
-
-	GlobStats() {
-		retrans_filenames.push_back(string("latency-all-"));
-	}
-	void update_vectors_size(vector<SPNS::shared_ptr<vector <LatencyItem> > > &vectors, ulong count) {
-		for (ulong i = vectors.size(); i < count; i++) {
-			vectors.push_back(SPNS::shared_ptr<vector <LatencyItem> > (new vector<LatencyItem>()));
-		}
-	}
-	void update_retrans_filenames(ulong count) {
-		update_vectors_size(ack_latency_vectors, count);
-		stringstream filename_tmp;
-		for (ulong i = retrans_filenames.size(); i < count; i++) {
-			filename_tmp.str("");
-			filename_tmp << "latency-retr" << i << "-";
-			retrans_filenames.push_back(filename_tmp.str());
-		}
-	}
-
-	void prefix_filenames(vector<string> &filenames) {
-		for (ulong i = 0; i < filenames.size(); i++) {
-			filenames[i] = GlobOpts::prefix + filenames[i];
-		}
-	}
+    static uint64_t totNumBytes;
 };
 
-extern GlobStats *globStats;
-
-
 /* Struct used to pass aggregated data between connections */
-struct connStats {
+struct ConnStats {
+public:
 	int duration;
 	int analysed_duration_sec; // The duration of the part that was analysed
 	int analysed_start_sec; // The duration of the part that was analysed
@@ -205,6 +173,10 @@ public:
 	vector<int> retrans;
 	vector<int> dupacks;
 
+	bool has_stats() {
+		return latency.get_counter() > 0;
+	}
+
 	PacketStats(bool _is_aggregate = false) : ExtendedPacketStats(_is_aggregate) {}
 };
 
@@ -221,7 +193,11 @@ public:
 		maximum.init();
 	}
 
-	AggrPacketStats() : aggregated(true), minimum(false), average(false), maximum(false) {
+	AggrPacketStats()
+		: aggregated(true)
+		, minimum(false)
+		, average(false)
+		, maximum(false) {
 		init();
 	}
 	void add(PacketStats &bs);

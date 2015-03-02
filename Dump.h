@@ -72,8 +72,8 @@ private:
 	string dstIp;
 	string srcPort; /* specify tcp.src in filter */
 	string dstPort; /* specify tcp.dst in filter */
-    string tcpPort; /* specify tcp.port in filter */
-    vector<four_tuple_t> _connections;
+	string tcpPort; /* specify tcp.port in filter */
+	vector<four_tuple_t> _connections;
 
 	int64_t sentPacketCount;
 	uint64_t sentBytesCount;
@@ -89,16 +89,16 @@ private:
 	void registerRecvd(const pcap_pkthdr* header, const u_char *data);
 
 public:
-    /** Version used by analyseTCP
-     *  It may represent an entire trace, or one that is retricted to a set of given src and dest
-     *  IP addresses and ports.
-     */
+	/** Version used by analyseTCP
+	 *	It may represent an entire trace, or one that is retricted to a set of given src and dest
+	 *	IP addresses and ports.
+	 */
 	Dump(string src_ip, string dst_ip, string src_port, string dst_port, string tcp_port, string fn);
 
-    /** Version used by analyseDASH
-     *  It represents a subset of a trace that contains an arbitrary number of connection
-     *  that must be specified completely by a 4-tuple.
-     */
+	/** Version used by analyseDASH
+	 *	It represents a subset of a trace that contains an arbitrary number of connection
+	 *	that must be specified completely by a 4-tuple.
+	 */
 	Dump( const vector<four_tuple_t>& connections, string fn );
 
 	~Dump();
@@ -108,12 +108,13 @@ public:
 	void processRecvd(string fn);
 	void calculateRetransAndRDBStats();
 	void printPacketDetails();
-	void free_resources();
 	void findTCPTimeStamp(DataSeg* data, uint8_t* opts, int option_length);
 	Connection* getConn(const in_addr *srcIp, const in_addr *dstIp, const uint16_t *srcPort, const uint16_t *dstPort, const uint32_t *seq);
 	void calculateLatencyVariation();
 
 	friend class Statistics;
+private:
+	void free_resources();
 };
 
 #endif /* DUMP_H */

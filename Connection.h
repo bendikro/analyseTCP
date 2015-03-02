@@ -13,6 +13,31 @@ struct PacketSize {
 	}
 };
 
+class PacketSizeGroup {
+public:
+	vector<PacketSize> packetSizes;
+	uint64_t bytes;
+	uint64_t _size;
+	uint64_t size() {
+		return _size;
+	}
+
+	void add(PacketSize &ps) {
+		packetSizes.push_back(ps);
+		bytes += ps.packet_size;
+		_size += 1;
+	}
+	string str() const;
+	PacketSizeGroup() : bytes(0), _size(0) {}
+
+	PacketSizeGroup& operator+=(PacketSizeGroup &rhs) {
+		bytes += rhs.bytes;
+		_size += rhs.size();
+		return *this;
+	}
+};
+ofstream& operator<<(ofstream& stream, const PacketSizeGroup& psGroup);
+
 /* Represents one connection (srcport/dstport pair) */
 class Connection {
 
@@ -39,7 +64,13 @@ public:
 	uint64_t lastLargestAckSeq;
 	uint32_t lastLargestAckSeqAbsolute;
 
-	vector< vector<struct PacketSize> > packetSizes;
+	void genByteCountGroupedByInterval();
+	void genAckLatencyData(long first_tstamp, vector<SPNS::shared_ptr<vector <LatencyItem> > > &diff_times);
+
+	vector< vector<PacketSize> > packetSizes;
+	vector<PacketSizeGroup> packetSizeGroups;
+
+	PacketStats packetStats;
 
 	timeval firstSendTime;
 	timeval endTime;
@@ -72,16 +103,16 @@ public:
 	void registerRange(struct sendData* sd);
 	void registerRecvd(struct sendData *sd);
 	bool registerAck(struct DataSeg *seg);
-	void addConnStats(struct connStats* cs);
-	void genBytesLatencyStats(struct PacketStats* bs);
+	void addConnStats(ConnStats* cs);
+	PacketStats* getBytesLatencyStats();
+	void genBytesLatencyStats(PacketStats* bs);
 	void validateRanges();
 	timeval get_duration() ;
 	void calculateLatencyVariation() { rm->calculateLatencyVariation(); }
 	void makeByteLatencyVariationCDF() { rm->makeByteLatencyVariationCDF(); }
 	void writeByteLatencyVariationCDF(ofstream *stream);
-	void writeSentTimesAndQueueingDelayVariance(const uint64_t first, ofstream& stream) { rm->writeSentTimesAndQueueingDelayVariance(first, stream); }
+	void writeSentTimesAndQueueingDelayVariance(const uint64_t first_tstamp, vector<ofstream*> streams) { rm->writeSentTimesAndQueueingDelayVariance(first_tstamp, streams); }
 	void addRDBStats(int *rdb_sent, int *rdb_miss, int *rdb_hits, int *totBytesSent);
-	void genAckLatencyFiles(long first_tstamp) { rm->genAckLatencyFiles(first_tstamp, getConnKey()); }
 	ulong getNumUniqueBytes();
 	string getConnKey();
 	string getSrcIp();
@@ -91,6 +122,6 @@ public:
 	uint32_t getDuration(bool analyse_range_duration);
 
 	void registerPacketSize(const timeval& first_tstamp_in_dump, const timeval& pkt_tstamp, const uint64_t pkt_size, const uint16_t payloadSize);
-	void writePacketByteCountAndITT(ofstream* all_stream, ofstream* conn_stream);
+	void writePacketByteCountAndITT(vector<ofstream*> streams);
 };
 #endif /* CONNECTION_H */

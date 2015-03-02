@@ -25,7 +25,8 @@ bool isNumeric(const char* pszInput, int nNumberBase) {
 }
 
 
-void parse_print_packets(char* optarg) {
+void parse_print_packets(char* optarg)
+{
 	std::istringstream ss(optarg);
 	std::string token;
 	uint64_t last_range_seq = 0;
@@ -60,4 +61,31 @@ void parse_print_packets(char* optarg) {
 		}
 		istringstream(token) >> num;
 	}
+}
+
+/**
+ * Parse the long_options data structure to ensure an optstring that
+ * is always up to date.
+ * Return pair<string,string>(OPTSTRING, usage)
+ */
+pair <string,string> make_optstring(struct option long_options[])
+{
+	stringstream usage_tmp, opts;
+	int i = 0;
+	for (; long_options[i].name != 0; i++) {
+		if (i)
+			usage_tmp << "|";
+		if (isprint(long_options[i].val))
+			usage_tmp << "-" << ((char) long_options[i].val);
+		else
+			usage_tmp << "--" << (long_options[i].name);
+
+		opts << (char) long_options[i].val;
+		if (long_options[i].has_arg == no_argument)
+			continue;
+		opts << ':';
+		if (long_options[i].has_arg == optional_argument)
+			opts << ':';
+	}
+	return make_pair(opts.str(), usage_tmp.str());
 }

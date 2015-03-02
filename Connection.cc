@@ -3,6 +3,18 @@
 #include "util.h"
 #include "color_print.h"
 
+ofstream& operator<<(ofstream& stream, const PacketSizeGroup& psGroup) {
+	stream << psGroup.str();
+	return stream;
+}
+
+
+string PacketSizeGroup::str() const {
+	ostringstream buffer;
+	buffer << packetSizes.size() << "," << bytes;
+	return buffer.str();
+}
+
 uint32_t Connection::getDuration(bool analyse_range_duration) {
 	if (analyse_range_duration)
 		return getTimeInterval(rm->analyse_range_start->second, rm->analyse_range_last->second);
@@ -14,22 +26,23 @@ uint32_t Connection::getDuration(bool analyse_range_duration) {
 bool Connection::registerSent(struct sendData* sd) {
 	totPacketSize += sd->totalSize;
 	nrPacketsSent++;
+#ifdef DEBUG
 	int debug = 0;
+#endif
 
 	if (sd->data.endSeq > lastLargestEndSeq && lastLargestEndSeq +1 != sd->data.seq) {
+#ifdef DEBUG
 		if (debug) {
 			printf("CONN: %s\n", getConnKey().c_str());
 			colored_printf(RED, "Sending unexpected sequence number: %lu, lastlargest: %lu\n",
 						   sd->data.seq, lastLargestEndSeq);
 		}
-
+#endif
 		// For some reason, seq can increase even if no data was sent, some issue with multiple SYN packets.
 		// 2014-08-12: This is expected for SYN retries after timeout (aka new connections)
 		if (sd->data.flags & TH_SYN) {
 			//printf("Changing firstSeq from %u to %u\n", rm->firstSeq, sd->data.seq_absolute);
-
 			rm->firstSeq = sd->data.seq_absolute;
-
 			//printf("Changing SD seq from (%lu - %lu) to (%d - %d)\n", sd->data.seq, sd->data.endSeq, 0, 0);
 			sd->data.seq = 0;
 			sd->data.endSeq = 0;
@@ -48,12 +61,13 @@ bool Connection::registerSent(struct sendData* sd) {
 			return true;
 	}
 
+#ifdef DEBUG
 	if (debug) {
 		printf("\nRegisterSent (%lu): %s\n",
                (ulong)(sd->data.endSeq - sd->data.seq),
 			   relative_seq_pair_str(rm, sd->data.seq, END_SEQ(sd->data.endSeq)).c_str());
 	}
-
+#endif
 	//printf("lastLargestEndSeq: %lu\n", lastLargestEndSeq);
 
 
@@ -66,7 +80,7 @@ bool Connection::registerSent(struct sendData* sd) {
 				   rm->relative_seq(lastLargestStartSeq),
 				   sd->data.payloadSize);
 		}
-
+#ifdef DEBUG
 		if (debug) {
 			//printf("\n");
 			printf("sd->data.seq:    %lu\n", rm->relative_seq(sd->data.seq));
@@ -80,24 +94,24 @@ bool Connection::registerSent(struct sendData* sd) {
 			printf("(sd->data.seq < lastLargestEndSeq): %d\n", (sd->data.seq < lastLargestEndSeq));
 			printf("(sd->data.endSeq > lastLargestEndSeq): %d\n", (sd->data.endSeq > lastLargestEndSeq));
 		}
-
+#endif
 		// Same seq as previous packet, if (lastLargestStartSeq + lastLargestEndSeq) == 0, it's the first packet of a stream with no SYN
 		if ((sd->data.seq == lastLargestStartSeq) && (sd->data.endSeq > lastLargestEndSeq)
 			&& (lastLargestStartSeq + lastLargestEndSeq) != 0) {
 			bundleCount++;
-			totRDBBytesSent += (lastLargestEndSeq - sd->data.seq +1);
+			totRDBBytesSent += (lastLargestEndSeq - sd->data.seq);
 			totNewDataSent += (sd->data.endSeq - lastLargestEndSeq);
 			sd->data.is_rdb = true;
 			sd->data.rdb_end_seq = lastLargestEndSeq;
 		} else if ((sd->data.seq > lastLargestStartSeq) && (sd->data.seq < lastLargestEndSeq)
 				   && (sd->data.endSeq > lastLargestEndSeq)) {
-			totRDBBytesSent += (lastLargestEndSeq - sd->data.seq +1);
+			totRDBBytesSent += (lastLargestEndSeq - sd->data.seq);
 			totNewDataSent += (sd->data.endSeq - lastLargestEndSeq);
 			bundleCount++;
 			sd->data.is_rdb = true;
 			sd->data.rdb_end_seq = lastLargestEndSeq;
 		} else if ((sd->data.seq < lastLargestEndSeq) && (sd->data.endSeq > lastLargestEndSeq)) {
-			totRDBBytesSent += (lastLargestEndSeq - sd->data.seq +1);
+			totRDBBytesSent += (lastLargestEndSeq - sd->data.seq);
 			totNewDataSent += (sd->data.endSeq - lastLargestEndSeq);
 			bundleCount++;
 			sd->data.is_rdb = true;
@@ -279,7 +293,7 @@ void Connection::set_analyse_range_interval() {
 
 /* Generate statistics for each connection.
    update aggregate stats if requested */
-void Connection::addConnStats(struct connStats* cs) {
+void Connection::addConnStats(ConnStats* cs) {
 	cs->duration += getDuration(true);
 	cs->analysed_duration_sec += rm->analyse_time_sec_end - rm->analyse_time_sec_start;
 	cs->analysed_start_sec += rm->analyse_time_sec_start;
@@ -332,11 +346,21 @@ void Connection::addConnStats(struct connStats* cs) {
 }
 
 /* Generate statistics for bytewise latency */
-void Connection::genBytesLatencyStats(struct PacketStats* bs){
-	/* Iterate through vector and gather data */
+void Connection::genBytesLatencyStats(PacketStats* bs){
 	rm->genStats(bs);
 }
 
+PacketStats* Connection::getBytesLatencyStats() {
+	if (!packetStats.has_stats()) {
+		packetStats.init();
+		rm->genStats(&packetStats);
+	}
+	return &packetStats;
+}
+
+void Connection::genAckLatencyData(long first_tstamp, vector<SPNS::shared_ptr<vector <LatencyItem> > > &diff_times) {
+	rm->genAckLatencyData(first_tstamp, diff_times, getConnKey());
+}
 
 /* Check validity of connection range and time data */
 void Connection::validateRanges(){
@@ -439,11 +463,15 @@ void Connection::registerPacketSize(const timeval& first, const timeval& ts, con
 	while (sent_time_bucket_idx >= packetSizes.size()) {
 		vector< PacketSize> empty;
 		packetSizes.push_back(empty);
+		PacketSizeGroup empty2;
+		packetSizeGroups.push_back(empty2);
 	}
-	packetSizes[sent_time_bucket_idx].push_back(PacketSize(ts, ps, payloadSize));
+	PacketSize pSize(ts, ps, payloadSize);
+	packetSizes[sent_time_bucket_idx].push_back(pSize);
+	packetSizeGroups[sent_time_bucket_idx].add(pSize);
 }
 
-void Connection::writePacketByteCountAndITT(ofstream* all_stream, ofstream* conn_stream) {
+void Connection::writePacketByteCountAndITT(vector<ofstream*> streams) {
 	size_t i, j;
 
 	uint64_t k = 0;
@@ -457,12 +485,9 @@ void Connection::writePacketByteCountAndITT(ofstream* all_stream, ofstream* conn
 			itt = (tmp - prev) / 1000L;
 			prev = tmp;
 
-			if (all_stream) {
-				*all_stream << tmp << "," << itt << "," << packetSizes[i][j].payload_size << "," << packetSizes[i][j].packet_size << endl;
-			}
-			if (conn_stream) {
-				*conn_stream << tmp << "," << itt << "," << packetSizes[i][j].payload_size << "," << packetSizes[i][j].packet_size << endl;
-			}
+			for(ofstream* stream : streams) {
+				*stream << tmp << "," << itt << "," << packetSizes[i][j].payload_size << "," << packetSizes[i][j].packet_size << endl;
+            }
 		}
 	}
 }

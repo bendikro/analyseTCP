@@ -33,71 +33,50 @@
 #include <getopt.h>
 #include <sys/stat.h>
 
+#define OPT_PORT 400
+#define OPT_ANALYSE_START 401
+#define OPT_ANALYSE_END 402
+#define OPT_ANALYSE_DURATION 403
+
 static struct option long_options[] = {
-	{"sender-dump",              	required_argument, 0, 'f'},
-	{"src-ip",                   	required_argument, 0, 's'},
-	{"src-port",                 	required_argument, 0, 'q'},
-	{"dst-ip",                   	required_argument, 0, 'r'},
-	{"dst-port",                 	required_argument, 0, 'p'},
-	{"src-nat-ip",               	required_argument, 0, 'm'},
-	{"dst-nat-ip",              	required_argument, 0, 'n'},
-	{"receiver-dump",            	required_argument, 0, 'g'},
-	{"output-dir",               	required_argument, 0, 'o'},
-	{"prefix",                   	required_argument, 0, 'u'},
-	{"transport-layer",   		 	no_argument,       0, 't'},
-	{"latency-variation",        	no_argument,       0, 'c'},
-	{"latency-values",           	no_argument,       0, 'l'},
-	{"queueing-delay",			 	no_argument,       0, 'Q'},
+	{"sender-dump",                 required_argument, 0, 'f'},
+	{"src-ip",                      required_argument, 0, 's'},
+	{"src-port",                    required_argument, 0, 'q'},
+	{"dst-ip",                      required_argument, 0, 'r'},
+	{"dst-port",                    required_argument, 0, 'p'},
+	{"src-nat-ip",                  required_argument, 0, 'm'},
+	{"dst-nat-ip",                  required_argument, 0, 'n'},
+	{"receiver-dump",               required_argument, 0, 'g'},
+	{"output-dir",                  required_argument, 0, 'o'},
+	{"prefix",                      required_argument, 0, 'u'},
+	{"transport-layer",             no_argument,       0, 't'},
+	{"latency-variation",           no_argument,       0, 'c'},
+	{"latency-values",              no_argument,       0, 'l'},
+	{"queueing-delay",              no_argument,       0, 'Q'},
 	{"throughput-interval",         optional_argument, 0, 'T'},
-	{"loss-interval",            	optional_argument, 0, 'L'},
-	{"percentiles",              	optional_argument, 0, 'i'},
-	{"connection-list",          	no_argument,       0, 'e'},
-	{"aggregated",               	no_argument,       0, 'a'},
-	{"aggregated-only",          	no_argument,       0, 'A'},
-	{"relative-sequence-numbers",	no_argument,       0, 'j'},
-	{"packet-details",             	optional_argument, 0, 'y'},
-	{"colored-print",              	no_argument,       0, 'k'},
-	{"help",                     	no_argument,       0, 'h'},
-	{"validate-ranges",            	no_argument,       0, 'V'},
-	{"verbose",                  	no_argument, 	   0, 'v'},
-	{"debug",                    	required_argument, 0, 'd'},
-	{"analyse-start",            	required_argument, 0, 'S'},
-	{"analyse-end",              	required_argument, 0, 'E'},
-	{"analyse-duration",         	required_argument, 0, 'D'},
-	{"tcp-port",         	        required_argument, 0, 400},
+	{"loss-interval",               optional_argument, 0, 'L'},
+	{"percentiles",                 optional_argument, 0, 'i'},
+	{"print-conns",                 no_argument,       0, 'e'},
+	{"write-conns",                 no_argument,       0, 'E'},
+	{"aggregated",                  no_argument,       0, 'a'},
+	{"aggregated-only",             no_argument,       0, 'A'},
+	{"relative-sequence-numbers",   no_argument,       0, 'j'},
+	{"packet-details",              optional_argument, 0, 'y'},
+	{"colored-print",               no_argument,       0, 'k'},
+	{"help",                        no_argument,       0, 'h'},
+	{"validate-ranges",             no_argument,       0, 'V'},
+	{"verbose",                     no_argument,       0, 'v'},
+	{"debug",                       required_argument, 0, 'd'},
+	{"analyse-start",               required_argument, 0, OPT_ANALYSE_START},
+	{"analyse-end",                 required_argument, 0, OPT_ANALYSE_END},
+	{"analyse-duration",            required_argument, 0, OPT_ANALYSE_DURATION},
+	{"tcp-port",                    required_argument, 0, OPT_PORT},
 	{0, 0, 0, 0}
 };
 
-string OPTSTRING;
-string usage_str;
 
-
-void make_optstring() {
-/*
-    const char *name;
-    int         has_arg;
-    int        *flag;
-    int         val;
-*/
-	stringstream usage_tmp, opts;
-	int i = 0;
-	for (; long_options[i].name != 0; i++) {
-		if (i)
-			usage_tmp << "|";
-		usage_tmp << "-" << ((char) long_options[i].val);
-
-		opts << (char) long_options[i].val;
-		if (long_options[i].has_arg == no_argument)
-			continue;
-		opts << ':';
-		if (long_options[i].has_arg == optional_argument)
-			opts << ':';
-	}
-	OPTSTRING = opts.str();
-	usage_str = usage_tmp.str();
-}
-
-void usage (char* argv, int exit_status=1, int help_level=1){
+void usage(char* argv, string usage_str, int exit_status=1, int help_level=1)
+{
 	printf("Usage: %s [%s]\n", argv, usage_str.c_str());
 
 	printf("Required options:\n");
@@ -151,6 +130,7 @@ void usage (char* argv, int exit_status=1, int help_level=1){
 	printf(" -a                  : Produce aggregated statistics (off by default, optional)\n");
 	printf(" -A                  : Only print aggregated statistics.\n");
 	printf(" -e                  : List the connections found in the dumpfile.\n");
+	printf(" -E                  : Write per-connection stats to file.\n");
 	printf(" -j                  : Use relative sequence numbers in output.\n");
 	printf(" -i<percentiles>     : Calculate the specified percentiles for latency and packet size.\n");
 	printf("                       Comma separated list of percentiles, default is 1,25,50,75,99\n");
@@ -214,7 +194,7 @@ string tcp_port = "";
 string sendfn = ""; /* Sender dump file name */
 string recvfn = ""; /* Receiver dump filename */
 
-void parse_cmd_args(int argc, char *argv[]) {
+void parse_cmd_args(int argc, char *argv[], string OPTSTRING, string usage_str) {
 	int option_index = 0;
 	int c;
 	int help_level = 0;
@@ -232,35 +212,38 @@ void parse_cmd_args(int argc, char *argv[]) {
 			break;
 		case 'p':
 			dst_port = string(optarg);
-            if( not tcp_port.empty() )
-            {
+			if( not tcp_port.empty() )
+			{
 				colored_printf(RED, "-p cannot be combined with --tcp-port, ignoring -p\n" );
-                dst_port = "";
-            }
+				dst_port = "";
+			}
 			break;
 		case 'q':
 			src_port = string(optarg);
-            if( not tcp_port.empty() )
-            {
+			if( not tcp_port.empty() )
+			{
 				colored_printf(RED, "-q cannot be combined with --tcp-port, ignoring -q\n" );
-                src_port = "";
-            }
+				src_port = "";
+			}
 			break;
-        case 400 :
-            tcp_port = string(optarg);
-            if( not dst_port.empty() )
-            {
+		case OPT_PORT :
+			tcp_port = string(optarg);
+			if( not dst_port.empty() )
+			{
 				colored_printf(RED, "--tcp-port cannot be combined with -p, ignoring --tcp-port\n" );
-                tcp_port = "";
-            }
-            else if( not src_port.empty() )
-            {
+				tcp_port = "";
+			}
+			else if( not src_port.empty() )
+			{
 				colored_printf(RED, "--tcp-port cannot be combined with -q, ignoring --tcp-port\n" );
-                tcp_port = "";
-            }
-            break;
+				tcp_port = "";
+			}
+			break;
 		case 'e':
 			GlobOpts::connDetails = true;
+			break;
+		case 'E':
+			GlobOpts::writeConnDetails = true;
 			break;
 		case 'm':
 			GlobOpts::sendNatIP = optarg;
@@ -282,7 +265,7 @@ void parse_cmd_args(int argc, char *argv[]) {
 				uint64_t ret = strtoul(optarg, &sptr, 10);
 				if (ret == 0 || sptr == NULL || *sptr != '\0') {
 					colored_printf(RED, "Option -%c requires a valid integer: '%s'\n", c, optarg);
-					usage(argv[0]);
+					usage(argv[0], usage_str);
 				}
 				GlobOpts::lossAggrMs = ret;
 			}
@@ -294,7 +277,7 @@ void parse_cmd_args(int argc, char *argv[]) {
 				uint64_t ret = strtoul(optarg, &sptr, 10);
 				if (ret == 0 || sptr == NULL || *sptr != '\0') {
 					colored_printf(RED, "Option -%c requires a valid integer: '%s'\n", c, optarg);
-					usage(argv[0]);
+					usage(argv[0], usage_str);
 				}
 				GlobOpts::throughputAggrMs = ret;
 			}
@@ -347,13 +330,13 @@ void parse_cmd_args(int argc, char *argv[]) {
 		case 'k':
 			disable_colors = false;
 			break;
-		case 'S':
+		case OPT_ANALYSE_START:
 			GlobOpts::analyse_start = atoi(optarg);
 			break;
-		case 'E':
+		case OPT_ANALYSE_END:
 			GlobOpts::analyse_end = atoi(optarg);
 			break;
-		case 'D':
+		case OPT_ANALYSE_DURATION:
 			GlobOpts::analyse_duration = atoi(optarg);
 			break;
 		case 'Q':
@@ -365,24 +348,24 @@ void parse_cmd_args(int argc, char *argv[]) {
 			break;
 		case '?' :
 			printf("Unknown option: -%c\n", c);
-			usage(argv[0]);
+			usage(argv[0], usage_str);
 		default:
 			break;
 		}
 	}
 
 	if (help_level > 0) {
-		usage(argv[0], 0, help_level);
+		usage(argv[0], usage_str, 0, help_level);
 	}
 
 	if (GlobOpts::analyse_end && GlobOpts::analyse_duration) {
 		printf("You may only supply either --analyse-end or analyse-duration, not both\n");
-		usage(argv[0]);
+		usage(argv[0], usage_str);
 	}
 
 	if (GlobOpts::withLoss && !GlobOpts::withRecv) {
 		printf("Option --loss-interval requires option --receiver-dump\n");
-		usage(argv[0]);
+		usage(argv[0], usage_str);
 	}
 
 	if (GlobOpts::oneway_delay_variance) {
@@ -395,13 +378,13 @@ void parse_cmd_args(int argc, char *argv[]) {
 	}
 
 	if (sendfn == "") {
-		usage(argv[0]);
+		usage(argv[0], usage_str);
 	}
 }
 
 int main(int argc, char *argv[]){
-	make_optstring();
-	parse_cmd_args(argc, argv);
+	pair <string,string> ret = make_optstring(long_options);
+	parse_cmd_args(argc, argv, ret.first, ret.second);
 
 	if(GlobOpts::debugLevel < 0)
 		cerr << "debugLevel = " << GlobOpts::debugLevel << endl;
@@ -418,10 +401,6 @@ int main(int argc, char *argv[]){
 
 		GlobOpts::prefix = GlobOpts::RFiles_dir + GlobOpts::prefix;
 	}
-
-	// Define once to run the constructor of GlobStats
-	GlobStats s;
-	globStats = &s;
 
 	/* Create Dump - object */
 	Dump *senderDump = new Dump(src_ip, dst_ip, src_port, dst_port, tcp_port, sendfn);
@@ -450,9 +429,7 @@ int main(int argc, char *argv[]){
 
 			if (!GlobOpts::aggOnly) {
 				stats.writeByteLatencyVariationCDF();
-				//senderDump->writeByteLatencyVariationCDF();
 			}
-
 			if (GlobOpts::aggregate){
 				stats.writeAggByteLatencyVariationCDF();
 			}
@@ -463,16 +440,23 @@ int main(int argc, char *argv[]){
 		}
 	}
 
-	if (GlobOpts::genAckLatencyFiles)
-		stats.genAckLatencyFiles();
+	if (GlobOpts::genAckLatencyFiles) {
+		stats.writeAckLatency();
+		stats.writePerPacketStats();
+	}
 
 	if (GlobOpts::withThroughput) {
 		stats.writeByteCountGroupedByInterval();
 		stats.writePacketByteCountAndITT();
 	}
 
-	if (GlobOpts::withLoss)
-		stats.write_loss_to_file();
+	if (GlobOpts::withLoss) {
+		stats.writeLossStats();
+	}
+
+	if (GlobOpts::writeConnDetails) {
+		stats.writeConnStats();
+	}
 
 	if (GlobOpts::connDetails) {
 		stats.printConns();
@@ -489,4 +473,3 @@ int main(int argc, char *argv[]){
 	delete senderDump;
 	return 0;
 }
-
