@@ -9,8 +9,11 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
 # * TESTS                   - Compile test executable
 #
 # Compile with dash:
+# mkdir build && cd build
 # cmake .. -DWITH_DASH=1
 #
+# To compile a debug build:
+# cmake .. -DCMAKE_BUILD_TYPE=Debug
 
 # Add more test files here when needed
 SET (TEST_FILES tests/TestAnalyseTCP.h)
@@ -44,15 +47,14 @@ SET (INCLUDE_FILES arpa/inet.h netinet/in.h sys/socket.h getopt.h)
 
 CHECK_TYPE_SIZE(ulong HAVE_ULONG)
 
-# SET (CMAKE_CXX_FLAGS "-std=gnu++11 -lm -Wall -Wno-long-long -Wno-variadic-macros") # -Werror?
-
 # Set compiler flags for all configurations
-#SET (CMAKE_CXX_FLAGS "-std=gnu++11 -lm -Wall -Wno-long-long -Wno-variadic-macros") # -Werror?
+SET (CMAKE_CXX_FLAGS "-Wall -Wno-long-long -Wno-variadic-macros")
+SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
-SET (CMAKE_CXX_FLAGS "-Wall -Wno-long-long -Wno-variadic-macros") # -Werror?
-IF (CMAKE_COMPILER_IS_GNUCXX)
-  SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-ENDIF (CMAKE_COMPILER_IS_GNUCXX)
+# Clang warns about unused argument -std=c++11 in the linker command
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Qunused-arguments")
+endif()
 
 # Add NDEBUG only for release version
 # To activate: cmake -DCMAKE_BUILD_TYPE=Release ..
@@ -66,12 +68,12 @@ SET (CMAKE_CXX_FLAGS_DEBUG "-g3 -Wall -DDEBUG -Wextra -pedantic")
 INCLUDE(FindSharedPtr)
 FIND_SHARED_PTR()
 IF (SHARED_PTR_FOUND)
-  IF (SHARED_PTR_TR1_MEMORY_HEADER)
-    SET(HAVE_TR1_MEMORY)
-  ENDIF (SHARED_PTR_TR1_MEMORY_HEADER)
-  IF (SHARED_PTR_TR1_NAMESPACE)
-    SET(HAVE_TR1_NAMESPACE)
-  ENDIF (SHARED_PTR_TR1_NAMESPACE)
+#  IF (SHARED_PTR_TR1_MEMORY_HEADER)
+#    SET(HAVE_TR1_MEMORY)
+#  ENDIF (SHARED_PTR_TR1_MEMORY_HEADER)
+#  IF (SHARED_PTR_TR1_NAMESPACE)
+#    SET(HAVE_TR1_NAMESPACE)
+#  ENDIF (SHARED_PTR_TR1_NAMESPACE)
 ELSE (SHARED_PTR_FOUND)
   MESSAGE(FATAL_ERROR "Unable to find shared_ptr.")
 ENDIF (SHARED_PTR_FOUND)
@@ -127,7 +129,7 @@ INCLUDE_DIRECTORIES (${INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR})
 # Distclean functionality (Remove cmake generated files)
 IF (UNIX OR APPLE)
   ADD_CUSTOM_TARGET(distclean)
-  # Doesn't work to add clean as dependency, so add binaries to DISTCLEANMFILES instead.
+  # Doesn't work to add clean as dependency, so add binaries to DISTCLEANM_FILES instead.
 
   SET(DISTCLEAN_FILES
     Makefile
