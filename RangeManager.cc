@@ -665,18 +665,22 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 					}
 				}
 				else {
+#ifdef DEBUG
 					if (debug_print) {
 						indent_print("data_received_count: %d\n", brIt->second->data_received_count);
 					}
+#endif
 					brIt->second->increase_received(data_seg->tstamp_tcp, data_seg->tstamp_pcap, data_seg->in_sequence);
 					if (!level) {
 						brIt->second->packet_received_count++;
 					}
+#ifdef DEBUG
 					if (debug_print) {
 						indent_print("received_tstamp_tcp: %d\n", brIt->second->received_tstamp_tcp);
 						indent_print("Conn: %s\n", conn->getConnKey().c_str());
 						indent_print("Range: %s\n", STR_RELATIVE_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq));
 					}
+#endif
 					assert(brIt->second->received_tstamp_tcp && "TEST\n");
 				}
 

@@ -138,7 +138,7 @@ void update_vectors_size(vector<SPNS::shared_ptr<vector <LatencyItem> > > &vecto
  /*****************************************
   * BaseStats
   *****************************************/
- BaseStats::BaseStats(bool is_aggregate)
+ BaseStats::BaseStats(bool is_aggregate = false)
      : _is_aggregate(is_aggregate)
      , _counter( 0 )
      , valid( true )
@@ -149,8 +149,9 @@ void update_vectors_size(vector<SPNS::shared_ptr<vector <LatencyItem> > > &vecto
      max = 0;
      cum = 0;
      _counter = 0;
+	 _percentiles.init();
+	 _values.clear();
  }
-
 
  void BaseStats::add( uint64_t val )
  {
@@ -160,6 +161,7 @@ void update_vectors_size(vector<SPNS::shared_ptr<vector <LatencyItem> > > &vecto
      this->min = std::min<int64_t>( this->min, val );
      this->max = std::max<int64_t>( this->max, val );
      this->cum += val;
+	 _values.push_back( val );
  }
 
  double BaseStats::get_avg( ) const
@@ -186,7 +188,51 @@ void update_vectors_size(vector<SPNS::shared_ptr<vector <LatencyItem> > > &vecto
      this->max = std::max<int64_t>( this->max, rhs.max );
      this->cum += rhs.cum;
      _counter++;
+	 _values.insert( _values.end(), rhs._values.begin(), rhs._values.end() );
  }
+
+void BaseStats::makeStats( )
+{
+    if( _values.size() )
+    {
+        if( _values.size() != BaseStats::get_counter() )
+        {
+            cerr << "Crashing !" << endl
+                 << "Array size: " << _values.size() << endl
+                 << "Counter:    " << BaseStats::get_counter() << endl;
+            assert( _values.size() == BaseStats::get_counter() );
+        }
+
+        double mean   = BaseStats::get_avg();
+        double temp   = 0;
+
+        auto it  = _values.begin();
+        auto end = _values.end();
+        for( ; it!=end; it++ )
+        {
+            double val = (*it) - mean;
+            temp += val * val;
+        }
+        _std_dev = sqrt( temp / BaseStats::get_counter() );
+
+        std::sort( _values.begin(), _values.end() );
+        _percentiles.compute( _values );
+    }
+    else
+    {
+        BaseStats::valid = false;
+    }
+}
+
+void BaseStats::sortValues( )
+{
+    std::sort( _values.begin(), _values.end() );
+}
+
+void BaseStats::computePercentiles( )
+{
+    _percentiles.compute( _values );
+}
 
  /*****************************************
   * AggrPacketStats
@@ -235,63 +281,4 @@ void update_vectors_size(vector<SPNS::shared_ptr<vector <LatencyItem> > > &vecto
 	for (ulong i = 0; i < bs.dupacks.size(); i++) {
 		aggregated.dupacks[i] += bs.dupacks[i];
 	}
-}
-
-
-/*****************************************
- * ExtendedStats
- *****************************************/
-void ExtendedStats::add_to_aggregate( const ExtendedStats &rhs )
-{
-	BaseStats::add_to_aggregate( rhs );
-    _values.insert( _values.end(), rhs._values.begin(), rhs._values.end() );
-}
-
-void ExtendedStats::add( uint64_t val )
-{
-	BaseStats::add( val );
-    _values.push_back( val );
-}
-
-void ExtendedStats::makeStats( )
-{
-    if( _values.size() )
-    {
-        if( _values.size() != BaseStats::get_counter() )
-        {
-            cerr << "Crashing !" << endl
-                 << "Array size: " << _values.size() << endl
-                 << "Counter:    " << BaseStats::get_counter() << endl;
-            assert( _values.size() == BaseStats::get_counter() );
-        }
-
-        double mean   = BaseStats::get_avg();
-        double temp   = 0;
-
-        auto it  = _values.begin();
-        auto end = _values.end();
-        for( ; it!=end; it++ )
-        {
-            double val = (*it) - mean;
-            temp += val * val;
-        }
-        _std_dev = sqrt( temp / BaseStats::get_counter() );
-
-        std::sort( _values.begin(), _values.end() );
-        _percentiles.compute( _values );
-    }
-    else
-    {
-        BaseStats::valid = false;
-    }
-}
-
-void ExtendedStats::sortValues( )
-{
-    std::sort( _values.begin(), _values.end() );
-}
-
-void ExtendedStats::computePercentiles( )
-{
-    _percentiles.compute( _values );
 }

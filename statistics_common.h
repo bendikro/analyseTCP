@@ -114,42 +114,21 @@ public:
     bool    valid;
 
 	BaseStats(bool is_aggregate);
-
-    void add_to_aggregate( const BaseStats &rhs );
+	void init();
 
     // add to cum, increase _counter, update min and max
     void add( uint64_t );
-
-	void init();
+    void add_to_aggregate( const BaseStats &rhs );
     double   get_avg( ) const;
     uint32_t get_counter( ) const;
-};
 
-class ExtendedStats : public BaseStats
-{
-public:
-    ExtendedStats(bool _is_aggregate = false)
-        : BaseStats(_is_aggregate)
-    { }
-
-    void add_to_aggregate( const ExtendedStats &rhs );
-
-    // call BaseStats::add, append to _values
-    void add( uint64_t );
+    Percentiles    _percentiles;
+    double         _std_dev;
 
     // derive _std_dev and _percentiles from _values
     void makeStats( );
     void sortValues( );
     void computePercentiles( );
-
-    void init() {
-		_percentiles.init();
-		_values.clear();
-		BaseStats::init();
-	}
-
-    Percentiles    _percentiles;
-    double         _std_dev;
 
 private:
     vector<double> _values;
@@ -157,9 +136,9 @@ private:
 
 class ExtendedPacketStats {
 public:
-	ExtendedStats latency;
-	ExtendedStats packet_length;
-	ExtendedStats itt;
+	BaseStats latency;
+	BaseStats packet_length;
+	BaseStats itt;
 
 	void init() {
 		latency.init();
@@ -181,7 +160,6 @@ public:
 	vector<int> dupacks;
 
 	void init() {
-		printf("PacketStats.init()!\n");
 		sent_times.clear();
 		retrans.clear();
 		dupacks.clear();
