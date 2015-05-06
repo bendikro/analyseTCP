@@ -360,7 +360,8 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 	sd.ipHdrLen          = ipHdrLen;
 	sd.tcpHdrLen         = tcpHdrLen;
 	sd.tcpOptionLen      = tcpHdrLen - 20;
-	sd.data.payloadSize  = ipSize - (ipHdrLen + tcpHdrLen);
+//	sd.data.payloadSize  = ipSize - (ipHdrLen + tcpHdrLen); // This gives incorrect result on some packets where the ipSize is wrong (0 in a test trace)
+	sd.data.payloadSize  = sd.totalSize - (ipHdrLen + tcpHdrLen + SIZE_ETHERNET);
 	sd.data.tstamp_pcap  = header->ts;
 	sd.data.seq_absolute = ntohl(tcp->th_seq);
 	sd.data.seq          = get_relative_sequence_number(sd.data.seq_absolute, tmpConn->rm->firstSeq, tmpConn->lastLargestEndSeq, tmpConn->lastLargestSeqAbsolute, tmpConn);
@@ -375,7 +376,6 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 			fprintf(stdout, "Found invalid sequence numbers in beginning of sender dump. Probably old SYN packets\n");
 			return;
 		}
-
 		printf("Found invalid sequence numbers in beginning of sender dump. Probably the sender dump has retransmissions of packets before the first packet in dump\n");
 		return;
 	}
@@ -397,8 +397,15 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 	sentPacketCount++;
 	sentBytesCount += sd.data.payloadSize;
 
-	if (sd.data.payloadSize > max_payload_size)
+	/*
+	printf("Conn: %s : %s (%lu) (%s)\n", tmpConn->getConnKey().c_str(),
+		   relative_seq_pair_str(tmpConn->rm, sd.data.seq, sd.data.endSeq).c_str(),
+		   (sd.data.endSeq - sd.data.seq), get_TCP_flags_str(sd.data.flags).c_str());
+	*/
+
+	if (sd.data.payloadSize > max_payload_size) {
 		max_payload_size = sd.data.payloadSize;
+	}
 
 	if (tmpConn->registerSent(&sd))
 		tmpConn->registerRange(&sd);

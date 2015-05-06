@@ -65,7 +65,7 @@ static struct option long_options[] = {
 	{"colored-print",               no_argument,       0, 'k'},
 	{"help",                        no_argument,       0, 'h'},
 	{"validate-ranges",             no_argument,       0, 'V'},
-	{"verbose",                     no_argument,       0, 'v'},
+	{"verbose",                     optional_argument, 0, 'v'},
 	{"debug",                       required_argument, 0, 'd'},
 	{"analyse-start",               required_argument, 0, OPT_ANALYSE_START},
 	{"analyse-end",                 required_argument, 0, OPT_ANALYSE_END},
@@ -138,12 +138,7 @@ void usage(char* argv, string usage_str, int exit_status=1, int help_level=1)
 		printf("                       Example for 90th, 99th and 99.9th: -i90,99,99.9\n");
 	}
 	printf(" -y<seq-num-range>   : Print details for each packet. Provide an option sequence number or range of seq to print\n");
-	printf(" -v                  : Be verbose, print more statistics details. The more v's the more verbose.\n");
-	if (help_level > 1) {
-		printf("                         v   = Be verbose and print some details.\n");
-		printf("                         vv  = Be more verbose and print some more details.\n");
-		printf("                         vvv = Be even more verbose and print even more details.\n");
-	}
+	printf(" -v<level>           : Control verbose level. v0 hides most output, v3 gives maximum verbosity\n");
 	printf(" -k                  : Use colors when printing.\n");
 	printf(" -V                  : Disable validation of the data in the ranges.\n");
 	printf(" -d<level>           : Indicate debug level (1-5).\n");
@@ -325,7 +320,10 @@ void parse_cmd_args(int argc, char *argv[], string OPTSTRING, string usage_str) 
 			GlobOpts::validate_ranges = false;
 			break;
 		case 'v':
-			GlobOpts::verbose++;
+			if (optarg)
+				GlobOpts::verbose = atoi(optarg);
+			else
+				GlobOpts::verbose++;
 			break;
 		case 'k':
 			disable_colors = false;
@@ -388,6 +386,9 @@ int main(int argc, char *argv[]){
 
 	if(GlobOpts::debugLevel < 0)
 		cerr << "debugLevel = " << GlobOpts::debugLevel << endl;
+
+	if(GlobOpts::verbose < 0)
+		cerr << "verbose = " << GlobOpts::verbose << endl;
 
 	if (GlobOpts::RFiles_dir.length()) {
 		if (!endsWith(GlobOpts::RFiles_dir, string("/")))
@@ -467,7 +468,9 @@ int main(int argc, char *argv[]){
 		senderDump->printPacketDetails();
 	}
 
-	stats.printStatistics();
+	if (GlobOpts::verbose) {
+		stats.printStatistics();
+	}
 	stats.printDumpStats();
 
 	delete senderDump;

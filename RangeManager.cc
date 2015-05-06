@@ -1011,9 +1011,6 @@ void RangeManager::genStats(PacketStats *bs) {
 					//printf("RETRANS: %lu -> %lu\n", tmp_byte_count, tmp_byte_count2);
 				}
 				else {
-					if (it->second->sent_tstamp_pcap[i].second != ST_PKT) {
-						printf("SENT TYPE; %d\n", it->second->sent_tstamp_pcap[i].second);
-					}
 					bs->sent_times.push_back(SentTime(TV_TO_MICSEC(it->second->sent_tstamp_pcap[i].first), tmp_byte_count));
 				}
 			}

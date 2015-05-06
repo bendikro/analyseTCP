@@ -188,26 +188,26 @@ void update_vectors_size(vector<SPNS::shared_ptr<vector <LatencyItem> > > &vecto
   *****************************************/
  void AggrPacketStats::add(PacketStats &bs)
  {
- 	int64_t max_value = (numeric_limits<int64_t>::max)();
+	if (bs.latency.get_counter()) {
+		aggregated.latency.add_to_aggregate(bs.latency);
+		average.latency.add(bs.latency.get_avg());
+		minimum.latency.add(bs.latency.min);
+		maximum.latency.add(bs.latency.max);
+	}
 
- 	aggregated.latency.add_to_aggregate(bs.latency);
- 	average.latency.add(bs.latency.get_avg());
- 	minimum.latency.add(bs.latency.min);
- 	maximum.latency.add(bs.latency.max);
+	if (bs.packet_length.get_counter()) {
+		aggregated.packet_length.add_to_aggregate(bs.packet_length);
+		average.packet_length.add(bs.packet_length.get_avg());
+		minimum.packet_length.add(bs.packet_length.min);
+		maximum.packet_length.add(bs.packet_length.max);
+	}
 
- 	aggregated.packet_length.add_to_aggregate(bs.packet_length);
- 	average.packet_length.add(bs.packet_length.get_avg());
- 	minimum.packet_length.add(bs.packet_length.min);
- 	maximum.packet_length.add(bs.packet_length.max);
-
- 	aggregated.itt.add_to_aggregate(bs.itt);
- 	average.itt.add(bs.itt.get_avg());
- 	minimum.itt.add(bs.itt.min);
- 	maximum.itt.add(bs.itt.max);
-
- 	if (bs.itt.min == max_value) {
- 		fprintf(stderr, "ERROR!!\n");
- 	}
+	if (bs.itt.get_counter()) {
+		aggregated.itt.add_to_aggregate(bs.itt);
+		average.itt.add(bs.itt.get_avg());
+		minimum.itt.add(bs.itt.min);
+		maximum.itt.add(bs.itt.max);
+	}
 
  	// Add retrans stats
  	if ((ulong) bs.retrans.size() > aggregated.retrans.size()) {
@@ -236,16 +236,15 @@ void update_vectors_size(vector<SPNS::shared_ptr<vector <LatencyItem> > > &vecto
 /*****************************************
  * ExtendedStats
  *****************************************/
-void ExtendedStats::add_to_aggregate
-( const ExtendedStats &rhs )
+void ExtendedStats::add_to_aggregate( const ExtendedStats &rhs )
 {
-BaseStats::add_to_aggregate( rhs );
+	BaseStats::add_to_aggregate( rhs );
     _values.insert( _values.end(), rhs._values.begin(), rhs._values.end() );
 }
 
 void ExtendedStats::add( uint64_t val )
 {
-BaseStats::add( val );
+	BaseStats::add( val );
     _values.push_back( val );
 }
 

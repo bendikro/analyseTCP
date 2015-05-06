@@ -57,7 +57,7 @@ void Statistics::printConns() {
 		printf("\n");
 	}
 
-	if (GlobOpts::verbose >= 3) {
+	if (GlobOpts::verbose >= 4) {
 		printf("\n   %-40s   %-17d   %-11d   %4.1f %%        %4.1f %%\n", "Average", 0,
 			   csAggregated.nrPacketsSentFoundInDump/(int)sortedConns.size(), (csAggregated.bytes_lost / (double) csAggregated.totBytesSent) * 100,
 			   (csAggregated.ranges_lost / (double) csAggregated.ranges_sent) * 100);
@@ -72,6 +72,9 @@ void Statistics::printConns() {
 
 
 void Statistics::printDumpStats() {
+	if (!GlobOpts::verbose)
+		return;
+
 	cout << endl;
 	colored_printf(YELLOW, "General info for entire dump:\n");
 	printf("  %s:%s -> %s:%s\n", dump.srcIp.c_str(), dump.srcPort.c_str(), dump.dstIp.c_str(), dump.dstPort.c_str());
@@ -140,7 +143,7 @@ void Statistics::printStatistics() {
 
 		if (!GlobOpts::aggOnly) {
 			colored_printf(YELLOW, "STATS FOR CONN: %s:%u -> %s:%u", cIt->second->getSrcIp().c_str(), cIt->second->srcPort,
-			       cIt->second->getDstIp().c_str(), cIt->second->dstPort);
+						   cIt->second->getDstIp().c_str(), cIt->second->dstPort);
 
 			if (GlobOpts::analyse_start || GlobOpts::analyse_end || GlobOpts::analyse_duration) {
 				colored_printf(YELLOW, " (Interval analysed (sec): %d-%d)", cIt->second->rm->analyse_time_sec_start, cIt->second->rm->analyse_time_sec_end);
@@ -322,7 +325,7 @@ void printBytesLatencyStatsAggr(ConnStats *cs, AggrPacketStats &aggrStats) {
 	printStatsAggr("latencies", "ms", cs, aggrStats.aggregated.latency, aggrStats.minimum.latency,
 				   aggrStats.average.latency, aggrStats.maximum.latency);
 
-	if (GlobOpts::verbose) {
+	if (GlobOpts::verbose > 1) {
 		printf("\nAggregated latency values explained:\n"
 			   "Minimum min: The smallest value of all the minimum latencies for each connection\n"
 			   "Minimum avg: The average of all the minimum latency values for all connections\n"
@@ -350,7 +353,7 @@ void printBytesLatencyStats(PacketStats* bs) {
 
 	bs->latency._percentiles.print("L %*sth percentile %-26s    : %10.0f ms\n");
 
-	if (GlobOpts::verbose) {
+	if (GlobOpts::verbose > 1) {
 		vector<int>::reverse_iterator curr;
 		int value;
 
@@ -363,7 +366,7 @@ void printBytesLatencyStats(PacketStats* bs) {
 		print_stats_separator(false);
 		printf("  Max retransmissions                           : %10lu \n", bs->retrans.size());
 		for (ulong i = 0; i < bs->retrans.size(); i++) {
-			if ((GlobOpts::verbose < 2) && i > 2)
+			if ((GlobOpts::verbose < 3) && i > 2)
 				break;
 			if (bs->retrans[i] == 0)
 				break;
@@ -378,7 +381,7 @@ void printBytesLatencyStats(PacketStats* bs) {
 		}
 		printf("  Max dupacks                                   : %10lu \n", bs->dupacks.size());
 		for (ulong i = 0; i < bs->dupacks.size(); i++) {
-			if ((GlobOpts::verbose > 1) || i < 3)
+			if ((GlobOpts::verbose > 2) || i < 3)
 				printf("  %2lu. dupacks (count / accumulated)             : %6d / %d\n", i+1, bs->dupacks[i], dupacks_accumed[i]);
 			//printf("  Occurrences of %2lu. dupacks                   : %d\n", i + 1, bs->dupacks[i]);
 		}

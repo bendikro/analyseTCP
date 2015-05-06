@@ -15,6 +15,21 @@ string relative_seq_pair_str(RangeManager *rm, uint64_t start, uint64_t end) {
 	return seq_pair_str(start, end);
 }
 
+string get_TCP_flags_str(u_char flags) {
+	stringstream out;
+	if (flags & TH_SYN)
+		out << ",SYN";
+	if (flags & TH_ACK)
+		out << ",ACK";
+	if (flags & TH_FIN)
+		out << ",FIN";
+	if (flags & TH_RST)
+		out << ",RST";
+	string result = out.str();
+	if (!result.empty())
+		result.erase(0, 1);
+	return "[" + result + "]";;
+}
 /*
   Checks if a char buf is a string
 */
@@ -62,6 +77,21 @@ void parse_print_packets(char* optarg)
 		istringstream(token) >> num;
 	}
 }
+
+// Requires #include <execinfo.h>
+//void print_stack() {
+//	void *array[10];
+//	size_t size;
+//
+//	// get void*'s for all entries on the stack
+//	size = backtrace(array, 10);
+//
+//	// print out all the frames to stderr
+//	//fprintf(stderr, "Error: signal %d:\n", sig);
+//	backtrace_symbols_fd(array, size, STDERR_FILENO);
+//	//exit(1);
+//}
+
 
 /**
  * Parse the long_options data structure to ensure an optstring that

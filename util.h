@@ -13,6 +13,8 @@ string relative_seq_pair_str(RangeManager *rm, uint64_t start, uint64_t end);
 bool isNumeric(const char* pszInput, int nNumberBase);
 void parse_print_packets(char* optarg);
 pair <string,string>  make_optstring(struct option long_options[]);
+void print_stack(void);
+string get_TCP_flags_str(u_char flags);
 
 /*
   Used to test if a sequence number comes after another
