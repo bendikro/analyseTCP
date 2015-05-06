@@ -141,11 +141,16 @@ void update_vectors_size(vector<SPNS::shared_ptr<vector <LatencyItem> > > &vecto
  BaseStats::BaseStats(bool is_aggregate)
      : _is_aggregate(is_aggregate)
      , _counter( 0 )
-     , min( std::numeric_limits<int64_t>::max() )
-     , max(0)
-     , cum(0)
      , valid( true )
- {}
+ {init();}
+
+ void BaseStats::init() {
+     min = std::numeric_limits<int64_t>::max();
+     max = 0;
+     cum = 0;
+     _counter = 0;
+ }
+
 
  void BaseStats::add( uint64_t val )
  {

@@ -22,25 +22,15 @@ char *colored(int fg_color, char *buf, const char *str) {
 	return buf;
 }
 
-
-void colored_printf(int fg_color, const char *format, ...) {
-	uint32_t max_size = 1000;
-	char *buf = static_cast<char*>(malloc(max_size));
-	if (buf == NULL) {
-		printf("Failed to allocate memory (colored_printf)!\n");
-		return;
-	}
-	va_list ap;
-	va_start(ap, format);
-	vsprintf(buf, format, ap);
-	va_end(ap);
+char* _colored_sprintf(uint32_t max_size, int fg_color, char *buf, const char *format, va_list args) {
+	vsprintf(buf, format, args);
 
 	// Add color
 	if (fg_color != NO_COLOR && !disable_colors) {
 		char *tmp = static_cast<char*>(malloc(strlen(buf) + 30));
 		if (tmp == NULL) {
-			printf("Failed to allocate memory (colored_printf)!\n");
-			return;
+			printf("Failed to allocate memory (colored_sprintf)!\n");
+			return 0;
 		}
 		strcpy(tmp, buf);
 		colored(fg_color, tmp, buf);
@@ -52,31 +42,39 @@ void colored_printf(int fg_color, const char *format, ...) {
 		colored(RED, buf2, "WARNING! length of string is greater than the buffer length!!\n");
 		fprintf(stderr, "%s", buf2);
 	}
+	return buf;
+}
 
-	printf("%s", buf);
+void _colored_printf(FILE *stream, uint32_t max_size, int fg_color, const char *format, va_list args) {
+	char *buf = static_cast<char*>(malloc(max_size));
+	if (buf == NULL) {
+		printf("Failed to allocate memory (colored_printf)!\n");
+		return;
+	}
+	_colored_sprintf(max_size, fg_color, buf, format, args);
+	fprintf(stream, "%s", buf);
 	free(buf);
 }
 
+void colored_printf(FILE *stream, int fg_color, const char *format, ...) {
+	va_list args;
+	va_start(args, format);
+	_colored_printf(stream, 1000, fg_color, format, args);
+	va_end(args);
+}
+void colored_printf(int fg_color, const char *format, ...) {
+	va_list args;
+	va_start(args, format);
+	_colored_printf(stdout, 1000, fg_color, format, args);
+	va_end(args);
+}
 
-char* colored_sprintf(int fg_color, char *str, const char *format, ...) {
-	va_list ap;
-	va_start(ap, format);
-	vsprintf(str, format, ap);
-	va_end(ap);
-
-	// Add color
-	if (fg_color != NO_COLOR && !disable_colors) {
-		char *tmp = static_cast<char*>(malloc(strlen(str) + 30));
-		if (tmp == NULL) {
-			printf("Failed to allocate memory (colored_sprintf)!\n");
-			return 0;
-		}
-		strcpy(tmp, str);
-		colored(fg_color, tmp, str);
-		strcpy(str, tmp);
-		free(tmp);
-	}
-	return str;
+char* colored_sprintf(uint32_t max_size, int fg_color, char *buf, const char *format, ...) {
+	va_list args;
+	va_start(args, format);
+	_colored_sprintf(max_size, fg_color, buf, format, args);
+	va_end(args);
+	return buf;
 }
 
 void printf_c(const char *fmt, ...) {

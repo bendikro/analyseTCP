@@ -120,6 +120,7 @@ public:
     // add to cum, increase _counter, update min and max
     void add( uint64_t );
 
+	void init();
     double   get_avg( ) const;
     uint32_t get_counter( ) const;
 };
@@ -141,6 +142,12 @@ public:
     void sortValues( );
     void computePercentiles( );
 
+    void init() {
+		_percentiles.init();
+		_values.clear();
+		BaseStats::init();
+	}
+
     Percentiles    _percentiles;
     double         _std_dev;
 
@@ -155,9 +162,9 @@ public:
 	ExtendedStats itt;
 
 	void init() {
-		latency._percentiles.init();
-		packet_length._percentiles.init();
-		itt._percentiles.init();
+		latency.init();
+		packet_length.init();
+		itt.init();
 	}
 	ExtendedPacketStats(bool is_aggregate) :
 		latency(is_aggregate),
@@ -172,6 +179,14 @@ public:
 	vector<SentTime> sent_times;
 	vector<int> retrans;
 	vector<int> dupacks;
+
+	void init() {
+		printf("PacketStats.init()!\n");
+		sent_times.clear();
+		retrans.clear();
+		dupacks.clear();
+		ExtendedPacketStats::init();
+	}
 
 	bool has_stats() {
 		return latency.get_counter() > 0;
@@ -190,6 +205,7 @@ public:
 	void init() {
 		aggregated.init();
 		minimum.init();
+		average.init();
 		maximum.init();
 	}
 

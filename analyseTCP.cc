@@ -320,10 +320,21 @@ void parse_cmd_args(int argc, char *argv[], string OPTSTRING, string usage_str) 
 			GlobOpts::validate_ranges = false;
 			break;
 		case 'v':
-			if (optarg)
-				GlobOpts::verbose = atoi(optarg);
-			else
+			if (optarg) {
+				if (isNumeric(optarg, 10)) {
+					GlobOpts::verbose = atoi(optarg);
+				} else {
+					for (uint32_t i = 0; i < strlen(optarg); i++) {
+						if (optarg[i] == 'v') {
+							GlobOpts::verbose++;
+						} else {
+							colored_printf(RED, "Invalid optional argument to verbose option: '%s'\n", optarg);
+						}
+					}
+				}
+			} else {
 				GlobOpts::verbose++;
+			}
 			break;
 		case 'k':
 			disable_colors = false;
@@ -387,7 +398,7 @@ int main(int argc, char *argv[]){
 	if(GlobOpts::debugLevel < 0)
 		cerr << "debugLevel = " << GlobOpts::debugLevel << endl;
 
-	if(GlobOpts::verbose < 0)
+	if(GlobOpts::verbose < 1)
 		cerr << "verbose = " << GlobOpts::verbose << endl;
 
 	if (GlobOpts::RFiles_dir.length()) {
