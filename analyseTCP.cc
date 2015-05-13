@@ -52,6 +52,7 @@ static struct option long_options[] = {
 	{"transport-layer",             no_argument,       0, 't'},
 	{"latency-variation",           no_argument,       0, 'c'},
 	{"latency-values",              no_argument,       0, 'l'},
+	{"per-packet-stats",            no_argument,       0, 'P'},
 	{"queueing-delay",              no_argument,       0, 'Q'},
 	{"throughput-interval",         optional_argument, 0, 'T'},
 	{"loss-interval",               optional_argument, 0, 'L'},
@@ -292,6 +293,9 @@ void parse_cmd_args(int argc, char *argv[], string OPTSTRING, string usage_str) 
 		case 'l':
 			GlobOpts::genAckLatencyFiles = true;
 			break;
+		case 'P':
+			GlobOpts::genPerPacketStats = true;
+			break;
 		case 'u':
 			GlobOpts::prefix = optarg;
 			break;
@@ -454,6 +458,9 @@ int main(int argc, char *argv[]){
 
 	if (GlobOpts::genAckLatencyFiles) {
 		stats.writeAckLatency();
+	}
+
+	if (GlobOpts::genPerPacketStats) {
 		stats.writePerPacketStats();
 	}
 

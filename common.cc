@@ -8,6 +8,7 @@ bool GlobOpts::withLoss                 = false;
 bool GlobOpts::withCDF                  = false;
 bool GlobOpts::transport                = false;
 bool GlobOpts::genAckLatencyFiles       = false;
+bool GlobOpts::genPerPacketStats        = false;
 bool GlobOpts::withThroughput           = false;
 string GlobOpts::prefix                 = "";
 string GlobOpts::RFiles_dir             = "";

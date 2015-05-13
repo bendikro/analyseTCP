@@ -75,6 +75,7 @@ public:
 	static string sendNatIP;
 	static string recvNatIP;
 	static bool genAckLatencyFiles;
+	static bool genPerPacketStats;
 	static string prefix;
 	static string RFiles_dir;
 	static bool connDetails;

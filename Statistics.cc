@@ -188,7 +188,7 @@ void Statistics::printStatistics() {
 void printPayloadStats(PacketStats *ps) {
 	printf("Payload size stats:\n");
 	printStats("payload", "bytes", ps->packet_length);
-	ps->packet_length._percentiles.print("P  %*sth percentile %-26s    : %10.0f\n");
+	ps->packet_length._percentiles.print("P  %*sth percentile %-26s   : %10.0f\n");
 }
 
 void printPayloadStatsAggr(ConnStats *cs, AggrPacketStats &aggrStats) {
