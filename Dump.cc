@@ -360,7 +360,6 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 	sd.ipHdrLen          = ipHdrLen;
 	sd.tcpHdrLen         = tcpHdrLen;
 	sd.tcpOptionLen      = tcpHdrLen - 20;
-//	sd.data.payloadSize  = ipSize - (ipHdrLen + tcpHdrLen); // This gives incorrect result on some packets where the ipSize is wrong (0 in a test trace)
 	sd.data.payloadSize  = sd.totalSize - (ipHdrLen + tcpHdrLen + SIZE_ETHERNET);
 	sd.data.tstamp_pcap  = header->ts;
 	sd.data.seq_absolute = ntohl(tcp->th_seq);
@@ -370,6 +369,14 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 	sd.data.is_rdb       = false;
 	sd.data.rdb_end_seq  = 0;
 	sd.data.flags        = tcp->th_flags;
+
+	uint16_t payloadSize = ipSize - (ipHdrLen + tcpHdrLen); // This gives incorrect result on some packets where the ipSize is wrong (0 in a test trace)
+	if (sd.data.payloadSize != payloadSize) {
+		colored_fprintf(stderr, RED, "Found invalid packet length value in IP header:\n");
+		fprintf(stderr, "%s: (seq: %s): Length reported as %d, but correct value is %d.\n", tmpConn->getConnKey().c_str(),
+				relative_seq_pair_str(tmpConn->rm, sd.data.seq, sd.data.endSeq).c_str(),
+				ipSize, sd.totalSize - SIZE_ETHERNET);
+	}
 
 	if (sd.data.seq == std::numeric_limits<ulong>::max()) {
 		if (sd.data.flags & TH_SYN) {

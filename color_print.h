@@ -5,6 +5,9 @@
 #ifndef COLOR_PRINT_H
 #define COLOR_PRINT_H
 
+#include <stdio.h>
+#include <stdint.h>
+
 #define KNRM  "\x1B[0m"
 #define KRED  "\x1B[31m"
 #define KGRN  "\x1B[32m"
@@ -16,11 +19,10 @@
 
 extern int disable_colors;
 
-void printf_c(const char *fmt, ...);
-
 char *colored(int fg_color, char *buf, const char *str);
 void colored_printf(int fg_color, const char *format, ...);
-char* colored_sprintf(int fg_color, char *str, const char *format, ...);
+void colored_fprintf(FILE *stream, int fg_color, const char *format, ...);
+char* colored_sprintf(uint32_t max_size, char *buf, int fg_color, const char *format, ...);
 
 #define RESET 0
 #define BRIGHT 1

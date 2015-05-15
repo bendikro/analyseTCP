@@ -197,6 +197,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 	char prefix[100];
 	int i;
 	int indent = level * 3;
+	indent = indent < 15 ? indent : 15;
 	for (i = 0; i < indent; i++) {
 		prefix[i] = ' ';
 	}
@@ -684,7 +685,7 @@ void RangeManager::insert_byte_range(ulong start_seq, ulong end_seq, bool sent, 
 					assert(brIt->second->received_tstamp_tcp && "TEST\n");
 				}
 
-				assert(level < 15 && "Recurse level too high");
+				assert(level < 1500 && "Recurse level too high");
 
 				// Recursive call to insert the remaining data
 				//indent_print("Recursive call1: brIt->endseq: %lu, endseq: %lu\n", brIt->second->endSeq, end_seq);
@@ -980,7 +981,7 @@ void RangeManager::genStats(PacketStats *bs) {
 	it = analyse_range_start;
 	it_end = analyse_range_end;
 
-	int64_t latency, tmp_byte_count, itt;
+	int64_t latency, tmp_byte_count;
 	bs->latency.min = bs->packet_length.min = bs->itt.min = (numeric_limits<int64_t>::max)();
 	int dupack_count;
 
@@ -1051,8 +1052,9 @@ void RangeManager::genStats(PacketStats *bs) {
 	std::sort(bs->sent_times.begin(), bs->sent_times.end());
 
 	SentTime prev = bs->sent_times[0];
+	float itt;
 	for (size_t i = 1; i < bs->sent_times.size(); i++) {
-		itt = (bs->sent_times[i].time - prev.time) / 1000L;
+		itt = (bs->sent_times[i].time - prev.time);
 		bs->itt.add( itt );
 		bs->sent_times[i].itt = itt;
 		prev = bs->sent_times[i];

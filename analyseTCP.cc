@@ -128,6 +128,7 @@ void usage(char* argv, string usage_str, int exit_status=1, int help_level=1)
 	}
 	printf(" -Q                  : Write sent-times and one-way delay variation (queueing delay) to file.\n");
 	printf("                       This will implicitly set option -t.\n");
+	printf(" -P                  : Write per-packet itt and payload to file.\n");
 	printf(" -a                  : Produce aggregated statistics (off by default, optional)\n");
 	printf(" -A                  : Only print aggregated statistics.\n");
 	printf(" -e                  : List the connections found in the dumpfile.\n");

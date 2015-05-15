@@ -22,7 +22,7 @@ char *colored(int fg_color, char *buf, const char *str) {
 	return buf;
 }
 
-char* _colored_sprintf(uint32_t max_size, int fg_color, char *buf, const char *format, va_list args) {
+char* _colored_sprintf(uint32_t max_size, char *buf, int fg_color, const char *format, va_list args) {
 	vsprintf(buf, format, args);
 
 	// Add color
@@ -51,12 +51,12 @@ void _colored_printf(FILE *stream, uint32_t max_size, int fg_color, const char *
 		printf("Failed to allocate memory (colored_printf)!\n");
 		return;
 	}
-	_colored_sprintf(max_size, fg_color, buf, format, args);
+	_colored_sprintf(max_size, buf, fg_color, format, args);
 	fprintf(stream, "%s", buf);
 	free(buf);
 }
 
-void colored_printf(FILE *stream, int fg_color, const char *format, ...) {
+void colored_fprintf(FILE *stream, int fg_color, const char *format, ...) {
 	va_list args;
 	va_start(args, format);
 	_colored_printf(stream, 1000, fg_color, format, args);
@@ -69,18 +69,10 @@ void colored_printf(int fg_color, const char *format, ...) {
 	va_end(args);
 }
 
-char* colored_sprintf(uint32_t max_size, int fg_color, char *buf, const char *format, ...) {
+char* colored_sprintf(uint32_t max_size, char *buf, int fg_color, const char *format, ...) {
 	va_list args;
 	va_start(args, format);
-	_colored_sprintf(max_size, fg_color, buf, format, args);
+	_colored_sprintf(max_size, buf, fg_color, format, args);
 	va_end(args);
 	return buf;
-}
-
-void printf_c(const char *fmt, ...) {
-	va_list argp;
-	va_start(argp, fmt);
-	vfprintf(stderr, fmt, argp);
-	va_end(argp);
-	printf(KNRM); // Terminate color after this printf
 }

@@ -170,6 +170,10 @@ void Statistics::printStatistics() {
 		if (csAggregated.nrPacketsSent) {
 			csAggregated.duration /= sortedConns.size();
 
+			psAggregated.aggregated.latency.makeStats();
+			psAggregated.aggregated.packet_length.makeStats();
+			psAggregated.aggregated.itt.makeStats();
+
 			cout << "\nAggregated Statistics for " << sortedConns.size() << " connections:" << endl;
 			printPacketStats(&csAggregated);
 			printPayloadStatsAggr(&csAggregated, psAggregated);
@@ -202,16 +206,16 @@ void printPacketITTStats(PacketStats* bs)
 {
 	print_stats_separator(false);
 	printf("ITT stats:\n");
-	printStats("itt", "ms", bs->itt);
-	bs->itt._percentiles.print("  %*sth percentile %-26s    : %10.0f ms\n");
+	printStats("itt", "usec", bs->itt);
+	bs->itt._percentiles.print("  %*sth percentile %-26s    : %10.0f usec\n");
 }
 
 void printPacketITTStatsAggr(ConnStats *cs, AggrPacketStats &aggrStats)
 {
 	print_stats_separator(false);
 	printf("ITT stats (Average for all the connections)\n");
-	printStatsAggr("ITT", "ms", cs, aggrStats.aggregated.itt, aggrStats.minimum.itt, aggrStats.average.itt, aggrStats.maximum.itt);
-	aggrStats.aggregated.itt._percentiles.print("  %*sth percentile %-26s    : %10.0f ms\n");
+	printStatsAggr("ITT", "usec", cs, aggrStats.aggregated.itt, aggrStats.minimum.itt, aggrStats.average.itt, aggrStats.maximum.itt);
+	aggrStats.aggregated.itt._percentiles.print("  %*sth percentile %-26s    : %10.0f usec\n");
 }
 
 
@@ -316,7 +320,7 @@ void printStatsAggr(string prefix, string unit, ConnStats *cs, BaseStats& bs,
 	printf("  Maximum %10s (min, avg, max)            :    %7lu, %7.0f, %7lu %s\n",
 		   prefix.c_str(), (ulong)aggregatedMax.min, aggregatedMax.get_avg(), (ulong)aggregatedMax.max, unit.c_str());
 	printf("  Average of all packets in all connections     : %10d %s\n",
-		   (int) floorf((double) safe_div(bs.cum, cs->nrDataPacketsSent)), unit.c_str());
+		   (int) nearbyint((double) safe_div(bs.cum, cs->nrDataPacketsSent)), unit.c_str());
 }
 
 void printBytesLatencyStatsAggr(ConnStats *cs, AggrPacketStats &aggrStats) {

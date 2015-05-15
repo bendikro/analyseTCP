@@ -187,8 +187,8 @@ void update_vectors_size(vector<SPNS::shared_ptr<vector <LatencyItem> > > &vecto
      this->min = std::min<int64_t>( this->min, rhs.min );
      this->max = std::max<int64_t>( this->max, rhs.max );
      this->cum += rhs.cum;
-     _counter++;
 	 _values.insert( _values.end(), rhs._values.begin(), rhs._values.end() );
+     _counter += rhs._values.size();
  }
 
 void BaseStats::makeStats( )
