@@ -12,6 +12,8 @@
 #include "Connection.h"
 #include "fourTuple.h"
 
+#include <stdexcept>      // std::invalid_argument
+
 /* Forward declarations */
 class Connection;
 class Statistics;
@@ -21,10 +23,14 @@ struct ConnectionMapKey {
 	u_short src_port, dst_port;
 };
 
+extern bool conn_key_debug;
+
 struct ConnectionKeyComparator {
 	bool operator()(const ConnectionMapKey*  left, const ConnectionMapKey* right) const {
-		//printf("Compare left  (%15p) : src ip: %ul, dst ip: %ul, src port: %us, dst port: %us\n", left, left->ip_src.s_addr, left->ip_dst.s_addr, left->src_port, left->dst_port);
-		//printf("Compare right (%15p) : src ip: %ul, dst ip: %ul, src port: %u, dst port: %u\n", right, right->ip_src.s_addr, right->ip_dst.s_addr, right->src_port, right->dst_port);
+		//if (conn_key_debug) {
+		//	printf("Compare left  (%15p) : src ip: %ul, dst ip: %ul, src port: %u, dst port: %u\n", left, left->ip_src.s_addr, left->ip_dst.s_addr, left->src_port, left->dst_port);
+		//	printf("Compare right (%15p) : src ip: %ul, dst ip: %ul, src port: %u, dst port: %u\n", right, right->ip_src.s_addr, right->ip_dst.s_addr, right->src_port, right->dst_port);
+		//}
 		bool ret;
 		if (left->ip_src.s_addr != right->ip_src.s_addr)
 			ret = left->ip_src.s_addr < right->ip_src.s_addr;
@@ -109,8 +115,10 @@ public:
 	void calculateRetransAndRDBStats();
 	void printPacketDetails();
 	void findTCPTimeStamp(DataSeg* data, uint8_t* opts, int option_length);
-	Connection* getConn(const in_addr *srcIp, const in_addr *dstIp, const uint16_t *srcPort, const uint16_t *dstPort, const uint32_t *seq);
+	Connection* getConn(const struct in_addr &srcIp, const struct in_addr &dstIp, const uint16_t *srcPort, const uint16_t *dstPort, const uint32_t *seq);
+	Connection* getConn(string &srcIpStr, string &dstIpStr, string &srcPortStr, string &dstPortStr);
 	void calculateLatencyVariation();
+	void calculateSojournTime();
 
 	friend class Statistics;
 private:

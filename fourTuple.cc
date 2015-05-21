@@ -35,6 +35,10 @@
 // #include <stdio.h>
 #include <string.h>
 
+#ifdef OS_FREEBSD
+#include <sys/socket.h>
+#endif
+
 using namespace std;
 
 string four_tuple_t::to_string( ) const
@@ -66,7 +70,7 @@ four_tuple_t::four_tuple_t( const char* arg )
     char *arg_copy = strdup( arg );
     char *connection = arg_copy;
     char *str;
-        
+
     str = strsep( &connection, ":" );
     if( str != 0 )
     {

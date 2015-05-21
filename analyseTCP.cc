@@ -37,6 +37,7 @@
 #define OPT_ANALYSE_START 401
 #define OPT_ANALYSE_END 402
 #define OPT_ANALYSE_DURATION 403
+#define OPT_SOJOURN_TIME_INPUT 404
 
 static struct option long_options[] = {
 	{"sender-dump",                 required_argument, 0, 'f'},
@@ -53,6 +54,7 @@ static struct option long_options[] = {
 	{"latency-variation",           no_argument,       0, 'c'},
 	{"latency-values",              no_argument,       0, 'l'},
 	{"per-packet-stats",            no_argument,       0, 'P'},
+	{"per-segment-stats",           no_argument,       0, 'S'},
 	{"queueing-delay",              no_argument,       0, 'Q'},
 	{"throughput-interval",         optional_argument, 0, 'T'},
 	{"loss-interval",               optional_argument, 0, 'L'},
@@ -72,6 +74,7 @@ static struct option long_options[] = {
 	{"analyse-end",                 required_argument, 0, OPT_ANALYSE_END},
 	{"analyse-duration",            required_argument, 0, OPT_ANALYSE_DURATION},
 	{"tcp-port",                    required_argument, 0, OPT_PORT},
+	{"sojourn-time-input",          required_argument, 0, OPT_SOJOURN_TIME_INPUT},
 	{0, 0, 0, 0}
 };
 
@@ -92,6 +95,12 @@ void usage(char* argv, string usage_str, int exit_status=1, int help_level=1)
 	printf(" -n <IP>             : Receiver side local address as seen on receiver-side dump\n");
 	printf(" -o <output-dir>     : Output directory to write the result files in.\n");
 	printf(" -u <prefix>         : Use <prefix> as filename prefix for output files.\n");
+
+	printf(" -a                  : Produce aggregated statistics (off by default, optional)\n");
+	printf(" -A                  : Only print aggregated statistics.\n");
+	printf(" -e                  : List the connections found in the dumpfile.\n");
+
+	printf("\nStatistics file output options:\n");
 	printf(" -l                  : Write ACK-based latency values to file.\n");
 	printf(" -c                  : Write byte-based latency variation CDF to file.\n");
 	printf("                       If -t is not set, application-layer latency variation will be used.\n");
@@ -128,20 +137,20 @@ void usage(char* argv, string usage_str, int exit_status=1, int help_level=1)
 	}
 	printf(" -Q                  : Write sent-times and one-way delay variation (queueing delay) to file.\n");
 	printf("                       This will implicitly set option -t.\n");
-	printf(" -P                  : Write per-packet itt and payload to file.\n");
-	printf(" -a                  : Produce aggregated statistics (off by default, optional)\n");
-	printf(" -A                  : Only print aggregated statistics.\n");
-	printf(" -e                  : List the connections found in the dumpfile.\n");
+	printf(" -P                  : Write per-packet stats to file.\n");
+	printf(" -S                  : Write per-segment stats to file (This requires sojourn data input with options '--sojourn-time-input').\n");
 	printf(" -E                  : Write per-connection stats to file.\n");
-	printf(" -j                  : Use relative sequence numbers in output.\n");
-	printf(" -i<percentiles>     : Calculate the specified percentiles for latency and packet size.\n");
+
+	printf("\nMisc options:\n");
+	printf(" -i<percentiles>     : Calculate and print to terminal the specified percentiles for packet payload size, latency and ITT.\n");
 	printf("                       Comma separated list of percentiles, default is 1,25,50,75,99\n");
 	if (help_level > 1) {
 		printf("                       Example for 90th, 99th and 99.9th: -i90,99,99.9\n");
 	}
-	printf(" -y<seq-num-range>   : Print details for each packet. Provide an option sequence number or range of seq to print\n");
-	printf(" -v<level>           : Control verbose level. v0 hides most output, v3 gives maximum verbosity\n");
-	printf(" -k                  : Use colors when printing.\n");
+	printf(" -y<seq-num-range>   : Print details for each packet. Provide an option sequence number or range of seq to print.\n");
+	printf(" -j                  : Use relative sequence numbers in terminal output from option -y.\n");
+	printf(" -v<level>           : Control verbose level. v0 hides most output, v3 gives maximum verbosity.\n");
+	printf(" -k                  : Use colors in terminal output.\n");
 	printf(" -V                  : Disable validation of the data in the ranges.\n");
 	printf(" -d<level>           : Indicate debug level (1-5).\n");
 	if (help_level > 1) {
@@ -153,10 +162,11 @@ void usage(char* argv, string usage_str, int exit_status=1, int help_level=1)
 	}
 	printf(" -h                  : Print this help and quit. More h's means more help.\n");
 	printf("\n");
-	printf(" --analyse-start=<start>       : Start analysing <start> seconds into the stream(s)\n");
-	printf(" --analyse-end=<end>           : Stop analysing <end> seconds before the end of the stream(s)\n");
-	printf(" --analyse-duration=<duration> : Stop analysing after <duration> seconds after the start\n");
-	printf(" --tcp-port=<port>             : Sender or receiver port, combines -q and -p\n");
+	printf(" --analyse-start=<start>          : Start analysing <start> seconds into the stream(s)\n");
+	printf(" --analyse-end=<end>              : Stop analysing <end> seconds before the end of the stream(s)\n");
+	printf(" --analyse-duration=<duration>    : Stop analysing after <duration> seconds after the start\n");
+	printf(" --tcp-port=<port>                : Sender or receiver port, combines -q and -p\n");
+	printf(" --sojourn-time-input=<filename>  : Text file containing timestamp and sequence number for data segments when entering the kernel.\n");
 
 	if (help_level > 2) {
 		printf("\n");
@@ -236,6 +246,9 @@ void parse_cmd_args(int argc, char *argv[], string OPTSTRING, string usage_str) 
 				tcp_port = "";
 			}
 			break;
+		case OPT_SOJOURN_TIME_INPUT:
+			GlobOpts::sojourn_time_file = string(optarg);
+			break;
 		case 'e':
 			GlobOpts::connDetails = true;
 			break;
@@ -296,6 +309,9 @@ void parse_cmd_args(int argc, char *argv[], string OPTSTRING, string usage_str) 
 			break;
 		case 'P':
 			GlobOpts::genPerPacketStats = true;
+			break;
+		case 'S':
+			GlobOpts::genPerSegmentStats = true;
 			break;
 		case 'u':
 			GlobOpts::prefix = optarg;
@@ -427,6 +443,9 @@ int main(int argc, char *argv[]){
 		senderDump->processRecvd(recvfn);
 	}
 
+	if (not GlobOpts::sojourn_time_file.empty())
+		senderDump->calculateSojournTime();
+
 	/* Traverse ranges in senderDump and compare to
 	   corresponding bytes / ranges in receiver ranges
 	   place timestamp diffs in buckets */
@@ -463,6 +482,10 @@ int main(int argc, char *argv[]){
 
 	if (GlobOpts::genPerPacketStats) {
 		stats.writePerPacketStats();
+	}
+
+	if (GlobOpts::genPerSegmentStats) {
+		stats.writePerSegmentStats();
 	}
 
 	if (GlobOpts::withThroughput) {

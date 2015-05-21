@@ -3,29 +3,31 @@
 
 #include "config.h"
 
-#include <sys/types.h>
-#include <netinet/in.h>
-#include <netinet/if_ether.h>
-#include <arpa/inet.h>
-
 #include <cstdio>
 #include <cstdlib>
-#include <pcap.h>
-#include <ctype.h>
-#include <unistd.h>
 #include <algorithm>
 #include <cassert>
-
-#include <string>
-
-#include <iostream>
-#include <sstream>
+#include <ctype.h>
+#include <deque>
 #include <fstream>
-
+#include <iostream>
 #include <limits>
+#include <pcap.h>
+#include <sstream>
+#include <string>
+#include <unistd.h>
 #include <vector>
 #include <map>
-#include <deque>
+
+#include <arpa/inet.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+
+#ifdef OS_FREEBSD
+#include <sys/socket.h>
+#endif
+
+#include <netinet/if_ether.h> // Must come after <sys/socket.h> on FreeBSD
 
 #ifdef HAVE_STD_MEMORY_HEADER
   #include <memory>
@@ -44,11 +46,11 @@ using namespace std;
 
 #define safe_div(x, y) ( (y) != 0 ? ((double) (x)) / (y) : 0.0 )
 
-typedef unsigned char uint8;
-
 /* Convert a timeval to milliseconds */
 #define TV_TO_MS(tv) ((int64_t)((tv).tv_sec * 1000L + ((tv).tv_usec / 1000L)))
 #define TV_TO_MICSEC(tv) ((int64_t)((tv).tv_sec * 1000000L + ((tv).tv_usec)))
+
+enum sent_type {ST_NONE, ST_PKT, ST_RTR, ST_PURE_ACK, ST_RST};
 
 /* Compare two timevals */
 bool operator==(const timeval& lhs, const timeval& rhs);
@@ -76,6 +78,7 @@ public:
 	static string recvNatIP;
 	static bool genAckLatencyFiles;
 	static bool genPerPacketStats;
+	static bool genPerSegmentStats;
 	static string prefix;
 	static string RFiles_dir;
 	static bool connDetails;
@@ -87,6 +90,7 @@ public:
 	static int analyse_start;
 	static int analyse_end;
 	static int analyse_duration;
+	static string sojourn_time_file;
 	static bool oneway_delay_variance;
 };
 

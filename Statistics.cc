@@ -128,7 +128,7 @@ void print_stats_separator(bool final) {
 
 void Statistics::printStatistics() {
 	ConnStats csAggregated = ConnStats();
-	AggrPacketStats psAggregated;
+	AggrPacketsStats psAggregated;
 
 	// Print stats for each connection or aggregated
 	map<ConnectionMapKey*, Connection*, SortedConnectionKeyComparator> sortedConns;
@@ -139,30 +139,29 @@ void Statistics::printStatistics() {
 		cIt->second->addConnStats(&cs);
 		cIt->second->addConnStats(&csAggregated);
 
-		PacketStats *packetStats = cIt->second->getBytesLatencyStats();
+		PacketsStats *packetsStats = cIt->second->getBytesLatencyStats();
 
 		if (!GlobOpts::aggOnly) {
-			colored_printf(YELLOW, "STATS FOR CONN: %s:%u -> %s:%u", cIt->second->getSrcIp().c_str(), cIt->second->srcPort,
-						   cIt->second->getDstIp().c_str(), cIt->second->dstPort);
+			colored_printf(YELLOW, "STATS FOR CONN: %s -> %s", cIt->second->getSenderKey().c_str(), cIt->second->getReceiverKey().c_str());
 
 			if (GlobOpts::analyse_start || GlobOpts::analyse_end || GlobOpts::analyse_duration) {
 				colored_printf(YELLOW, " (Interval analysed (sec): %d-%d)", cIt->second->rm->analyse_time_sec_start, cIt->second->rm->analyse_time_sec_end);
 			}
 			printf("\n");
-			printPacketStats(&cs);
-			printPayloadStats(packetStats);
+			printPacketsStats(&cs);
+			printPayloadStats(packetsStats);
 		}
 
 		if (!GlobOpts::aggOnly) {
-			printBytesLatencyStatsConn(packetStats);
+			printBytesLatencyStatsConn(packetsStats);
 
 			// ITT stats
-			printPacketITTStats(packetStats);
+			printPacketITTStats(packetsStats);
 			print_stats_separator(true);
 		}
 
 		if (GlobOpts::aggregate) {
-			psAggregated.add(*packetStats);
+			psAggregated.add(*packetsStats);
 		}
 	}
 
@@ -175,7 +174,7 @@ void Statistics::printStatistics() {
 			psAggregated.aggregated.itt.makeStats();
 
 			cout << "\nAggregated Statistics for " << sortedConns.size() << " connections:" << endl;
-			printPacketStats(&csAggregated);
+			printPacketsStats(&csAggregated);
 			printPayloadStatsAggr(&csAggregated, psAggregated);
 
 			/* Print Aggregate bytewise latency */
@@ -189,20 +188,20 @@ void Statistics::printStatistics() {
 }
 
 
-void printPayloadStats(PacketStats *ps) {
+void printPayloadStats(PacketsStats *ps) {
 	printf("Payload size stats:\n");
 	printStats("payload", "bytes", ps->packet_length);
 	ps->packet_length._percentiles.print("P  %*sth percentile %-26s   : %10.0f\n");
 }
 
-void printPayloadStatsAggr(ConnStats *cs, AggrPacketStats &aggrStats) {
+void printPayloadStatsAggr(ConnStats *cs, AggrPacketsStats &aggrStats) {
 	printf("Payload size stats:\n");
 	printStatsAggr("payload", "bytes", cs, aggrStats.aggregated.packet_length, aggrStats.minimum.packet_length,
 				   aggrStats.average.packet_length, aggrStats.maximum.packet_length);
 	aggrStats.aggregated.packet_length._percentiles.print("P  %*sth percentile %-26s    : %10.0f\n");
 }
 
-void printPacketITTStats(PacketStats* bs)
+void printPacketITTStats(PacketsStats* bs)
 {
 	print_stats_separator(false);
 	printf("ITT stats:\n");
@@ -210,7 +209,7 @@ void printPacketITTStats(PacketStats* bs)
 	bs->itt._percentiles.print("  %*sth percentile %-26s    : %10.0f usec\n");
 }
 
-void printPacketITTStatsAggr(ConnStats *cs, AggrPacketStats &aggrStats)
+void printPacketITTStatsAggr(ConnStats *cs, AggrPacketsStats &aggrStats)
 {
 	print_stats_separator(false);
 	printf("ITT stats (Average for all the connections)\n");
@@ -219,7 +218,7 @@ void printPacketITTStatsAggr(ConnStats *cs, AggrPacketStats &aggrStats)
 }
 
 
-void printPacketStats(ConnStats *cs) {
+void printPacketsStats(ConnStats *cs) {
 	printf("  Duration: %u seconds (%f hours)\n", cs->duration, ((double) cs->duration / 60 / 60));
 
 	if (cs->nrPacketsSent != cs->nrPacketsSentFoundInDump) {
@@ -279,8 +278,11 @@ void printPacketStats(ConnStats *cs) {
 
 		printf("  Bytes Lost (actual loss on receiver side)     : %10lu\n", (ulong)cs->bytes_lost);
 		printf("  Bytes Loss                                    : %10.2f %%\n", safe_div(cs->bytes_lost, cs->totBytesSent) * 100);
-		printf("  Ranges Lost (actual loss on receiver side)    : %10lu\n", (ulong)cs->ranges_lost);
-		printf("  Ranges Loss                                   : %10.2f %%\n", safe_div(cs->ranges_lost, cs->ranges_sent) * 100);
+
+		if (GlobOpts::verbose > 1) {
+			printf("  Ranges Lost (actual loss on receiver side)    : %10lu\n", (ulong)cs->ranges_lost);
+			printf("  Ranges Loss                                   : %10.2f %%\n", safe_div(cs->ranges_lost, cs->ranges_sent) * 100);
+		}
 	}
 
 	print_stats_separator(false);
@@ -323,7 +325,7 @@ void printStatsAggr(string prefix, string unit, ConnStats *cs, BaseStats& bs,
 		   (int) nearbyint((double) safe_div(bs.cum, cs->nrDataPacketsSent)), unit.c_str());
 }
 
-void printBytesLatencyStatsAggr(ConnStats *cs, AggrPacketStats &aggrStats) {
+void printBytesLatencyStatsAggr(ConnStats *cs, AggrPacketsStats &aggrStats) {
 	print_stats_separator(false);
 	printf("Latency stats (Average for all the connections)\n");
 	printStatsAggr("latencies", "ms", cs, aggrStats.aggregated.latency, aggrStats.minimum.latency,
@@ -345,7 +347,7 @@ void printBytesLatencyStatsAggr(ConnStats *cs, AggrPacketStats &aggrStats) {
 	printBytesLatencyStats(&aggrStats.aggregated);
 }
 
-void printBytesLatencyStatsConn(PacketStats* bs) {
+void printBytesLatencyStatsConn(PacketsStats* bs) {
 	print_stats_separator(false);
 	printf("Latency stats:\n");
 	printStats("latency", "ms", bs->latency);
@@ -353,7 +355,7 @@ void printBytesLatencyStatsConn(PacketStats* bs) {
 }
 
 /* Print latency statistics */
-void printBytesLatencyStats(PacketStats* bs) {
+void printBytesLatencyStats(PacketsStats* bs) {
 
 	bs->latency._percentiles.print("L %*sth percentile %-26s    : %10.0f ms\n");
 
@@ -471,7 +473,7 @@ public:
 			string filename;
 			ofstream* stream = newStream(getConnFilename(conn));
 			writeToStream(stream, loss, conn.rm->analysed_sent_ranges_count, conn.rm->analysed_bytes_sent);
-			stream->close();
+			delete stream;
 		}
 	}
 	virtual void begin() {
@@ -481,6 +483,7 @@ public:
 		if (GlobOpts::aggregate) {
 			ofstream* stream = newStream(getAggrFilename());
 			writeToStream(stream, aggr, total_count, total_bytes);
+			delete stream;
 		}
 	}
 
@@ -539,14 +542,12 @@ public:
 		stream = newStream(getAggrFilename());
 	}
 	virtual void end() {
-		stream->close();
+		delete stream;
 	}
-
 	virtual void writeStats(Connection &conn) {
-		PacketStats *packetStats = conn.getBytesLatencyStats();
-		for (size_t i = 0; i < packetStats->sent_times.size(); i++) {
-			*stream << (packetStats->sent_times[i].time) << "," << packetStats->sent_times[i].itt << "," \
-					<< packetStats->sent_times[i].size << "," << conn.getConnKey() << endl;
+		PacketsStats *packetsStats = conn.getBytesLatencyStats();
+		for (size_t i = 0; i < packetsStats->packet_stats.size(); i++) {
+			*stream << packetsStats->packet_stats[i].str() << endl;
 		}
 	}
 };
@@ -556,10 +557,41 @@ public:
  ****************************************/
 void Statistics::writePerPacketStats() {
 	PerPacketStats conf;
-	conf.setHeader("time,itt,payload_bytes,stream_id");
-	conf.setFilenameID("per-packet-itt-size");
+	conf.setHeader("stream_id,time,itt,payload_bytes");
+	conf.setFilenameID("per-packet-stats");
+	conf.aggrPostfix = "-all.dat";
 	writeStatisticsFiles(conf);
 }
+
+
+class PerSegmentStats : public StatsWriterBase {
+public:
+	ofstream* stream;
+	virtual void begin() {
+		stream = newStream(getAggrFilename());
+	}
+	virtual void end() {
+		delete stream;
+	}
+	virtual void writeStats(Connection &conn) {
+		PacketsStats *packetsStats = conn.getBytesLatencyStats();
+		for (size_t i = 0; i < packetsStats->packet_stats.size(); i++) {
+			*stream << packetsStats->packet_stats[i].perSegmentStr();
+		}
+	}
+};
+
+/**************************************************************
+ * Write stats per segment (chunk) written by the application
+ **************************************************************/
+void Statistics::writePerSegmentStats() {
+	PerSegmentStats conf;
+	conf.setHeader("stream_id,time,payload_bytes,sojourn_time,ack_latency,sojourn_and_ack_latency");
+	conf.setFilenameID("per-segment-stats");
+	conf.aggrPostfix = "-all.dat";
+	writeStatisticsFiles(conf);
+}
+
 
 /*****************************************
  * ACK Latency
@@ -616,7 +648,7 @@ public:
 			for (; it != it_end; it++) {
 				*stream << it->str() << endl;
 			}
-			stream->close();
+			delete stream;
 		}
 	}
 	AckLatencyWriter(const uint64_t tstamp)
@@ -702,7 +734,7 @@ public:
 			}
 		}
 		if (!GlobOpts::aggOnly)
-			connStream->close();
+			delete connStream;
 	}
 
 	virtual void begin() {}
@@ -712,7 +744,7 @@ public:
 		for (idx = 0; idx < aggrPacketSizeGroups.size(); ++idx) {
 			writeToStream(idx, aggrPacketSizeGroups[idx], *aggrStream);
 		}
-		aggrStream->close();
+		delete aggrStream;
 	}
 
 	void writeToStream(uint64_t idx, PacketSizeGroup &psGroup, ofstream &stream) {

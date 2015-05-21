@@ -1,5 +1,6 @@
 #include "ByteRange.h"
 #include "color_print.h"
+#include "time_util.h"
 
 /* Returns the difference between the start
    of the dump and r in seconds */
@@ -21,9 +22,9 @@ bool ByteRange::match_received_type(bool print) {
 	// Find which data packet was received first
 	for (uint8_t i = 0; i < tstamps_tcp.size(); i++) {
 		if (print) {
-			printf("     timestamp: %u\n", tstamps_tcp[i]);
+			printf("     timestamp: %u\n", tstamps_tcp[i].first);
 		}
-		if (tstamps_tcp[i] == received_tstamp_tcp) {
+		if (tstamps_tcp[i].first == received_tstamp_tcp) {
 			send_tcp_stamp_recv_index = i; // Store the index of the send packet that matches the first received packet
 			// Retrans
 			if (i > 0) {
@@ -60,7 +61,7 @@ void ByteRange::print_tstamps_tcp() {
 	printf("tstamps_tcp: %lu, rdb-stamps: %lu\n", tstamps_tcp.size(), rdb_tstamps_tcp.size());
 
 	for (ulong i = 0; i < tstamps_tcp.size(); i++) {
-		printf("     timestamp: %u\n", tstamps_tcp[i]);
+		printf("     timestamp: %u\n", tstamps_tcp[i].first);
 	}
 	for (ulong i = 0; i < rdb_tstamps_tcp.size(); i++) {
 		printf(" rdb_timestamp: %u\n", rdb_tstamps_tcp[i]);
@@ -87,11 +88,39 @@ void ByteRange::print_tstamps_pcap() {
 	}
 }
 
+bool ByteRange::addSegmentEnteredKernelTime(uint64_t seq, timeval &tv) {
+
+	if (sent_data_pkt_pcap_index == -1) {
+		//printf("sent_data_pkt_pcap_index: %hu, acked_sent: %u\n", sent_data_pkt_pcap_index, acked_sent);
+		return false;
+	}
+	uint64_t sent = get_usecs(sent_tstamp_pcap[sent_data_pkt_pcap_index].first);
+	uint64_t soj = get_usecs(tv);
+	if (soj > sent) {
+		char buf1[30];
+		char buf2[30];
+		sprint_time_us_prec(buf1, sent_tstamp_pcap[sent_data_pkt_pcap_index].first);
+		sprint_time_us_prec(buf2, tv);
+		size_t print_packet_ranges_index = 0;
+		//fprintf(stderr, "ByteRange seq_with_print_range() type: %d\n", sent_tstamp_pcap[sent_data_pkt_pcap_index].second);
+		if (GlobOpts::print_packets_pairs.size() == 0 ||
+			seq_with_print_range(startSeq, endSeq, print_packet_ranges_index) == 1) {
+			colored_printf(RED, "INSERT INCORRECT SOJOURN TIME for ByteRange(%lu, %lu)\n"
+						   "Sent time '%s' is before sojourn time '%s'\n", startSeq, endSeq,
+						   buf1, buf2);
+			printf("Seq: %lu, startSeq: %lu, endSeq: %lu\n", seq, startSeq, endSeq);
+		}
+		return false;
+	}
+	sojourn_time = 1;
+	sojourn_tstamps.push_back(pair<uint64_t, timeval>(seq, tv));
+	return true;
+}
 
 /* Get the difference between send and ack time for this range */
 int ByteRange::getSendAckTimeDiff(RangeManager *rm) {
-	struct timeval tv;
-	int ms = 0;
+	struct timeval tv_diff;
+	int usec = 0;
 
 	if (sent_tstamp_pcap.empty() || (sent_tstamp_pcap[0].first.tv_sec == 0 && sent_tstamp_pcap[0].first.tv_usec == 0)) {
 #ifdef DEBUG
@@ -127,23 +156,20 @@ int ByteRange::getSendAckTimeDiff(RangeManager *rm) {
 
 	/* since ackTime will always be bigger than sent_tstamp_pcap,
 	   (directly comparable timers) timerSub can be used here */
-	timersub(&ackTime, &sent_tstamp_pcap[0].first, &tv);
+	timersub(&ackTime, &sent_tstamp_pcap[0].first, &tv_diff);
+	usec = get_usecs(tv_diff);
 
-	if (tv.tv_sec > 0) {
-		ms += tv.tv_sec * 1000;
-	}
-	ms += (int) (tv.tv_usec / 1000);
-
-	if (ms < 0) { /* Should not be possible */
-		cerr << "Found byte with 0ms or less latency. Exiting." << endl;
-		printf("Is acked: %d\n", acked);
-		exit(1);
+	if (usec < 0) { /* Should not be possible */
+		colored_fprintf(stderr, RED, "Found byte with negative latency (%d usec)\n", usec);
+		string s = this->strInfo();
+		cout << s;
+		assert(0);
 	}
 
 	if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
-		cerr << "Latency for range: " << ms << endl;
-		if (ms > 1000 || ms < 10) {
-			cerr << "Strange latency: " << ms << "ms." << endl;
+		cerr << "Latency for range: " << usec << endl;
+		if (usec > 1000000 || usec < 10000) {
+			cerr << "Strange latency: " << usec << "usec." << endl;
 			//cerr << "Start seq: " << rm->relative_seq(startSeq) << " End seq: " << rm->relative_seq(endSeq) << endl;
 			cerr << "Size of range: " << endSeq - startSeq << endl;
 			cerr << "sent_tstamp_pcap.tv_sec: " << sent_tstamp_pcap[0].first.tv_sec << " - sent_tstamp_pcap.tv_usec: "
@@ -154,7 +180,67 @@ int ByteRange::getSendAckTimeDiff(RangeManager *rm) {
 			cerr << "Number of bundles: " << rdb_count << endl;
 		}
 	}
-	return ms;
+	return usec;
+}
+
+vector< pair<int, int> > ByteRange::getSojournTimes() {
+	struct timeval tv_diff;
+	vector< pair<int, int> > sojourn_times;
+	int usec = 0;
+
+	if (sent_tstamp_pcap.empty() || (sent_tstamp_pcap[0].first.tv_sec == 0 && sent_tstamp_pcap[0].first.tv_usec == 0)) {
+#ifdef DEBUG
+		cerr << "Range without a send time. Skipping: " << endl;
+#endif
+		sojourn_times.push_back(pair<int, int>(0, 0));
+		return sojourn_times;
+	}
+
+	if (!sojourn_time) {
+		//printf("SOJOURN RETURN sojourn_time: %d, stamp: %ld.%ld\n", sojourn_time, tval_pair(sojourn_tstamp));
+		sojourn_times.push_back(pair<int, int>(0, 0));
+		return sojourn_times;
+	}
+
+	ulong send_tstamp_index = 0;
+	for (ulong i = 0; i < sent_tstamp_pcap.size(); i++) {
+		send_tstamp_index = i;
+		if (sent_tstamp_pcap[i].second == ST_PKT)
+			break;
+	}
+
+	if (sent_tstamp_pcap[send_tstamp_index].second != ST_PKT) {
+		printf("Using sent time for packet type: %d ??\n", sent_tstamp_pcap[send_tstamp_index].second);
+	}
+
+	uint64_t tmpBeginSeq = startSeq;
+	for (ulong i = 0; i < sojourn_tstamps.size(); i++) {
+		timersub(&sent_tstamp_pcap[send_tstamp_index].first, &sojourn_tstamps[i].second, &tv_diff);
+		usec = get_usecs(tv_diff);
+		if (usec < 0) { /* Should not be possible */
+			colored_fprintf(stderr, RED, "Found ByteRange with negative sojourn latency (%d usec).\n", usec);
+			cout << this->strInfo();
+			//assert(0);
+		}
+		sojourn_times.push_back(pair<int, int>(sojourn_tstamps[i].first - tmpBeginSeq, usec));
+		tmpBeginSeq = sojourn_tstamps[i].first;
+	}
+
+	if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
+		cerr << "Latency for range: " << usec << endl;
+		if (usec > 1000000 || usec < 10000) {
+			cerr << "Strange latency: " << usec << "usec." << endl;
+			//cerr << "Start seq: " << rm->relative_seq(startSeq) << " End seq: " << rm->relative_seq(endSeq) << endl;
+			cerr << "Size of range: " << endSeq - startSeq << endl;
+			cerr << "sent_tstamp_pcap.tv_sec: " << sent_tstamp_pcap[0].first.tv_sec << " - sent_tstamp_pcap.tv_usec: "
+				 << sent_tstamp_pcap[0].first.tv_usec << endl;
+			cerr << "ackTime.tv_sec : " << ackTime.tv_sec << "  - ackTime.tv_usec : "
+				 << ackTime.tv_usec << endl;
+			cerr << "Number of retransmissions: " << packet_retrans_count << endl;
+			cerr << "Number of bundles: " << rdb_count << endl;
+		}
+	}
+	return sojourn_times;
 }
 
 void ByteRange::calculateRecvDiff(timeval *recv_tstamp) {
@@ -174,7 +260,28 @@ void ByteRange::calculateRecvDiff(timeval *recv_tstamp) {
 	diff = ms;
 }
 
-void ByteRange::printValues() {
+string ByteRange::str() {
+	stringstream s;
+	s << "ByteRange(" << startSeq << ", " << endSeq << ")" << endl;
+	return s.str();
+}
+
+string ByteRange::strInfo() {
+	stringstream s;
+	s << "ByteRange(" << startSeq << ", " << endSeq << ")" << endl;
+	s << "size: " << byte_count << endl;
+	s << "sent_tstamp: " << sent_tstamp_pcap[0].first.tv_sec << "."  << sent_tstamp_pcap[0].first.tv_usec  << endl;
+	s << "ackTime:     " << ackTime.tv_sec << "." << ackTime.tv_usec  << endl;
+
+	//if (sojourn_time)
+	//	s << "sojournTime: " << sojourn_tstamp.tv_sec << "." << sojourn_tstamp.tv_usec  << endl;
+
+	s << "syn: " << std::to_string(syn) << ", fin:" << std::to_string(fin) << ", rst: " << std::to_string(rst) << endl;
+
+	for (ulong i = 0; i < tstamps_tcp.size(); i++) {
+		s << "tcp tstamp:" << tstamps_tcp[i].first << endl;
+	}
+
 /*
   cerr << endl << "-------RangePrint-------" << endl;
   cerr << "startSeq   : " << rm->relative_seq(startSeq) << endl;
@@ -188,6 +295,7 @@ void ByteRange::printValues() {
   cerr << "diff       : " << diff << endl;
   cerr << "dcDiff     : " << dcDiff << endl << endl;;
 */
+	return s.str();
 }
 
 timeval* ByteRange::getSendTime() {

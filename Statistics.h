@@ -22,13 +22,13 @@ class StatsWriterBase : public StatsWriter
 public:
 	bool write_header;
 	string header;
-	string aggrFilename;
+	string aggrPostfix;
 	string filenameID;
 	virtual bool getWriteHeader() { return write_header; }
 	virtual string getHeader() { return header; }
 
 	virtual string getAggrFilename() {
-		return GlobOpts::prefix + filenameID + "-aggr.dat";
+		return GlobOpts::prefix + filenameID + aggrPostfix;
 	}
 	virtual string getConnFilename(Connection &conn) {
 		return GlobOpts::prefix + filenameID + "-" + conn.getConnKey() + ".dat";
@@ -49,8 +49,9 @@ public:
 	void setFilenameID(string id) {
 		filenameID = id;
 	};
-	StatsWriterBase()
-		: write_header(false)
+	StatsWriterBase() :
+		write_header(false),
+		aggrPostfix("-aggr.dat")
 	{}
 };
 
@@ -68,7 +69,7 @@ public:
 	}
 	virtual void end() {
 		if (GlobOpts::aggregate) {
-			aggrStream->close();
+			delete aggrStream;
 		}
 	}
 
@@ -84,7 +85,7 @@ public:
 		}
 		statsFunc(conn, streams);
 		if (!GlobOpts::aggOnly) {
-			connStream->close();
+			delete connStream;
 		}
 	}
 };
@@ -105,7 +106,7 @@ public:
 	void writePacketByteCountAndITT();
 	void writeAckLatency();
 	void write_loss_to_file();
-	void writeITT(ofstream& stream, vector<SentTime>& sent_times);
+	void writeITT(ofstream& stream, vector<PacketStats>& sent_times);
 	void writeByteLatencyVariationCDF();
 	void writeAggByteLatencyVariationCDF();
 	void writeSentTimesAndQueueingDelayVariance();
@@ -116,20 +117,21 @@ public:
 	void writeConnStats();
 	void writeLossStats();
 	void writePerPacketStats();
+	void writePerSegmentStats();
 
 	Statistics(Dump &d);
 };
 
 void printStatsAggr(string prefix, string unit, ConnStats *cs, BaseStats& bs, BaseStats& aggregatedMin,
 					BaseStats& aggregatedAvg, BaseStats& aggregatedMax);
-void printBytesLatencyStatsAggr(ConnStats *cs, AggrPacketStats &aggrStats);
-void printBytesLatencyStatsConn(PacketStats* bs);
-void printBytesLatencyStats(PacketStats* bs);
-void printPayloadStats(PacketStats *ps);
-void printPayloadStatsAggr(ConnStats *cs, AggrPacketStats &aggrStats);
-void printPacketStats(ConnStats *cs);
-void printPacketITTStats(PacketStats* bs);
-void printPacketITTStatsAggr(ConnStats *cs, AggrPacketStats &aggrStats);
+void printBytesLatencyStatsAggr(ConnStats *cs, AggrPacketsStats &aggrStats);
+void printBytesLatencyStatsConn(PacketsStats* bs);
+void printBytesLatencyStats(PacketsStats* bs);
+void printPayloadStats(PacketsStats *ps);
+void printPayloadStatsAggr(ConnStats *cs, AggrPacketsStats &aggrStats);
+void printPacketsStats(ConnStats *cs);
+void printPacketITTStats(PacketsStats* bs);
+void printPacketITTStatsAggr(ConnStats *cs, AggrPacketsStats &aggrStats);
 void printAggStats(string prefix, string unit, ConnStats *cs, BaseStats& bs, BaseStats& aggregatedMin, BaseStats& aggregatedMax);
 void printStats(string prefix, string unit, BaseStats& bs);
 

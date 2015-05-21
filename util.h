@@ -1,20 +1,24 @@
 #ifndef UTIL_H
 #define UTIL_H
 
-#define SSTR( x ) dynamic_cast< std::ostringstream & >( \
-		( std::ostringstream() << std::dec << x ) ).str()
-
 #include <getopt.h>
+#include <string>
+
+#include "common.h"
 
 class RangeManager;
 
-string seq_pair_str(uint64_t start, uint64_t end);
-string relative_seq_pair_str(RangeManager *rm, uint64_t start, uint64_t end);
+std::string seq_pair_str(uint64_t start, uint64_t end);
+std::string relative_seq_pair_str(RangeManager *rm, uint64_t start, uint64_t end);
 bool isNumeric(const char* pszInput, int nNumberBase);
 void parse_print_packets(char* optarg);
-pair <string,string>  make_optstring(struct option long_options[]);
+std::pair <std::string,std::string>  make_optstring(struct option long_options[]);
 void print_stack(void);
-string get_TCP_flags_str(u_char flags);
+std::string get_TCP_flags_str(u_char flags);
+
+std::string getIp(const struct in_addr &ip);
+std::string makeHostKey(const struct in_addr &ip, const uint16_t *port);
+std::string makeConnKey(const struct in_addr &srcIp, const struct in_addr &dstIp, const uint16_t *srcPort, const uint16_t *dstPort);
 
 /*
   Used to test if a sequence number comes after another

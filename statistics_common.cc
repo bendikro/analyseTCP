@@ -16,10 +16,30 @@ string LatencyItem::str() const {
 	return buffer.str();
 }
 
- ofstream& operator<<(ofstream& stream, const LatencyItem& lat) {
- 	stream << lat.str();
+ofstream& operator<<(ofstream& stream, const LatencyItem& lat) {
+	stream << lat.str();
  	return stream;
- }
+}
+
+string PacketStats::str() const {
+	ostringstream buffer;
+	buffer << stream_id << "," << send_time_us << "," << itt << "," << size;
+	return buffer.str();
+}
+
+string PacketStats::perSegmentStr() const {
+	ostringstream buffer;
+	//printf("sojourn_times: %ld, type: %d\n", sojourn_times.size(), s_type);
+	if (s_type != ST_PKT) {
+		//printf("perSegmentStr skipping type: %d\n", s_type);
+		return string();
+	}
+	for (ulong i = 0; i < sojourn_times.size(); i++) {
+		buffer << stream_id << "," << send_time_us << "," << sojourn_times[i].first << "," << sojourn_times[i].second <<
+			"," << ack_latency_usec << "," << sojourn_times[i].second + ack_latency_usec << endl;
+	}
+	return buffer.str();
+}
 
 void update_vectors_size(vector<SPNS::shared_ptr<vector <LatencyItem> > > &vectors, ulong count) {
 	for (ulong i = vectors.size(); i < count; i++) {
@@ -138,7 +158,7 @@ void update_vectors_size(vector<SPNS::shared_ptr<vector <LatencyItem> > > &vecto
  /*****************************************
   * BaseStats
   *****************************************/
- BaseStats::BaseStats(bool is_aggregate = false)
+ BaseStats::BaseStats(bool is_aggregate)
      : _is_aggregate(is_aggregate)
      , _counter( 0 )
      , valid( true )
@@ -235,9 +255,9 @@ void BaseStats::computePercentiles( )
 }
 
  /*****************************************
-  * AggrPacketStats
+  * AggrPacketsStats
   *****************************************/
- void AggrPacketStats::add(PacketStats &bs)
+ void AggrPacketsStats::add(PacketsStats &bs)
  {
 	if (bs.latency.get_counter()) {
 		aggregated.latency.add_to_aggregate(bs.latency);

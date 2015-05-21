@@ -1,6 +1,7 @@
 #ifndef CONNECTION_H
 #define CONNECTION_H
 
+#include "util.h"
 #include "RangeManager.h"
 #include <cmath>
 #include <netinet/in.h>
@@ -51,9 +52,7 @@ public:
 	uint64_t totRetransBytesSent;
 	uint64_t nrRetrans;
 	struct in_addr srcIp;
-	uint16_t srcPort;
 	struct in_addr dstIp;
-	uint16_t dstPort;
 	uint64_t bundleCount; // Number of packets with RDB data
 	// Used for calulcating relative sequence number
 	uint64_t lastLargestStartSeq;
@@ -63,36 +62,41 @@ public:
 	uint32_t lastLargestRecvSeqAbsolute;  // For reveiver side analyse
 	uint64_t lastLargestAckSeq;
 	uint32_t lastLargestAckSeqAbsolute;
+	uint64_t lastLargestSojournEndSeq;       // For reveiver side analyse
+	uint32_t lastLargestSojournSeqAbsolute;  // For reveiver side analyse
+
 
 	void genByteCountGroupedByInterval();
-	void genAckLatencyData(long first_tstamp, vector<SPNS::shared_ptr<vector <LatencyItem> > > &diff_times);
 
 	vector< vector<PacketSize> > packetSizes;
 	vector<PacketSizeGroup> packetSizeGroups;
 
-	PacketStats packetStats;
+	PacketsStats packetsStats;
+	string connKey, senderKey, receiverKey;
 
 	timeval firstSendTime;
 	timeval endTime;
 	RangeManager *rm;
 
-	Connection(struct in_addr src_ip, uint16_t src_port,
-						   struct in_addr dst_ip, uint16_t dst_port,
-						   uint32_t seq) : nrPacketsSent(0), nrDataPacketsSent(0), totPacketSize(0),
-										   totBytesSent(0), totRDBBytesSent(0), totNewDataSent(0),
-										   totRetransBytesSent(0), nrRetrans(0), bundleCount(0), lastLargestStartSeq(0),
-										   lastLargestEndSeq(0), lastLargestRecvEndSeq(0), lastLargestAckSeq(0)
+	Connection(const struct in_addr &src_ip, const uint16_t *src_port,
+			   const struct in_addr &dst_ip, const uint16_t *dst_port,
+			   uint32_t seq) : nrPacketsSent(0), nrDataPacketsSent(0), totPacketSize(0),
+							   totBytesSent(0), totRDBBytesSent(0), totNewDataSent(0),
+							   totRetransBytesSent(0), nrRetrans(0), bundleCount(0), lastLargestStartSeq(0),
+							   lastLargestEndSeq(0), lastLargestRecvEndSeq(0), lastLargestAckSeq(0),
+							   lastLargestSojournEndSeq(0), lastLargestSojournSeqAbsolute(0)
 	{
 		srcIp                      = src_ip;
-		srcPort                    = src_port;
 		dstIp                      = dst_ip;
-		dstPort                    = dst_port;
 		lastLargestSeqAbsolute     = seq;
 		lastLargestRecvSeqAbsolute = seq;
 		lastLargestAckSeqAbsolute  = seq;
 		timerclear(&firstSendTime);
 		timerclear(&endTime);
 		rm = new RangeManager(this, seq);
+		connKey = makeConnKey(src_ip, dst_ip, src_port, dst_port);
+		senderKey = makeHostKey(src_ip, src_port);
+		receiverKey = makeHostKey(dst_ip, dst_port);
 	}
 
 	~Connection() {
@@ -104,19 +108,22 @@ public:
 	void registerRecvd(struct sendData *sd);
 	bool registerAck(struct DataSeg *seg);
 	void addConnStats(ConnStats* cs);
-	PacketStats* getBytesLatencyStats();
-	void genBytesLatencyStats(PacketStats* bs);
+	PacketsStats* getBytesLatencyStats();
+	void genBytesLatencyStats(PacketsStats* bs);
 	void validateRanges();
 	timeval get_duration() ;
 	void calculateLatencyVariation() { rm->calculateLatencyVariation(); }
 	void makeByteLatencyVariationCDF() { rm->makeByteLatencyVariationCDF(); }
 	void writeByteLatencyVariationCDF(ofstream *stream);
 	void writeSentTimesAndQueueingDelayVariance(const uint64_t first_tstamp, vector<ofstream*> streams) { rm->writeSentTimesAndQueueingDelayVariance(first_tstamp, streams); }
+	void genAckLatencyData(long first_tstamp, vector<SPNS::shared_ptr<vector <LatencyItem> > > &diff_times) {
+		rm->genAckLatencyData(first_tstamp, diff_times, getConnKey());
+	}
 	void addRDBStats(int *rdb_sent, int *rdb_miss, int *rdb_hits, int *totBytesSent);
 	ulong getNumUniqueBytes();
-	string getConnKey();
-	string getSrcIp();
-	string getDstIp();
+	string getConnKey() { return connKey; }
+	string getSenderKey() { return senderKey; }
+	string getReceiverKey() { return receiverKey; }
 	void set_analyse_range_interval();
 	void calculateRetransAndRDBStats();
 	uint32_t getDuration(bool analyse_range_duration);

@@ -14,11 +14,28 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
 #
 # To compile a debug build:
 # cmake .. -DCMAKE_BUILD_TYPE=Debug
-
+#
+# To manually set compiler, e.g. gcc:
+#  -DCMAKE_CXX_COMPILER=/usr/local/bin/gcc48
+#
+#
 # Add more test files here when needed
 SET (TEST_FILES tests/TestAnalyseTCP.h)
 
 LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+
+IF(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+    ADD_DEFINITIONS(-DOS_LINUX)
+ENDIF(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+
+IF(${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
+    ADD_DEFINITIONS(-DOS_FREEBSD)
+ENDIF(${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
+
+IF (APPLE)
+    ADD_DEFINITIONS(-DOS_OSX)
+ENDIF(APPLE)
+
 
 INCLUDE (CheckTypeSize)
 
@@ -111,7 +128,7 @@ IF (WITH_DASH)
   TARGET_LINK_LIBRARIES (analyseDASH pcap)
 ENDIF(WITH_DASH)
 
-# Please write more tests. Very important!!
+# Please write more tests. Very important!! :-)
 IF (TESTS)
   SET (INCLUDE_DIRS tests/ tests/cxxtest-4.4/)
   SET (TESTS_SRC ${BASE_SRC} time_util.cc time_util.h tests/testrunner.cpp ${TEST_FILES})

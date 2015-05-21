@@ -65,7 +65,7 @@ bool Connection::registerSent(struct sendData* sd) {
 	if (debug) {
 		printf("\nRegisterSent (%lu): %s\n",
                (ulong)(sd->data.endSeq - sd->data.seq),
-			   relative_seq_pair_str(rm, sd->data.seq, END_SEQ(sd->data.endSeq)).c_str());
+		       rm->relative_seq_pair_str(sd->data.seq, END_SEQ(sd->data.endSeq)).c_str());
 	}
 #endif
 	//printf("lastLargestEndSeq: %lu\n", lastLargestEndSeq);
@@ -74,19 +74,18 @@ bool Connection::registerSent(struct sendData* sd) {
 	if (sd->data.endSeq > lastLargestEndSeq) { /* New data */
 		if (GlobOpts::debugLevel == 6) {
 			printf("New Data - sd->endSeq: %lu > lastLargestEndSeq: %lu, sd->seq: %lu, lastLargestStartSeq: %lu, len: %u\n",
-				   rm->relative_seq(END_SEQ(sd->data.endSeq)),
-				   rm->relative_seq(END_SEQ(lastLargestEndSeq)),
-				   rm->relative_seq(sd->data.seq),
-				   rm->relative_seq(lastLargestStartSeq),
+				   rm->get_print_seq(END_SEQ(sd->data.endSeq)),
+				   rm->get_print_seq(END_SEQ(lastLargestEndSeq)),
+				   rm->get_print_seq(sd->data.seq),
+				   rm->get_print_seq(lastLargestStartSeq),
 				   sd->data.payloadSize);
 		}
 #ifdef DEBUG
 		if (debug) {
-			//printf("\n");
-			printf("sd->data.seq:    %lu\n", rm->relative_seq(sd->data.seq));
-			printf(" lastLargestStartSeq:    %lu\n", rm->relative_seq(lastLargestStartSeq));
-			printf("sd->data.endSeq: %lu\n", rm->relative_seq(END_SEQ(sd->data.endSeq)));
-			printf("lastLargestEndSeq: %lu\n", rm->relative_seq(END_SEQ(lastLargestEndSeq)));
+			printf("sd->data.seq:    %lu\n", rm->get_print_seq(sd->data.seq));
+			printf(" lastLargestStartSeq:    %lu\n", rm->get_print_seq(lastLargestStartSeq));
+			printf("sd->data.endSeq: %lu\n", rm->get_print_seq(END_SEQ(sd->data.endSeq)));
+			printf("lastLargestEndSeq: %lu\n", rm->get_print_seq(END_SEQ(lastLargestEndSeq)));
 
 			printf("(sd->data.seq == lastLargestStartSeq): %d\n", (sd->data.seq == lastLargestStartSeq));
 			printf("(sd->data.endSeq > lastLargestEndSeq): %d\n", (sd->data.endSeq > lastLargestEndSeq));
@@ -126,8 +125,8 @@ bool Connection::registerSent(struct sendData* sd) {
 	} else if (lastLargestStartSeq > 0 && sd->data.seq <= lastLargestStartSeq) { /* All seen before */
 		if (GlobOpts::debugLevel == 6) {
 			printf("\nRetrans - lastLargestStartSeq: %lu > 0 && sd->data.seq: %lu <= lastLargestStartSeq: %lu\n",
-				   rm->relative_seq(lastLargestStartSeq), rm->relative_seq(sd->data.seq),
-				   rm->relative_seq(lastLargestStartSeq));
+				   rm->get_print_seq(lastLargestStartSeq), rm->get_print_seq(sd->data.seq),
+				   rm->get_print_seq(lastLargestStartSeq));
 		}
 		nrRetrans++;
 		totRetransBytesSent += sd->data.payloadSize;
@@ -139,9 +138,9 @@ bool Connection::registerSent(struct sendData* sd) {
 		sd->data.retrans = true;
 		if (GlobOpts::debugLevel == 6) {
 			printf("Retrans - lastLargestStartSeq: %lu > 0 && sd->data.seq: %lu <= lastLargestStartSeq: %lu\n",
-				   rm->relative_seq(lastLargestStartSeq), rm->relative_seq(sd->data.seq), rm->relative_seq(lastLargestStartSeq));
+				   rm->get_print_seq(lastLargestStartSeq), rm->get_print_seq(sd->data.seq), rm->get_print_seq(lastLargestStartSeq));
 			printf("New Data - sd->data.endSeq: %lu > lastLargestEndSeq: %lu\n",
-				   rm->relative_seq(END_SEQ(sd->data.endSeq)), rm->relative_seq(END_SEQ(lastLargestEndSeq)));
+				   rm->get_print_seq(END_SEQ(sd->data.endSeq)), rm->get_print_seq(END_SEQ(lastLargestEndSeq)));
 		}
 	}
 
@@ -162,8 +161,8 @@ void Connection::registerRange(struct sendData* sd) {
 
 		timeval offset;
 		timersub(&(sd->data.tstamp_pcap), &firstSendTime, &offset);
-		cerr << "\nRegistering new outgoing. Seq: " << rm->relative_seq(sd->data.seq) << " - "
-		     << rm->relative_seq(END_SEQ(sd->data.endSeq)) << " Absolute seq: " << sd->data.seq << " - "
+		cerr << "\nRegistering new outgoing. Seq: " << rm->get_print_seq(sd->data.seq) << " - "
+		     << rm->get_print_seq(END_SEQ(sd->data.endSeq)) << " Absolute seq: " << sd->data.seq << " - "
 			 << END_SEQ(sd->data.endSeq) << " Payload: " << sd->data.payloadSize << endl;
 		cerr << "Time offset: Secs: " << offset.tv_sec << "." << offset.tv_usec << endl;
 	}
@@ -171,8 +170,8 @@ void Connection::registerRange(struct sendData* sd) {
 	rm->insertSentRange(sd);
 
 	if (GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5) {
-		cerr << "Last range: seq: " << rm->relative_seq(rm->getLastRange()->getStartSeq())
-		     << " - " << rm->relative_seq(END_SEQ(rm->getLastRange()->getEndSeq())) << " - size: "
+		cerr << "Last range: seq: " << rm->get_print_seq(rm->getLastRange()->getStartSeq())
+		     << " - " << rm->get_print_seq(END_SEQ(rm->getLastRange()->getEndSeq())) << " - size: "
 		     << rm->getLastRange()->getEndSeq() - rm->getLastRange()->getStartSeq() << endl;
 	}
 }
@@ -183,7 +182,7 @@ bool Connection::registerAck(struct DataSeg *seg) {
 	if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
 		timeval offset;
 		timersub(&seg->tstamp_pcap, &firstSendTime, &offset);
-		cerr << endl << "Registering new ACK. Conn: " << getConnKey() << " Ack: " << rm->relative_seq(seg->ack) << endl;
+		cerr << endl << "Registering new ACK. Conn: " << getConnKey() << " Ack: " << rm->get_print_seq(seg->ack) << endl;
 		cerr << "Time offset: Secs: " << offset.tv_sec << " uSecs: " << offset.tv_usec << endl;
 	}
 
@@ -195,8 +194,8 @@ bool Connection::registerAck(struct DataSeg *seg) {
 
 	if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
 		if(rm->getHighestAcked() != NULL){
-			cerr << "highestAcked: startSeq: " << rm->relative_seq(rm->getHighestAcked()->getStartSeq()) << " - endSeq: "
-			     << rm->relative_seq(rm->getHighestAcked()->getEndSeq()) << " - size: "
+			cerr << "highestAcked: startSeq: " << rm->get_print_seq(rm->getHighestAcked()->getStartSeq()) << " - endSeq: "
+			     << rm->get_print_seq(rm->getHighestAcked()->getEndSeq()) << " - size: "
 			     << rm->getHighestAcked()->getEndSeq() - rm->getHighestAcked()->getStartSeq() << endl;
 		}
 	}
@@ -346,20 +345,16 @@ void Connection::addConnStats(ConnStats* cs) {
 }
 
 /* Generate statistics for bytewise latency */
-void Connection::genBytesLatencyStats(PacketStats* bs){
+void Connection::genBytesLatencyStats(PacketsStats* bs){
 	rm->genStats(bs);
 }
 
-PacketStats* Connection::getBytesLatencyStats() {
-	if (!packetStats.has_stats()) {
-		packetStats.init();
-		rm->genStats(&packetStats);
+PacketsStats* Connection::getBytesLatencyStats() {
+	if (!packetsStats.has_stats()) {
+		packetsStats.init();
+		rm->genStats(&packetsStats);
 	}
-	return &packetStats;
-}
-
-void Connection::genAckLatencyData(long first_tstamp, vector<SPNS::shared_ptr<vector <LatencyItem> > > &diff_times) {
-	rm->genAckLatencyData(first_tstamp, diff_times, getConnKey());
+	return &packetsStats;
 }
 
 /* Check validity of connection range and time data */
@@ -415,45 +410,6 @@ ulong Connection::getNumUniqueBytes() {
 	}
 	ulong unique_data_bytes = last_data_seq - first_data_seq;
 	return unique_data_bytes;
-}
-
-string Connection::getConnKey() {
-	char src_ip[INET_ADDRSTRLEN];
-	char dst_ip[INET_ADDRSTRLEN];
-	inet_ntop(AF_INET, &(srcIp), src_ip, INET_ADDRSTRLEN);
-	inet_ntop(AF_INET, &(dstIp), dst_ip, INET_ADDRSTRLEN);
-
-	/* Generate snd IP/port + rcv IP/port string to use as key */
-	stringstream connKey;
-	connKey << src_ip
-			<< "-" << srcPort
-			<< "-" << dst_ip
-			<< "-" << dstPort;
-	return connKey.str();
-}
-
-string Connection::getSrcIp() {
-	char src_ip[INET_ADDRSTRLEN];
-	char dst_ip[INET_ADDRSTRLEN];
-	inet_ntop(AF_INET, &(srcIp), src_ip, INET_ADDRSTRLEN);
-	inet_ntop(AF_INET, &(dstIp), dst_ip, INET_ADDRSTRLEN);
-
-	/* Generate snd IP/port + rcv IP/port string to use as key */
-	stringstream sip;
-	sip << src_ip;
-	return sip.str();
-}
-
-string Connection::getDstIp() {
-	char src_ip[INET_ADDRSTRLEN];
-	char dst_ip[INET_ADDRSTRLEN];
-	inet_ntop(AF_INET, &(srcIp), src_ip, INET_ADDRSTRLEN);
-	inet_ntop(AF_INET, &(dstIp), dst_ip, INET_ADDRSTRLEN);
-
-	/* Generate snd IP/port + rcv IP/port string to use as key */
-	stringstream dip;
-	dip << dst_ip;
-	return dip.str();
 }
 
 void Connection::registerPacketSize(const timeval& first, const timeval& ts, const uint64_t ps, const uint16_t payloadSize) {

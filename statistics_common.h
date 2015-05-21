@@ -2,6 +2,7 @@
 #define STATISTICS_COMMON_H
 
 #include "common.h"
+#include <math.h>
 
 // A loss value object, used for aggregating loss over intervals
 struct LossInterval {
@@ -36,13 +37,29 @@ struct LatencyItem {
 };
 ofstream& operator<<(ofstream& stream, const LatencyItem& lat);
 
+//struct SegmentLatencyItem {
+//	long time_us;
+//	int sojourn_time_usec;
+//	vector< pair<int, int> > sojourn_times;
+//	int ack_latency_usec;
+//	string stream_id;
+//	SegmentLatencyItem(long time_us, vector< pair<int, int> > &sojourn_t, int ack_latency, string stream_id)
+//		: time_us(time_us), sojourn_times(sojourn_t), ack_latency_usec(ack_latency), stream_id(stream_id) { }
+//
+//	string str() const;
+//	string header() { return "time,latency,stream_id"; }
+//	operator string() const { return str(); }
+//};
+//ofstream& operator<<(ofstream& stream, const SegmentLatencyItem& lat);
+
+
 void update_vectors_size(vector<SPNS::shared_ptr<vector <LatencyItem> > > &vectors, ulong count);
 
 class GlobStats
 {
 public:
 	static map<const long, int> byteLatencyVariationCDFValues;
-    static uint64_t totNumBytes;
+	static uint64_t totNumBytes;
 };
 
 /* Struct used to pass aggregated data between connections */
@@ -87,54 +104,45 @@ struct Percentiles
 	int max_char_length;
 
 	void init();
-    void compute( const vector<double>& v );
+	void compute( const vector<double>& v );
 	void print(string fmt, bool show_quartiles = true);
-};
-
-struct SentTime
-{
-	uint64_t time;
-	uint16_t size;
-	uint16_t itt;
-	SentTime(uint64_t t, uint16_t s) : time(t), size(s), itt(0) {}
-
-	bool operator < (const SentTime& other) const {
-        return (time < other.time);
-    }
 };
 
 class BaseStats
 {
 	bool _is_aggregate;
-    int32_t _counter;
+	int32_t _counter;
 public:
 	int64_t min;
 	int64_t max;
 	int64_t cum;
-    bool    valid;
+	bool	valid;
 
+	BaseStats() : _is_aggregate(false) {}
 	BaseStats(bool is_aggregate);
+
 	void init();
 
-    // add to cum, increase _counter, update min and max
-    void add( uint64_t );
-    void add_to_aggregate( const BaseStats &rhs );
-    double   get_avg( ) const;
-    uint32_t get_counter( ) const;
+	// add to cum, increase _counter, update min and max
+	void add( uint64_t );
+	void add_to_aggregate( const BaseStats &rhs );
+	double	 get_avg( ) const;
+	uint32_t get_counter( ) const;
 
-    Percentiles    _percentiles;
-    double         _std_dev;
+	Percentiles	   _percentiles;
+	double		   _std_dev;
 
-    // derive _std_dev and _percentiles from _values
-    void makeStats( );
-    void sortValues( );
-    void computePercentiles( );
+	// derive _std_dev and _percentiles from _values
+	void makeStats( );
+	void sortValues( );
+	void computePercentiles( );
 
 private:
-    vector<double> _values;
+	vector<double> _values;
 };
 
-class ExtendedPacketStats {
+
+class StreamStats {
 public:
 	BaseStats latency;
 	BaseStats packet_length;
@@ -145,40 +153,70 @@ public:
 		packet_length.init();
 		itt.init();
 	}
-	ExtendedPacketStats(bool is_aggregate) :
+	StreamStats(bool is_aggregate) :
 		latency(is_aggregate),
 		packet_length(is_aggregate),
 		itt(is_aggregate)
 	{}
 };
 
-/* Struct used to keep track of bytewise latency stats */
-class PacketStats : public ExtendedPacketStats {
+class PacketStats
+{
 public:
-	vector<SentTime> sent_times;
+	sent_type s_type;
+	string stream_id;
+	uint64_t send_time_us;
+	uint16_t size;
+	uint16_t itt;
+	vector< pair<int, int> > sojourn_times; // byte count, sojourn time
+	int ack_latency_usec;
+	PacketStats() {}
+	PacketStats(sent_type type, string connKey, uint64_t time, uint16_t s) : s_type(type), stream_id(connKey), send_time_us(time), size(s), itt(0) {}
+
+	bool operator < (const PacketStats& other) const {
+		return (send_time_us < other.send_time_us);
+	}
+	string str() const;
+	string perSegmentStr() const;
+	operator string() const { return str(); }
+};
+
+/*
+  Used only for producing statistics for terminal output
+*/
+class PacketsStats : public StreamStats {
+public:
+	vector<PacketStats> packet_stats;
 	vector<int> retrans;
 	vector<int> dupacks;
 
 	void init() {
-		sent_times.clear();
+		packet_stats.clear();
 		retrans.clear();
 		dupacks.clear();
-		ExtendedPacketStats::init();
+		StreamStats::init();
+	}
+
+	void addPacketStats(PacketStats &ps) {
+		packet_stats.push_back(ps);
 	}
 
 	bool has_stats() {
 		return latency.get_counter() > 0;
 	}
 
-	PacketStats(bool _is_aggregate = false) : ExtendedPacketStats(_is_aggregate) {}
+	PacketsStats(bool _is_aggregate = false) : StreamStats(_is_aggregate) {}
 };
 
-class AggrPacketStats {
+/*
+  Used only for producing statistics for terminal output
+*/
+class AggrPacketsStats {
 public:
-	PacketStats aggregated;
-	ExtendedPacketStats minimum;
-	ExtendedPacketStats average;
-	ExtendedPacketStats maximum;
+	PacketsStats aggregated;
+	StreamStats minimum;
+	StreamStats average;
+	StreamStats maximum;
 
 	void init() {
 		aggregated.init();
@@ -187,14 +225,14 @@ public:
 		maximum.init();
 	}
 
-	AggrPacketStats()
+	AggrPacketsStats()
 		: aggregated(true)
 		, minimum(false)
 		, average(false)
 		, maximum(false) {
 		init();
 	}
-	void add(PacketStats &bs);
+	void add(PacketsStats &bs);
 };
 
 #endif /* STATISTICS_COMMON_H */

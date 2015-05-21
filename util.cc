@@ -1,19 +1,4 @@
-#include "RangeManager.h"
 #include "util.h"
-
-string seq_pair_str(uint64_t start, uint64_t end) {
-	stringstream s;
-	s << start << ", " << end;
-	return s.str();
-}
-
-string relative_seq_pair_str(RangeManager *rm, uint64_t start, uint64_t end) {
-	if (!GlobOpts::relative_seq) {
-		start = rm->relative_seq(start);
-		end = rm->relative_seq(end);
-	}
-	return seq_pair_str(start, end);
-}
 
 string get_TCP_flags_str(u_char flags) {
 	stringstream out;
@@ -37,6 +22,23 @@ bool isNumeric(const char* pszInput, int nNumberBase) {
 	string base = "0123456789ABCDEF";
 	string input = pszInput;
 	return (input.find_first_not_of(base.substr(0, nNumberBase)) == string::npos);
+}
+
+
+string getIp(const struct in_addr &ip) {
+	char ip_buf[INET_ADDRSTRLEN];
+	inet_ntop(AF_INET, &ip, ip_buf, INET_ADDRSTRLEN);
+	return string(ip_buf);
+}
+
+string makeHostKey(const struct in_addr &ip, const uint16_t *port) {
+	return getIp(ip) + ":" + to_string(ntohs(*port));
+}
+
+string makeConnKey(const struct in_addr &srcIp, const struct in_addr &dstIp, const uint16_t *srcPort, const uint16_t *dstPort) {
+	stringstream connKeyTmp;
+	connKeyTmp << makeHostKey(srcIp, srcPort) << "-" << makeHostKey(dstIp, dstPort);
+	return connKeyTmp.str();
 }
 
 

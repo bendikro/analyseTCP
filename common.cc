@@ -9,6 +9,7 @@ bool GlobOpts::withCDF                  = false;
 bool GlobOpts::transport                = false;
 bool GlobOpts::genAckLatencyFiles       = false;
 bool GlobOpts::genPerPacketStats        = false;
+bool GlobOpts::genPerSegmentStats       = false;
 bool GlobOpts::withThroughput           = false;
 string GlobOpts::prefix                 = "";
 string GlobOpts::RFiles_dir             = "";
@@ -28,6 +29,7 @@ string GlobOpts::percentiles            = "";
 int GlobOpts::analyse_start             = 0;
 int GlobOpts::analyse_end               = 0;
 int GlobOpts::analyse_duration          = 0;
+string GlobOpts::sojourn_time_file      = "";
 bool GlobOpts::oneway_delay_variance    = false;
 vector <pair<uint64_t, uint64_t> > GlobOpts::print_packets_pairs;
 
