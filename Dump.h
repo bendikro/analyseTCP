@@ -19,7 +19,7 @@ class Connection;
 class Statistics;
 
 struct ConnectionMapKey {
-	struct in_addr ip_src, ip_dst;
+	in_addr ip_src, ip_dst;
 	u_short src_port, dst_port;
 };
 
@@ -81,11 +81,11 @@ private:
 	string tcpPort; /* specify tcp.port in filter */
 	vector<four_tuple_t> _connections;
 
-	int64_t sentPacketCount;
-	uint64_t sentBytesCount;
-	int64_t recvPacketCount;
-	uint64_t recvBytesCount;
-	uint64_t ackCount;
+	llint_t sentPacketCount;
+	llint_t recvPacketCount;
+	ullint_t sentBytesCount;
+	ullint_t recvBytesCount;
+	ullint_t ackCount;
 	uint32_t max_payload_size;
 	map<ConnectionMapKey*, Connection*, ConnectionKeyComparator> conns;
 
@@ -109,20 +109,18 @@ public:
 
 	~Dump();
 
-	uint64_t get_relative_sequence_number(uint32_t ack, uint32_t firstSeq, ulong largestAckSeq, uint32_t largestAckSeqAbsolute, Connection *conn);
+	seq64_t get_relative_sequence_number(seq32_t ack, seq32_t firstSeq, seq64_t largestAckSeq, seq32_t largestAckSeqAbsolute, Connection *conn);
 	void analyseSender();
 	void processRecvd(string fn);
 	void calculateRetransAndRDBStats();
 	void printPacketDetails();
 	void findTCPTimeStamp(DataSeg* data, uint8_t* opts, int option_length);
-	Connection* getConn(const struct in_addr &srcIp, const struct in_addr &dstIp, const uint16_t *srcPort, const uint16_t *dstPort, const uint32_t *seq);
+	Connection* getConn(const in_addr &srcIp, const in_addr &dstIp, const uint16_t *srcPort, const uint16_t *dstPort, const seq32_t *seq);
 	Connection* getConn(string &srcIpStr, string &dstIpStr, string &srcPortStr, string &dstPortStr);
 	void calculateLatencyVariation();
 	void calculateSojournTime();
 
 	friend class Statistics;
-private:
-	void free_resources();
 };
 
 #endif /* DUMP_H */

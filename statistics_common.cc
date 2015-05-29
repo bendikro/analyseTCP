@@ -4,7 +4,7 @@
 
 GlobStats globStats;
 
-uint64_t GlobStats::totNumBytes;
+ullint_t GlobStats::totNumBytes;
 map<const long, int> GlobStats::byteLatencyVariationCDFValues;
 
 /*****************************************
@@ -102,7 +102,7 @@ void update_vectors_size(vector<SPNS::shared_ptr<vector <LatencyItem> > > &vecto
  /*****************************************
   * Percentiles
   *****************************************/
- void Percentiles::init( )
+ void Percentiles::init()
  {
  	max_char_length = 0;
  	std::istringstream ss(GlobOpts::percentiles);
@@ -120,14 +120,14 @@ void update_vectors_size(vector<SPNS::shared_ptr<vector <LatencyItem> > > &vecto
      }
  }
 
- void Percentiles::compute( const vector<double>& v )
+ void Percentiles::compute(const vector<double>& v)
  {
  	double num;
      auto it  = percentiles.begin();
      auto end = percentiles.end();
-     for( ; it!=end; it++ )
+     for (; it!=end; it++)
      {
- 		istringstream(it->first) >> num;
+		 istringstream(it->first) >> num;
  		vector<double>::const_iterator it_p = v.begin() + ((int) ceil(v.size() * (num / 100.0)));
  		it->second = *it_p;
  	}
@@ -160,12 +160,12 @@ void update_vectors_size(vector<SPNS::shared_ptr<vector <LatencyItem> > > &vecto
   *****************************************/
  BaseStats::BaseStats(bool is_aggregate)
      : _is_aggregate(is_aggregate)
-     , _counter( 0 )
-     , valid( true )
+     , _counter(0)
+     , valid(true)
  {init();}
 
  void BaseStats::init() {
-     min = std::numeric_limits<int64_t>::max();
+     min = std::numeric_limits<uint64_t>::max();
      max = 0;
      cum = 0;
      _counter = 0;
@@ -173,54 +173,54 @@ void update_vectors_size(vector<SPNS::shared_ptr<vector <LatencyItem> > > &vecto
 	 _values.clear();
  }
 
- void BaseStats::add( uint64_t val )
+ void BaseStats::add(ullint_t val)
  {
-     assert( _is_aggregate == false );
-     assert( valid );
+     assert(_is_aggregate == false);
+     assert(valid);
      _counter++;
-     this->min = std::min<int64_t>( this->min, val );
-     this->max = std::max<int64_t>( this->max, val );
+     this->min = std::min<ullint_t>(this->min, val);
+     this->max = std::max<ullint_t>(this->max, val);
      this->cum += val;
-	 _values.push_back( val );
+	 _values.push_back(val);
  }
 
- double BaseStats::get_avg( ) const
+ double BaseStats::get_avg() const
  {
-     if( _counter == 0 ) return 0;
-     return (double)cum/(double)_counter;
+     if (_counter == 0) return 0;
+     return (double) cum / (double) _counter;
  }
 
- uint32_t BaseStats::get_counter( ) const
+ uint32_t BaseStats::get_counter() const
  {
      return _counter;
  }
 
  void BaseStats::add_to_aggregate(const BaseStats &rhs)
  {
-     assert( _is_aggregate == true );
-     assert( valid );
-     if( not rhs.valid )
+     assert(_is_aggregate == true);
+     assert(valid);
+     if (!rhs.valid)
      {
          cerr << "WARNING: rhs is invalid in " << __FILE__ << ":" << __LINE__ << endl;
          return;
      }
-     this->min = std::min<int64_t>( this->min, rhs.min );
-     this->max = std::max<int64_t>( this->max, rhs.max );
+     this->min = std::min<int64_t>(this->min, rhs.min);
+     this->max = std::max<int64_t>(this->max, rhs.max);
      this->cum += rhs.cum;
-	 _values.insert( _values.end(), rhs._values.begin(), rhs._values.end() );
+	 _values.insert(_values.end(), rhs._values.begin(), rhs._values.end());
      _counter += rhs._values.size();
  }
 
-void BaseStats::makeStats( )
+void BaseStats::makeStats()
 {
-    if( _values.size() )
+    if (_values.size())
     {
-        if( _values.size() != BaseStats::get_counter() )
+        if (_values.size() != BaseStats::get_counter())
         {
             cerr << "Crashing !" << endl
                  << "Array size: " << _values.size() << endl
                  << "Counter:    " << BaseStats::get_counter() << endl;
-            assert( _values.size() == BaseStats::get_counter() );
+            assert(_values.size() == BaseStats::get_counter());
         }
 
         double mean   = BaseStats::get_avg();
@@ -228,15 +228,15 @@ void BaseStats::makeStats( )
 
         auto it  = _values.begin();
         auto end = _values.end();
-        for( ; it!=end; it++ )
+        for (; it!=end; it++)
         {
             double val = (*it) - mean;
             temp += val * val;
         }
-        _std_dev = sqrt( temp / BaseStats::get_counter() );
+        _std_dev = sqrt(temp / BaseStats::get_counter());
 
-        std::sort( _values.begin(), _values.end() );
-        _percentiles.compute( _values );
+        std::sort(_values.begin(), _values.end());
+        _percentiles.compute(_values);
     }
     else
     {
@@ -244,14 +244,14 @@ void BaseStats::makeStats( )
     }
 }
 
-void BaseStats::sortValues( )
+void BaseStats::sortValues()
 {
-    std::sort( _values.begin(), _values.end() );
+    std::sort(_values.begin(), _values.end());
 }
 
-void BaseStats::computePercentiles( )
+void BaseStats::computePercentiles()
 {
-    _percentiles.compute( _values );
+    _percentiles.compute(_values);
 }
 
  /*****************************************

@@ -22,7 +22,7 @@ class Connection;
    are received */
 class RangeManager {
 private:
-	struct timeval highestRecvd;
+	timeval highestRecvd;
 	int redundantBytes;
 	long lowestRecvDiff; /* Lowest pcap packet diff */
 	double drift; /* Clock drift (ms/s) */
@@ -30,44 +30,43 @@ private:
 	int minimum_segment_size;
 	int maximum_segment_size;
 
-	map<ulong, ByteRange*>::iterator highestAckedByteRangeIt;
+	map<seq64_t, ByteRange*>::iterator highestAckedByteRangeIt;
 	map<const long, int> byteLatencyVariationCDFValues;
 
 public:
-	map<ulong, ByteRange*> ranges;
-	uint32_t firstSeq; /* The absolute start sequence number */
-	uint64_t lastSeq;  /* Global relative end sequence number (Equals the number of unique bytes) */
+	map<seq64_t, ByteRange*> ranges;
+	seq32_t firstSeq; /* The absolute start sequence number */
+	seq64_t lastSeq;  /* Global relative end sequence number (Equals the number of unique bytes) */
 
-	map<ulong, ByteRange*>::iterator first_to_analyze, last_to_analyze;
+	map<seq64_t, ByteRange*>::iterator first_to_analyze, last_to_analyze;
 
 	// The number of RDB bytes that were redundant and not
 	int rdb_packet_misses;
 	int rdb_packet_hits;
-	uint rdb_byte_miss;
-	uint rdb_byte_hits;
+	ullint_t rdb_byte_miss;
+	ullint_t rdb_byte_hits;
+	ullint_t analysed_lost_bytes;
 	int analysed_lost_ranges_count;
 	int analysed_sent_ranges_count;
-	uint analysed_lost_bytes;
 	int ack_count;
-	uint64_t analysed_bytes_sent, analysed_bytes_sent_unique, analysed_bytes_retransmitted, analysed_redundant_bytes;
+	ullint_t analysed_bytes_sent, analysed_bytes_sent_unique, analysed_bytes_retransmitted, analysed_redundant_bytes;
 	int analysed_packet_sent_count, analysed_retr_packet_count, analysed_retr_packet_count_in_dump,
 		analysed_retr_no_payload_packet_count, analysed_rdb_packet_count, analysed_ack_count,
-		analysed_packet_sent_count_in_dump, analysed_packet_received_count, analysed_ranges_count, analysed_sent_pure_ack_count;
-
-	int analysed_data_packet_count;
-	int analysed_syn_count, analysed_fin_count, analysed_rst_count, analysed_pure_acks_count;
+		analysed_packet_sent_count_in_dump, analysed_packet_received_count, analysed_ranges_count, analysed_sent_pure_ack_count,
+		analysed_data_packet_count,
+		analysed_syn_count, analysed_fin_count, analysed_rst_count, analysed_pure_acks_count;
 	uint16_t analysed_max_range_payload;
 
-	map<ulong, ByteRange*>::iterator analyse_range_start, analyse_range_last, analyse_range_end;
+	map<seq64_t, ByteRange*>::iterator analyse_range_start, analyse_range_last, analyse_range_end;
 	uint64_t analyse_time_sec_start, analyse_time_sec_end;
 
 	Connection *conn;
 public:
-	RangeManager(Connection *c, uint32_t first_seq) :
+	RangeManager(Connection *c, seq32_t first_seq) :
 		redundantBytes(0), lastSeq(0),
 		rdb_packet_misses(0), rdb_packet_hits(0), rdb_byte_miss(0),
-		rdb_byte_hits(0), analysed_lost_ranges_count(0),
-		analysed_sent_ranges_count(0), analysed_lost_bytes(0),
+		rdb_byte_hits(0), analysed_lost_bytes(0),
+		analysed_lost_ranges_count(0), analysed_sent_ranges_count(0),
 		ack_count(0), analysed_bytes_sent(0), analysed_bytes_sent_unique(0), analysed_bytes_retransmitted(0),
 		analysed_redundant_bytes(0), analysed_packet_sent_count(0),
 		analysed_retr_packet_count(0), analysed_retr_packet_count_in_dump(0),
@@ -87,9 +86,9 @@ public:
 
 	~RangeManager();
 
-	void insertSentRange(struct sendData *sd);
-	void insertReceivedRange(struct sendData *sd);
-	bool processAck(struct DataSeg *seg);
+	void insertSentRange(sendData *sd);
+	void insertReceivedRange(sendData *sd);
+	bool processAck(DataSeg *seg);
 	void genStats(PacketsStats* bs);
 	ByteRange* getLastRange() {	return ranges.rbegin()->second;	}
 	ByteRange* getHighestAcked();
@@ -103,28 +102,26 @@ public:
 	void writeSentTimesAndQueueingDelayVariance(const uint64_t first_tstamp, vector<ofstream*> streams);
 	int calculateClockDrift();
 	void doDriftCompensation();
-	bool insert_byte_range(uint64_t start_seq, uint64_t end_seq, insert_type type, struct DataSeg *data_seq, int level);
-	void genAckLatencyFiles(long first_tstamp, const string& connKey);
-	void genAckLatencyData(long first_tstamp, vector<SPNS::shared_ptr<vector <LatencyItem> > > &diff_times, const string& connKey);
-
-	int getNumBytes() { return lastSeq; } // lastSeq is the last relative seq number
-	long int getByteRangesCount() { return ranges.size(); }
-	long int getAnalysedByteRangesCount() { return ranges.size(); }
-	long int getByteRangesLost() { return analysed_lost_ranges_count; }
-	long int getByteRangesSent() { return analysed_sent_ranges_count; }
-	int getRedundantBytes(){ return analysed_redundant_bytes; }
-	int getLostBytes() { return analysed_lost_bytes; }
-	ulong get_print_seq(uint64_t seq);
-	string get_print_relative_seq_pair(uint64_t start, uint64_t end);
-	ulong relative_seq(uint64_t seq);
-	string relative_seq_pair_str(uint64_t start, uint64_t end);
-	void calculateRealLoss(map<ulong, ByteRange*>::iterator brIt, map<ulong, ByteRange*>::iterator brIt_end);
+	bool insert_byte_range(seq64_t start_seq, seq64_t end_seq, insert_type type, DataSeg *data_seq, int level);
+	void genAckLatencyData(uint64_t first_tstamp, vector<SPNS::shared_ptr<vector <LatencyItem> > > &diff_times, const string& connKey);
+	ullint_t getNumBytes() { return lastSeq; } // lastSeq is the last relative seq number
+	int getByteRangesCount() { return ranges.size(); }
+	int getAnalysedByteRangesCount() { return ranges.size(); }
+	int getByteRangesLost() { return analysed_lost_ranges_count; }
+	int getByteRangesSent() { return analysed_sent_ranges_count; }
+	int getRedundantBytes() { return analysed_redundant_bytes; }
+	ullint_t getLostBytes() { return analysed_lost_bytes; }
+	seq64_t get_print_seq(seq64_t seq);
+	string get_print_relative_seq_pair(seq64_t start, seq64_t end);
+	seq64_t relative_seq(seq64_t seq);
+	string relative_seq_pair_str(seq64_t start, seq64_t end);
+	void calculateRealLoss(map<seq64_t, ByteRange*>::iterator brIt, map<seq64_t, ByteRange*>::iterator brIt_end);
 	void analyseReceiverSideData();
 	void calculateRetransAndRDBStats();
-	void calculateLossGroupedByInterval(const uint64_t first_ts, vector<LossInterval>& aggr_loss, vector<LossInterval>& loss);
+	void calculateLossGroupedByInterval(const uint64_t first_tstamp, vector<LossInterval>& aggr_loss, vector<LossInterval>& loss);
 	void printPacketDetails();
 };
 
-int seq_with_print_range(uint64_t start, uint64_t end, size_t &print_packet_ranges_index);
+int seq_with_print_range(seq64_t start, seq64_t end, size_t &print_packet_ranges_index);
 
 #endif /* RANGEMANAGER_H */

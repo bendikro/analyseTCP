@@ -25,17 +25,17 @@ bool isNumeric(const char* pszInput, int nNumberBase) {
 }
 
 
-string getIp(const struct in_addr &ip) {
+string ipToStr(const in_addr &ip) {
 	char ip_buf[INET_ADDRSTRLEN];
 	inet_ntop(AF_INET, &ip, ip_buf, INET_ADDRSTRLEN);
 	return string(ip_buf);
 }
 
-string makeHostKey(const struct in_addr &ip, const uint16_t *port) {
-	return getIp(ip) + ":" + to_string(ntohs(*port));
+string makeHostKey(const in_addr &ip, const uint16_t *port) {
+	return ipToStr(ip) + ":" + to_string(ntohs(*port));
 }
 
-string makeConnKey(const struct in_addr &srcIp, const struct in_addr &dstIp, const uint16_t *srcPort, const uint16_t *dstPort) {
+string makeConnKey(const in_addr &srcIp, const in_addr &dstIp, const uint16_t *srcPort, const uint16_t *dstPort) {
 	stringstream connKeyTmp;
 	connKeyTmp << makeHostKey(srcIp, srcPort) << "-" << makeHostKey(dstIp, dstPort);
 	return connKeyTmp.str();
@@ -100,7 +100,7 @@ void parse_print_packets(char* optarg)
  * is always up to date.
  * Return pair<string,string>(OPTSTRING, usage)
  */
-pair <string,string> make_optstring(struct option long_options[])
+pair <string,string> make_optstring(option long_options[])
 {
 	stringstream usage_tmp, opts;
 	int i = 0;

@@ -39,7 +39,7 @@
 #define OPT_ANALYSE_DURATION 403
 #define OPT_SOJOURN_TIME_INPUT 404
 
-static struct option long_options[] = {
+static option long_options[] = {
 	{"sender-dump",                 required_argument, 0, 'f'},
 	{"src-ip",                      required_argument, 0, 's'},
 	{"src-port",                    required_argument, 0, 'q'},
@@ -219,30 +219,30 @@ void parse_cmd_args(int argc, char *argv[], string OPTSTRING, string usage_str) 
 			break;
 		case 'p':
 			dst_port = string(optarg);
-			if( not tcp_port.empty() )
+			if ( not tcp_port.empty())
 			{
-				colored_printf(RED, "-p cannot be combined with --tcp-port, ignoring -p\n" );
+				colored_printf(RED, "-p cannot be combined with --tcp-port, ignoring -p\n");
 				dst_port = "";
 			}
 			break;
 		case 'q':
 			src_port = string(optarg);
-			if( not tcp_port.empty() )
+			if (!tcp_port.empty())
 			{
-				colored_printf(RED, "-q cannot be combined with --tcp-port, ignoring -q\n" );
+				colored_printf(RED, "-q cannot be combined with --tcp-port, ignoring -q\n");
 				src_port = "";
 			}
 			break;
 		case OPT_PORT :
 			tcp_port = string(optarg);
-			if( not dst_port.empty() )
+			if (!dst_port.empty())
 			{
-				colored_printf(RED, "--tcp-port cannot be combined with -p, ignoring --tcp-port\n" );
+				colored_printf(RED, "--tcp-port cannot be combined with -p, ignoring --tcp-port\n");
 				tcp_port = "";
 			}
-			else if( not src_port.empty() )
+			else if (!src_port.empty())
 			{
-				colored_printf(RED, "--tcp-port cannot be combined with -q, ignoring --tcp-port\n" );
+				colored_printf(RED, "--tcp-port cannot be combined with -q, ignoring --tcp-port\n");
 				tcp_port = "";
 			}
 			break;
@@ -412,14 +412,14 @@ void parse_cmd_args(int argc, char *argv[], string OPTSTRING, string usage_str) 
 	}
 }
 
-int main(int argc, char *argv[]){
+int main(int argc, char *argv[]) {
 	pair <string,string> ret = make_optstring(long_options);
 	parse_cmd_args(argc, argv, ret.first, ret.second);
 
-	if(GlobOpts::debugLevel < 0)
+	if (GlobOpts::debugLevel < 0)
 		cerr << "debugLevel = " << GlobOpts::debugLevel << endl;
 
-	if(GlobOpts::verbose < 1)
+	if (GlobOpts::verbose < 1)
 		cerr << "verbose = " << GlobOpts::verbose << endl;
 
 	if (GlobOpts::RFiles_dir.length()) {
@@ -466,7 +466,7 @@ int main(int argc, char *argv[]){
 			if (!GlobOpts::aggOnly) {
 				stats.writeByteLatencyVariationCDF();
 			}
-			if (GlobOpts::aggregate){
+			if (GlobOpts::aggregate) {
 				stats.writeAggByteLatencyVariationCDF();
 			}
 		}

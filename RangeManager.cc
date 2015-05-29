@@ -11,7 +11,7 @@
 const char *received_type_str[] = {"DEF", "DTA", "RDB", "RTR"};
 
 RangeManager::~RangeManager() {
-	map<ulong, ByteRange*>::iterator it, it_end;
+	map<seq64_t, ByteRange*>::iterator it, it_end;
 	it = ranges.begin();
 	it_end = ranges.end();
 	for (; it != it_end; it++) {
@@ -23,20 +23,20 @@ RangeManager::~RangeManager() {
 #define STR_RELATIVE_SEQNUM_PAIR(seq_start, seq_end) relative_seq_pair_str(seq_start, END_SEQ(seq_end)).c_str()
 #define STR_SEQNUM_PAIR(seq_start, seq_end) seq_pair_str(seq_start, seq_end).c_str()
 
-string seq_pair_str(uint64_t start, uint64_t end) {
+string seq_pair_str(seq64_t start, seq64_t end) {
 	return to_string(start) + "," + to_string(end);
 }
 
-string RangeManager::relative_seq_pair_str(uint64_t start, uint64_t end) {
+string RangeManager::relative_seq_pair_str(seq64_t start, seq64_t end) {
 	return seq_pair_str(relative_seq(start), relative_seq(end));
 }
 
-ulong RangeManager::relative_seq(ulong seq) {
-	ulong wrap_index;
+seq64_t RangeManager::relative_seq(seq64_t seq) {
+	seq64_t wrap_index;
 	wrap_index = (firstSeq + seq) / 4294967296L;
-	//	printf("relative_seq: seq: %lu, first + seq: %lu, wrap_index: %lu\n", seq, firstSeq + seq, wrap_index);
-	ulong res = seq + firstSeq;
-	res -= ((ulong) wrap_index * 4294967296L);
+	//	printf("relative_seq: seq: %llu, first + seq: %llu, wrap_index: %lu\n", seq, firstSeq + seq, wrap_index);
+	seq64_t res = seq + firstSeq;
+	res -= ((seq64_t) wrap_index * 4294967296L);
 	//printf("relative_seq  ret: %lu\n", res);
 	return res;
 }
@@ -45,13 +45,13 @@ ulong RangeManager::relative_seq(ulong seq) {
   If relative_seq option is enabled, the seq argument is returned as is.
   If disabled, it will convert the seq to the absolute sequence number (the actual value found in the TCP header)
  */
-ulong RangeManager::get_print_seq(ulong seq) {
+seq64_t RangeManager::get_print_seq(seq64_t seq) {
 	if (GlobOpts::relative_seq)
 		return seq;
 	return relative_seq(seq);
 }
 
-string RangeManager::get_print_relative_seq_pair(uint64_t start, uint64_t end) {
+string RangeManager::get_print_relative_seq_pair(seq64_t start, seq64_t end) {
 	if (GlobOpts::relative_seq)
 		return relative_seq_pair_str(start, end);
 	return seq_pair_str(start, end);
@@ -59,15 +59,15 @@ string RangeManager::get_print_relative_seq_pair(uint64_t start, uint64_t end) {
 
 
 /* Register all bytes with a common send time as a range */
-void RangeManager::insertSentRange(struct sendData *sd) {
-	ulong startSeq = sd->data.seq;
-	ulong endSeq = sd->data.endSeq;
+void RangeManager::insertSentRange(sendData *sd) {
+	seq64_t startSeq = sd->data.seq;
+	seq64_t endSeq = sd->data.endSeq;
 
 #ifdef DEBUG
 	int debug_print = 0;
 	if (debug_print) {
-		printf("\ninsertSentRange (%lu): (%s) (%s), retrans: %d, is_rdb: %d\n",
-               (ulong)(endSeq - startSeq),
+		printf("\ninsertSentRange (%llu): (%s) (%s), retrans: %d, is_rdb: %d\n",
+               (seq64_t) (endSeq - startSeq),
 			   STR_RELATIVE_SEQNUM_PAIR(startSeq, endSeq),
 			   STR_SEQNUM_PAIR(startSeq, endSeq), sd->data.retrans, sd->data.is_rdb);
 	}
@@ -90,7 +90,7 @@ void RangeManager::insertSentRange(struct sendData *sd) {
 #ifdef DEBUG
 		if (debug_print) {
 			printf("-------New range equivalent with packet---------\n");
-			printf("%s - inserted Range with startseq: %lu\n", conn->getConnKey().c_str(), get_print_seq(startSeq));
+			printf("%s - inserted Range with startseq: %llu\n", conn->getConnKey().c_str(), get_print_seq(startSeq));
 		}
 #endif
 	}
@@ -101,9 +101,9 @@ void RangeManager::insertSentRange(struct sendData *sd) {
 			if (GlobOpts::validate_ranges) {
 				fprintf(stderr, "RangeManager::insertRange: Missing byte in send range in conn '%s''\n",
 					   conn->getConnKey().c_str());
-				fprintf(stderr, "Expected seq: %lu but got %lu\n", (ulong)lastSeq, startSeq);
-				fprintf(stderr, "Absolute: lastSeq: %lu, startSeq: %lu. Relative: lastSeq: %lu, startSeq: %lu\n",
-					   (ulong)lastSeq, startSeq, get_print_seq(lastSeq), get_print_seq(startSeq));
+				fprintf(stderr, "Expected seq: %llu but got %llu\n", (seq64_t) lastSeq, startSeq);
+				fprintf(stderr, "Absolute: lastSeq: %llu, startSeq: %llu. Relative: lastSeq: %llu, startSeq: %llu\n",
+						(seq64_t) lastSeq, startSeq, get_print_seq(lastSeq), get_print_seq(startSeq));
 				fprintf(stderr, "This is an indication that tcpdump has dropped packets while collecting the trace.\n");
 				warn_with_file_and_linenum(__FILE__, __LINE__);
 			}
@@ -134,7 +134,7 @@ void RangeManager::insertSentRange(struct sendData *sd) {
 			redundantBytes += (endSeq +1 - startSeq);
 #ifdef DEBUG
 			if (debug_print) {
-				printf("Adding %lu redundant bytes to connection\n", (endSeq +1 - startSeq));
+				printf("Adding %llu redundant bytes to connection\n", (endSeq +1 - startSeq));
 			}
 #endif
 		} else { /* Old and new bytes: Bundle */
@@ -158,7 +158,7 @@ void RangeManager::insertSentRange(struct sendData *sd) {
 	}
 }
 
-void RangeManager::insertReceivedRange(struct sendData *sd) {
+void RangeManager::insertReceivedRange(sendData *sd) {
 	DataSeg tmpSeg;
 	tmpSeg.seq = sd->data.seq;
 	tmpSeg.endSeq = sd->data.endSeq;
@@ -186,9 +186,9 @@ void RangeManager::insertReceivedRange(struct sendData *sd) {
   This inserts the the data into the ranges map.
   It's called both with sent end received data ranges.
 */
-bool RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, insert_type itype, DataSeg *data_seg, int level) {
+bool RangeManager::insert_byte_range(seq64_t start_seq, seq64_t end_seq, insert_type itype, DataSeg *data_seg, int level) {
 	ByteRange *last_br = NULL;
-	map<ulong, ByteRange*>::iterator brIt, brIt_end, brItNext;
+	map<seq64_t, ByteRange*>::iterator brIt, brIt_end, brItNext;
 	brIt_end = ranges.end();
 	brIt = brIt_end;
 
@@ -234,7 +234,7 @@ bool RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, inser
 	if (debug_print) {
 		if (!level)
 			printf("\n");
-		indent_print("insert_byte_range0 (%lu): (%s) (%s), itype: %d, "
+		indent_print("insert_byte_range0 (%llu): (%s) (%s), itype: %d, "
 					 "retrans: %d, is_rdb: %d, SYN: %d, FIN: %d, RST: %d, tstamp_tcp: %u\n",
 					 end_seq - start_seq, STR_RELATIVE_SEQNUM_PAIR(start_seq, end_seq),
 					 STR_SEQNUM_PAIR(start_seq, end_seq), itype, data_seg->retrans, data_seg->is_rdb,
@@ -259,7 +259,7 @@ bool RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, inser
 			}
 #ifdef DEBUG
 			if (debug_print) {
-				indent_print("Pure ack! Decrease SEQ with 1: %lu\n", start_seq);
+				indent_print("Pure ack! Decrease SEQ with 1: %llu\n", start_seq);
 			}
 #endif
 		}
@@ -271,13 +271,13 @@ bool RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, inser
 	if (brIt == brIt_end) {
 #ifdef DEBUG
 		if (debug_print) {
-			indent_print("NOT FOUND: itype:%d, %s (%lu)\n",
+			indent_print("NOT FOUND: itype:%d, %s (%llu)\n",
 						 itype, STR_RELATIVE_SEQNUM_PAIR(start_seq, end_seq), end_seq - start_seq);
 		}
 #endif
 		if (itype == INSERT_RECV) {
 #ifdef DEBUG
-			indent_print("Received non-existent byte range (%lu): (%s) (%s), itype: %d, retrans: %d, is_rdb: %d\n",
+			indent_print("Received non-existent byte range (%llu): (%s) (%s), itype: %d, retrans: %d, is_rdb: %d\n",
 						 end_seq == start_seq ? 0 : end_seq - start_seq +1,
 						 STR_RELATIVE_SEQNUM_PAIR(start_seq, end_seq), STR_SEQNUM_PAIR(start_seq, end_seq),
 						 itype, data_seg->retrans, data_seg->is_rdb);
@@ -288,7 +288,7 @@ bool RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, inser
 
 #ifdef DEBUG
 		if (debug_print) {
-			indent_print("Adding: %s (start_seq: %lu)\n",
+			indent_print("Adding: %s (start_seq: %llu)\n",
 						 STR_RELATIVE_SEQNUM_PAIR(start_seq, end_seq), start_seq);
 		}
 #endif
@@ -340,28 +340,28 @@ bool RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, inser
 			last_br->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_tcp_echo,
 								   data_seg->tstamp_pcap, this_is_rdb_data,
 								   (last_br->syn | last_br->rst | last_br->fin) ? ST_PKT : ST_PURE_ACK);
-			ranges.insert(pair<ulong, ByteRange*>(start_seq, last_br));
+			ranges.insert(pair<seq64_t, ByteRange*>(start_seq, last_br));
 			return true;
 		}
 
-		map<ulong, ByteRange*>::iterator lowIt, highIt;
+		map<seq64_t, ByteRange*>::iterator lowIt, highIt;
 		highIt = ranges.upper_bound(end_seq);
-		ulong new_end_seq = end_seq;
+		seq64_t new_end_seq = end_seq;
 
 		// This is retransmitted or packet containing rdb data
 		if (start_seq < lastSeq) {
 #ifdef DEBUG
 			// Some Non-rdb packets are registered as RDB because of segmentation-offloading
 			if (debug_print) {
-				indent_print("FOUND RETRANS: start_seq < lastSeq: %lu < %lu\n", start_seq, lastSeq);
+				indent_print("FOUND RETRANS: start_seq < lastSeq: %llu < %llu\n", start_seq, lastSeq);
 			}
 #endif
-			ulong lower = start_seq;
+			seq64_t lower = start_seq;
 			lowIt = ranges.lower_bound(lower);
 			if (lowIt != ranges.begin())
 				lowIt--;
 			if (lowIt == highIt) {
-				printf("lowIt == highIt, start_seq: %lu\n", start_seq);
+				printf("lowIt == highIt, start_seq: %llu\n", start_seq);
 				printf("lowIt: (%s)\n", STR_RELATIVE_SEQNUM_PAIR(lowIt->second->startSeq, lowIt->second->endSeq));
 				assert(0);
 			}
@@ -389,7 +389,7 @@ bool RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, inser
 						indent_print("ITYPE: %d, rdb: %d, retrans: %d\n", itype, data_seg->is_rdb, data_seg->retrans);
 						indent_print("Found existing range with matching data\n            for: %s!\n",
 									 STR_RELATIVE_SEQNUM_PAIR(start_seq, end_seq));
-						indent_print("Old Range        : %s (%lu)\n", STR_RELATIVE_SEQNUM_PAIR(cur_br->startSeq, cur_br->endSeq),
+						indent_print("Old Range        : %s (%llu)\n", STR_RELATIVE_SEQNUM_PAIR(cur_br->startSeq, cur_br->endSeq),
 									 (cur_br->endSeq - cur_br->startSeq) +1);
 					}
 #endif
@@ -405,9 +405,9 @@ bool RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, inser
 							}
 #ifdef DEBUG
 							if (debug_print) {
-								indent_print("New Range 1      : %s (%lu)\n",
+								indent_print("New Range 1      : %s (%llu)\n",
 											 STR_RELATIVE_SEQNUM_PAIR(cur_br->startSeq, cur_br->endSeq), (cur_br->endSeq - cur_br->startSeq) +1);
-								indent_print("New Range 2      : %s (%lu)\n",
+								indent_print("New Range 2      : %s (%llu)\n",
 											 STR_RELATIVE_SEQNUM_PAIR(new_br->startSeq, new_br->endSeq), (new_br->endSeq - new_br->startSeq) +1);
 							}
 #endif
@@ -420,8 +420,8 @@ bool RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, inser
 							}
 #ifdef DEBUG
 							if (debug_print) {
-								indent_print("New Range 1      : %s (%lu)\n", STR_RELATIVE_SEQNUM_PAIR(cur_br->startSeq, cur_br->endSeq), (cur_br->endSeq - cur_br->startSeq) +1);
-								indent_print("New Range 2      : %s (%lu)\n", STR_RELATIVE_SEQNUM_PAIR(new_br->startSeq, new_br->endSeq), (new_br->endSeq - new_br->startSeq) +1);
+								indent_print("New Range 1      : %s (%llu)\n", STR_RELATIVE_SEQNUM_PAIR(cur_br->startSeq, cur_br->endSeq), (cur_br->endSeq - cur_br->startSeq) +1);
+								indent_print("New Range 2      : %s (%llu)\n", STR_RELATIVE_SEQNUM_PAIR(new_br->startSeq, new_br->endSeq), (new_br->endSeq - new_br->startSeq) +1);
 							}
 #endif
 							range_received = new_br;
@@ -436,15 +436,15 @@ bool RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, inser
 							ByteRange *new_last = new_br->split_end(end_seq, new_br->endSeq);
 #ifdef DEBUG
 							if (debug_print) {
-								indent_print("New Range 1      : %s (%lu)\n",
+								indent_print("New Range 1      : %s (%llu)\n",
 											 STR_RELATIVE_SEQNUM_PAIR(cur_br->startSeq, cur_br->endSeq), (cur_br->endSeq - cur_br->startSeq) +1);
-								indent_print("New Range 2      : %s (%lu)\n",
+								indent_print("New Range 2      : %s (%llu)\n",
 											 STR_RELATIVE_SEQNUM_PAIR(new_br->startSeq, new_br->endSeq), (new_br->endSeq - new_br->startSeq) +1);
-								indent_print("New Range 3      : %s (%lu)\n",
+								indent_print("New Range 3      : %s (%llu)\n",
 											 STR_RELATIVE_SEQNUM_PAIR(new_last->startSeq, new_last->endSeq), (new_last->endSeq - new_last->startSeq) +1);
 							}
 #endif
-							ranges.insert(pair<ulong, ByteRange*>(new_last->startSeq, new_last));
+							ranges.insert(pair<seq64_t, ByteRange*>(new_last->startSeq, new_last));
 							range_received = new_br;
 						}
 						// New data spans beyond current range
@@ -453,7 +453,7 @@ bool RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, inser
 							range_received = new_br;
 							insert_more_recursively = 1;
 						}
-						ranges.insert(pair<ulong, ByteRange*>(new_br->startSeq, new_br));
+						ranges.insert(pair<seq64_t, ByteRange*>(new_br->startSeq, new_br));
 
 						if (itype == INSERT_SENT) {
 							sent_type s_type = ST_NONE;
@@ -497,7 +497,7 @@ bool RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, inser
 							assert(0);
 						}
 						if (insert_more_recursively) {
-							//indent_print("Recursive call2: brIt->endseq: %lu, endseq: %lu\n", brIt->second->endSeq, end_seq);
+							//indent_print("Recursive call2: brIt->endseq: %llu, endseq: %llu\n", brIt->second->endSeq, end_seq);
 							return insert_byte_range(new_br->endSeq, end_seq, itype, data_seg, level +1);
 						}
 					}// END if (itype != INSERT_SOJOURN)
@@ -535,10 +535,10 @@ bool RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, inser
 						// New data spans beyond current range
 						else {
 							insert_more_recursively = 1;
-							//indent_print("New data spans beyond current range. Range(%s), data end: %lu\n", STR_RELATIVE_SEQNUM_PAIR(cur_br->startSeq, cur_br->endSeq), end_seq);
+							//indent_print("New data spans beyond current range. Range(%s), data end: %llu\n", STR_RELATIVE_SEQNUM_PAIR(cur_br->startSeq, cur_br->endSeq), end_seq);
 						}
 						if (insert_more_recursively) {
-							//indent_print("Sojourn recursive call2: brIt->endseq: %lu, endseq: %lu\n", cur_br->endSeq, end_seq);
+							//indent_print("Sojourn recursive call2: brIt->endseq: %llu, endseq: %llu\n", cur_br->endSeq, end_seq);
 							return insert_byte_range(cur_br->endSeq, end_seq, itype, data_seg, level +1);
 						}
 					}
@@ -553,7 +553,7 @@ bool RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, inser
 #ifdef DEBUG
 			if (debug_print) {
 				indent_print("data_seg->is_rdb: %d, this_is_rdb_data: %d\n", data_seg->is_rdb, this_is_rdb_data);
-				indent_print("data_seg->rdb_end_seq > start_seq: %lu > %lu: %d\n", get_print_seq(data_seg->rdb_end_seq), get_print_seq(start_seq), data_seg->rdb_end_seq > start_seq);
+				indent_print("data_seg->rdb_end_seq > start_seq: %llu > %llu: %d\n", get_print_seq(data_seg->rdb_end_seq), get_print_seq(start_seq), data_seg->rdb_end_seq > start_seq);
 			}
 #endif
 			last_br = new ByteRange(start_seq, new_end_seq);
@@ -573,7 +573,7 @@ bool RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, inser
 				if (debug_print) {
 					printf("data_seg->retrans: %d\n", data_seg->retrans);
 					printf("this_is_rdb_data: %d\n", this_is_rdb_data);
-					indent_print("insert_byte_range2 (%lu): (%s) (%s), itype: %d, retrans: %d, is_rdb: %d, SYN: %d, FIN: %d, RST: %d\n",
+					indent_print("insert_byte_range2 (%llu): (%s) (%s), itype: %d, retrans: %d, is_rdb: %d, SYN: %d, FIN: %d, RST: %d\n",
 								 end_seq - start_seq,
 								 STR_RELATIVE_SEQNUM_PAIR(start_seq, end_seq), STR_SEQNUM_PAIR(start_seq, end_seq),
 								 itype, data_seg->retrans, data_seg->is_rdb,
@@ -584,12 +584,12 @@ bool RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, inser
 
 			if ((new_end_seq - start_seq) > 100) {
 				if (debug_print) {
-					indent_print("Inserting new big range: %lu\n", (new_end_seq - start_seq +1));
+					indent_print("Inserting new big range: %llu\n", (new_end_seq - start_seq +1));
 					indent_print("original_payload_size: %d\n", last_br->original_payload_size);
 				}
 			}
 #endif
-			ranges.insert(pair<ulong, ByteRange*>(start_seq, last_br));
+			ranges.insert(pair<seq64_t, ByteRange*>(start_seq, last_br));
 		}
 #ifdef DEBUG
 		else if (itype == INSERT_RECV) {
@@ -612,14 +612,14 @@ bool RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, inser
 				assert(data_seg->retrans == 0 && "Shouldn't be retrans!\n");
 				assert(this_is_rdb_data == 0 && "Shouldn't be RDB?!\n");
 #endif
-				ranges.insert(pair<ulong, ByteRange*>(start_seq, last_br));
+				ranges.insert(pair<seq64_t, ByteRange*>(start_seq, last_br));
 			}
 		}
 		else if (itype == INSERT_SOJOURN) {
-			throw std::logic_error( "Sojourn not handled 2: in insert_byte_range:"
-									"seq: " + to_string(start_seq) +
-									", end seq: " + to_string(end_seq) +
-									", Type: " + to_string(itype)
+			throw std::logic_error("Sojourn not handled 2: in insert_byte_range:"
+								   "seq: " + to_string(start_seq) +
+								   ", end seq: " + to_string(end_seq) +
+								   ", Type: " + to_string(itype)
 				);
 		}
 #endif
@@ -628,8 +628,8 @@ bool RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, inser
 	else {
 #ifdef DEBUG
 		if (debug_print) {
-			indent_print("FOUND START: itype:%d, %s (%lu)\n", itype, STR_RELATIVE_SEQNUM_PAIR(start_seq, end_seq), end_seq - start_seq);
-			indent_print("brIt(%lu): %s, new endseq: %lu\n", brIt->second->endSeq - brIt->second->startSeq, STR_RELATIVE_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq), get_print_seq(end_seq));
+			indent_print("FOUND START: itype:%d, %s (%llu)\n", itype, STR_RELATIVE_SEQNUM_PAIR(start_seq, end_seq), end_seq - start_seq);
+			indent_print("brIt(%llu): %s, new endseq: %llu\n", brIt->second->endSeq - brIt->second->startSeq, STR_RELATIVE_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq), get_print_seq(end_seq));
 
 			if (brIt->second->endSeq < brIt->second->startSeq) {
 				colored_printf(RED, "Startseq is greater than Endseq!!\n");
@@ -677,16 +677,16 @@ bool RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, inser
 					}
 				}
 				else if (itype == INSERT_SOJOURN) {
-					throw std::logic_error( "Sojourn not handled 3: in insert_byte_range:"
-											"seq: " + to_string(start_seq) +
-											", end seq: " + to_string(end_seq) +
-											", Type: " + to_string(itype)
+					throw std::logic_error("Sojourn not handled 3: in insert_byte_range:"
+										   "seq: " + to_string(start_seq) +
+										   ", end seq: " + to_string(end_seq) +
+										   ", Type: " + to_string(itype)
 						);
 				}
 			}
 #ifdef DEBUG
 			else {
-				printf("WAS END, searched for start: %lu\n", std::min(start_seq -1, start_seq));
+				printf("WAS END, searched for start: %llu\n", std::min(start_seq -1, start_seq));
 			}
 #endif
 			return true;
@@ -704,8 +704,8 @@ bool RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, inser
 				}
 			}
 
-			//printf("brIt->second->endSeq: %lu\n", brIt->second->endSeq);
-			//printf("end_seq: %lu\n", end_seq);
+			//printf("brIt->second->endSeq: %llu\n", brIt->second->endSeq);
+			//printf("end_seq: %llu\n", end_seq);
 			// Spans multiple byte ranges
 			if (brIt->second->endSeq < end_seq) {
 #ifdef DEBUG
@@ -778,7 +778,7 @@ bool RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, inser
 						printf("SOJOURN DEBUG 3\n");
 					}
 
-					//indent_print("Sojourn recursive call3: ByteRange(%s): start_seq: %lu, end_seq: %lu\n",
+					//indent_print("Sojourn recursive call3: ByteRange(%s): start_seq: %llu, end_seq: %llu\n",
 					//			 STR_RELATIVE_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq), start_seq, end_seq);
 					brItNext = brIt;
 					if ((++brItNext) == ranges.end()) {
@@ -788,16 +788,16 @@ bool RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, inser
 				}
 
 				if (level > RECURSION_LEVEL) {
-					throw std::logic_error( "Recurse level too high: " + to_string(RECURSION_LEVEL) + " in insert_byte_range:"
-											"seq: " + to_string(start_seq) +
-											", start seq: " + to_string(start_seq) +
-											", end seq: " + to_string(end_seq) +
-											", Type: " + to_string(itype)
+					throw std::logic_error("Recurse level too high: " + to_string(RECURSION_LEVEL) + " in insert_byte_range:"
+										   "seq: " + to_string(start_seq) +
+										   ", start seq: " + to_string(start_seq) +
+										   ", end seq: " + to_string(end_seq) +
+										   ", Type: " + to_string(itype)
 											//,, DataSeg *data_seg, int level
 						);
 				}
 				// Recursive call to insert the remaining data
-				//indent_print("Recursive call1: brIt->endseq: %lu, endseq: %lu\n", brIt->second->endSeq, end_seq);
+				//indent_print("Recursive call1: brIt->endseq: %llu, endseq: %llu\n", brIt->second->endSeq, end_seq);
 				//indent_print("tstamp_tcp: %u\n", data_seg->tstamp_tcp);
 				return insert_byte_range(brIt->second->endSeq, end_seq, itype, data_seg, level +1);
 			}
@@ -807,7 +807,7 @@ bool RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, inser
 					ByteRange *new_br = brIt->second->split_end(end_seq, brIt->second->endSeq);
 #ifdef DEBUG
 					if (debug_print) {
-						indent_print("New range ends in the middle of existing\nByteRange(%s) [%lu]\n", STR_RELATIVE_SEQNUM_PAIR(brIt->second->startSeq, new_br->endSeq), end_seq);
+						indent_print("New range ends in the middle of existing\nByteRange(%s) [%llu]\n", STR_RELATIVE_SEQNUM_PAIR(brIt->second->startSeq, new_br->endSeq), end_seq);
 						indent_print("Split Range into: (%s), (%s)\n", STR_RELATIVE_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq),
 									 STR_RELATIVE_SEQNUM_PAIR(new_br->startSeq, new_br->endSeq));
 					}
@@ -835,7 +835,7 @@ bool RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, inser
 							brIt->second->packet_received_count++;
 						}
 					}
-					ranges.insert(pair<ulong, ByteRange*>(new_br->startSeq, new_br));
+					ranges.insert(pair<seq64_t, ByteRange*>(new_br->startSeq, new_br));
 				}
 				else {// INSERT_SOJOURN - Do not split, only register sojourn timestamp
 					bool ret = brIt->second->addSegmentEnteredKernelTime(end_seq, data_seg->tstamp_pcap);
@@ -904,11 +904,11 @@ bool RangeManager::insert_byte_range(uint64_t start_seq, uint64_t end_seq, inser
 
 /* Register first ack time for all bytes.
    Organize in ranges that have common send and ack times */
-bool RangeManager::processAck(struct DataSeg *seg) {
+bool RangeManager::processAck(DataSeg *seg) {
 	ByteRange* tmpRange;
-	map<ulong, ByteRange*>::iterator it, it_end, prev;
+	map<seq64_t, ByteRange*>::iterator it, it_end, prev;
 	bool ret = false;
-	ulong ack = seg->ack;
+	seq64_t ack = seg->ack;
 	it = ranges.begin();
 	it_end = ranges.end();
 	ack_count++;
@@ -926,7 +926,7 @@ bool RangeManager::processAck(struct DataSeg *seg) {
 	//	debug_print = 1;
 
 	if (debug_print) {
-		printf("ProcessACK: %8lu  (%8lu), TSVal: %u, last acked start seq: %lu\n", get_print_seq(ack), ack, seg->tstamp_tcp,
+		printf("ProcessACK: %8llu  (%8llu), TSVal: %u, last acked start seq: %llu\n", get_print_seq(ack), ack, seg->tstamp_tcp,
 		       get_print_seq(it->second->getStartSeq()));
 	}
 #endif
@@ -936,7 +936,7 @@ bool RangeManager::processAck(struct DataSeg *seg) {
 		if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
 			cerr << "--------All data has been ACKed before - skipping--------" << endl;
 		printf("ACKed before!\n");
-		printf("ProcessACK: %8lu  (%8lu), TSVal: %u, last acked start seq: %lu\n", get_print_seq(ack), ack, seg->tstamp_tcp,
+		printf("ProcessACK: %8llu  (%8llu), TSVal: %u, last acked start seq: %llu\n", get_print_seq(ack), ack, seg->tstamp_tcp,
 		       get_print_seq(it->second->getStartSeq()));
 
 		return true;
@@ -1038,7 +1038,7 @@ bool RangeManager::processAck(struct DataSeg *seg) {
 			tmpRange->ack_count++;
 
 			// Second part of range: insert after tmpRange (tmpRange)
-			highestAckedByteRangeIt = ranges.insert(std::pair<ulong, ByteRange*>(new_br->getStartSeq(), new_br)).first;
+			highestAckedByteRangeIt = ranges.insert(std::pair<seq64_t, ByteRange*>(new_br->getStartSeq(), new_br)).first;
 			return true;
 		}
 
@@ -1071,7 +1071,7 @@ bool RangeManager::processAck(struct DataSeg *seg) {
 		// ACK on old data, just ignore
 		if (ack < tmpRange->getEndSeq()) {
 			do {
-				//printf("ack: %lu, prev->end: %lu\n", ack, prev->second->getEndSeq());
+				//printf("ack: %llu, prev->end: %llu\n", ack, prev->second->getEndSeq());
 				if (ack == prev->second->getEndSeq()) {
 					prev->second->ack_count++;
 					return true;
@@ -1079,7 +1079,7 @@ bool RangeManager::processAck(struct DataSeg *seg) {
 
 				if (ack > prev->second->getEndSeq()) {
 					if (ack == prev->second->getStartSeq())
-						//printf("ack is bigger: %lu, prev->end: %lu\n", ack, prev->second->getEndSeq());
+						//printf("ack is bigger: %llu, prev->end: %llu\n", ack, prev->second->getEndSeq());
 					return true;
 				}
 			} while (prev-- != ranges.begin());
@@ -1095,7 +1095,7 @@ bool RangeManager::processAck(struct DataSeg *seg) {
 		}
 
 		fprintf(stderr, "Conn: %s\n", conn->getConnKey().c_str());
-		fprintf(stderr, "RangeManager::processAck: Possible error when processing ack: %lu (%lu)\n", get_print_seq(ack), ack);
+		fprintf(stderr, "RangeManager::processAck: Possible error when processing ack: %llu (%llu)\n", get_print_seq(ack), ack);
 		fprintf(stderr, "Range(%s) (%s)\n",
 				STR_RELATIVE_SEQNUM_PAIR(tmpRange->getStartSeq(), tmpRange->getEndSeq()), STR_SEQNUM_PAIR(tmpRange->getStartSeq(), tmpRange->getEndSeq()));
 		ByteRange *tmp = ranges.begin()->second;
@@ -1106,14 +1106,14 @@ bool RangeManager::processAck(struct DataSeg *seg) {
 		break;
 	}
 	if (!ret)
-		printf("ByteRange - Failed to find packet for ack: %lu\n", ack);
+		printf("ByteRange - Failed to find packet for ack: %llu\n", ack);
 
 	return ret;
 }
 
 
 void RangeManager::genStats(PacketsStats *bs) {
-	map<ulong, ByteRange*>::iterator it, it_end;
+	map<seq64_t, ByteRange*>::iterator it, it_end;
 	it = analyse_range_start;
 	it_end = analyse_range_end;
 
@@ -1146,14 +1146,14 @@ void RangeManager::genStats(PacketsStats *bs) {
 					// In case a collapsed retrans packet spans multiple segments, check if next range has retrans data
 					// that is not a retrans packet in itself
 					int64_t tmp_byte_count2 = tmp_byte_count;
-					map<ulong, ByteRange*>::iterator it_tmp = it;
+					map<seq64_t, ByteRange*>::iterator it_tmp = it;
 					if (++it_tmp != it_end) {
 						if (it_tmp->second->packet_retrans_count < it_tmp->second->data_retrans_count) {
 							tmp_byte_count2 += it_tmp->second->data_retrans_count * it_tmp->second->byte_count;
 						}
 					}
 					psTmp = PacketStats(ST_RTR, conn->getConnKey(), TV_TO_MICSEC(it->second->sent_tstamp_pcap[i].first), tmp_byte_count2);
-					//printf("RETRANS: %lu -> %lu\n", tmp_byte_count, tmp_byte_count2);
+					//printf("RETRANS: %llu -> %llu\n", tmp_byte_count, tmp_byte_count2);
 				}
 				else if (it->second->sent_tstamp_pcap[i].second == ST_PURE_ACK) {
 					psTmp = PacketStats(ST_PURE_ACK, conn->getConnKey(), TV_TO_MICSEC(it->second->sent_tstamp_pcap[i].first), 0);
@@ -1204,9 +1204,9 @@ void RangeManager::genStats(PacketsStats *bs) {
 		prev = bs->packet_stats[i];
 	}
 
-    bs->latency.makeStats( );
-    bs->packet_length.makeStats( );
-    bs->itt.makeStats( );
+    bs->latency.makeStats();
+    bs->packet_length.makeStats();
+    bs->itt.makeStats();
 }
 
 /* Check that every byte from firstSeq to lastSeq is present.
@@ -1217,9 +1217,9 @@ void RangeManager::genStats(PacketsStats *bs) {
 void RangeManager::validateContent() {
 	int numAckTimes = 0;
 	int numSendTimes = 0;
-	ulong tmpEndSeq = 0;
+	seq64_t tmpEndSeq = 0;
 
-	map<ulong, ByteRange*>::iterator first, it, it_end, prev;
+	map<seq64_t, ByteRange*>::iterator first, it, it_end, prev;
 	first = it = ranges.begin();
 	it_end = ranges.end();
 	prev = it_end;
@@ -1228,27 +1228,27 @@ void RangeManager::validateContent() {
 	   LastRange.endSeq == lastSeq
 	   every packet in between are aligned */
 	if (it->second->getStartSeq() != 0) {
-		printf("firstSeq: %u, StartSeq: %lu\n", firstSeq, (ulong)it->second->getStartSeq());
-		printf("RangeManager::validateContent: firstSeq != StartSeq (%lu != %lu)\n", get_print_seq(it->second->getStartSeq()), get_print_seq(firstSeq));
-		printf("First range (%lu, %lu)\n", get_print_seq(it->second->getStartSeq()), get_print_seq(it->second->getEndSeq()));
+		printf("firstSeq: %u, StartSeq: %llu\n", firstSeq, it->second->getStartSeq());
+		printf("RangeManager::validateContent: firstSeq != StartSeq (%llu != %llu)\n", get_print_seq(it->second->getStartSeq()), get_print_seq(firstSeq));
+		printf("First range (%llu, %llu)\n", get_print_seq(it->second->getStartSeq()), get_print_seq(it->second->getEndSeq()));
 		printf("Conn: %s\n", conn->getConnKey().c_str());
 		warn_with_file_and_linenum(__FILE__, __LINE__);
 	}
 
-	//printf("ranges.rbegin()->second->getEndSeq(): %lu\n", ranges.rbegin()->second->getEndSeq());
-	//printf("lastSeq: %lu\n", lastSeq);
-	//printf("ranges.rbegin()->second->getEndSeq(): %lu\n", ranges.rbegin()->second->getEndSeq());
-	//printf("lastSeq - 1: %lu\n", lastSeq - 1);
+	//printf("ranges.rbegin()->second->getEndSeq(): %llu\n", ranges.rbegin()->second->getEndSeq());
+	//printf("lastSeq: %llu\n", lastSeq);
+	//printf("ranges.rbegin()->second->getEndSeq(): %llu\n", ranges.rbegin()->second->getEndSeq());
+	//printf("lastSeq - 1: %llu\n", lastSeq - 1);
 	if (!(ranges.rbegin()->second->getEndSeq() <= lastSeq && ranges.rbegin()->second->getEndSeq() >= (lastSeq - 1))) {
-		fprintf(stderr, "RangeManager::validateContent: lastSeq unaligned! lastSeq: %lu, EndSeq: %lu\n", get_print_seq(lastSeq), get_print_seq(ranges.rbegin()->second->getEndSeq()));
+		fprintf(stderr, "RangeManager::validateContent: lastSeq unaligned! lastSeq: %llu, EndSeq: %llu\n", get_print_seq(lastSeq), get_print_seq(ranges.rbegin()->second->getEndSeq()));
 		fprintf(stderr, "Conn: %s\n", conn->getConnKey().c_str());
 		warn_with_file_and_linenum(__FILE__, __LINE__);
 	}
 
 	if (conn->totBytesSent != (conn->totNewDataSent + conn->totRDBBytesSent + conn->totRetransBytesSent)) {
-		uint64_t totBytesSentCalculated = conn->totNewDataSent + conn->totRDBBytesSent + conn->totRetransBytesSent;
-		fprintf(stderr, "conn->totBytesSent(%9lu) != %-9lu (Diff: %lu) (totNewDataSent(%lu) + totRDBBytesSent(%lu) + totRetransBytesSent(%lu)) \n",
-				(ulong)conn->totBytesSent, (ulong) totBytesSentCalculated, (ulong) totBytesSentCalculated - conn->totBytesSent,
+		ullint_t totBytesSentCalculated = conn->totNewDataSent + conn->totRDBBytesSent + conn->totRetransBytesSent;
+		fprintf(stderr, "conn->totBytesSent(%9llu) != %-9llu (Diff: %llu) (totNewDataSent(%llu) + totRDBBytesSent(%llu) + totRetransBytesSent(%llu)) \n",
+				conn->totBytesSent, totBytesSentCalculated, totBytesSentCalculated - conn->totBytesSent,
 				conn->totNewDataSent, conn->totRDBBytesSent, conn->totRetransBytesSent);
 		fprintf(stderr, "Conn: %s\n", conn->getConnKey().c_str());
 		warn_with_file_and_linenum(__FILE__, __LINE__);
@@ -1331,7 +1331,7 @@ bool negSojTime(ByteRange *br) {
 	return false;
 }
 
-int seq_with_print_range(uint64_t start, uint64_t end, size_t &print_packet_ranges_index) {
+int seq_with_print_range(seq64_t start, seq64_t end, size_t &print_packet_ranges_index) {
 	while (end > GlobOpts::print_packets_pairs[print_packet_ranges_index].second) {
 		// We are at the last range so we quit printing
 		if (GlobOpts::print_packets_pairs.size() == (print_packet_ranges_index + 1)) {
@@ -1349,7 +1349,7 @@ int seq_with_print_range(uint64_t start, uint64_t end, size_t &print_packet_rang
   Print a list of all the registered ranges.
 */
 void RangeManager::printPacketDetails() {
-	map<ulong, ByteRange*>::iterator it, it_end;
+	map<seq64_t, ByteRange*>::iterator it, it_end;
 	it = analyse_range_start;
 	it_end = analyse_range_end;
 
@@ -1379,12 +1379,12 @@ void RangeManager::printPacketDetails() {
 
 		printf("R(%*u, %*u):", range_paylad_len, it->second->getNumBytes(), range_paylad_len, it->second->original_payload_size);
 		if (GlobOpts::debugLevel) {
-			printf(" %-*lu - %-*lu: (%-*lu - %-*lu):",
+			printf(" %-*llu - %-*llu: (%-*llu - %-*llu):",
 				   seq_char_len, relative_seq(it->second->startSeq), seq_char_len, relative_seq(it->second->endSeq),
 				   rel_seq_char_len, it->second->startSeq, rel_seq_char_len, it->second->endSeq);
 		}
 		else {
-			printf(" %-*lu - %-*lu:", seq_char_len, get_print_seq(it->second->startSeq), seq_char_len, get_print_seq(it->second->endSeq));
+			printf(" %-*llu - %-*llu:", seq_char_len, get_print_seq(it->second->startSeq), seq_char_len, get_print_seq(it->second->endSeq));
 		}
 
 		printf(" snt-pkt:%d, snt-ack:%d, rcv-pkt:%d"
@@ -1476,7 +1476,7 @@ void RangeManager::calculateRetransAndRDBStats() {
 	calculateRealLoss(analyse_range_start, analyse_range_end);
 }
 
-void RangeManager::calculateRealLoss(map<ulong, ByteRange*>::iterator brIt, map<ulong, ByteRange*>::iterator brIt_end) {
+void RangeManager::calculateRealLoss(map<seq64_t, ByteRange*>::iterator brIt, map<seq64_t, ByteRange*>::iterator brIt_end) {
 	ByteRange *prev = NULL;
 	ulong index = 0;
 	int lost_tmp = 0;
@@ -1497,7 +1497,7 @@ void RangeManager::calculateRealLoss(map<ulong, ByteRange*>::iterator brIt, map<
 			if (ret == false) {
 				if (index < (ranges.size() * (1 - loss_and_end_limit))) {
 					match_fails_before_end++;
-					colored_printf(YELLOW, "Failed to match %s (%s) (index: %lu) on %s\n",
+					colored_printf(YELLOW, "Failed to match %s (%s) (index: %llu) on %s\n",
 								   STR_RELATIVE_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq),
 								   STR_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq), index, conn->getConnKey().c_str());
 					brIt->second->print_tstamps_tcp();
@@ -1619,7 +1619,7 @@ void RangeManager::calculateRealLoss(map<ulong, ByteRange*>::iterator brIt, map<
 	rdb_packet_misses = analysed_rdb_packet_count - rdb_packet_hits;
 
 #ifdef DEBUG
-	//printf("Ranges count: %lu\n", ranges.size());
+	//printf("Ranges count: %llu\n", ranges.size());
 	//printf("ranges_with_data: %d\n", ranges_with_data);
 
 //	printf("analysed_packet_sent_count: %d\n", analysed_packet_sent_count);
@@ -1627,7 +1627,7 @@ void RangeManager::calculateRealLoss(map<ulong, ByteRange*>::iterator brIt, map<
 
 	if (match_fails_before_end) {
 		colored_printf(RED, "%s : Failed to find timestamp for %d out of %ld packets.\n", conn->getConnKey().c_str(), match_fails_before_end, ranges.size());
-		colored_printf(RED, "These packest were before the %f%% limit (%d) from the end (%lu), and might be caused by packets being dropped from tcpdump\n",
+		colored_printf(RED, "These packest were before the %f%% limit (%d) from the end (%llu), and might be caused by packets being dropped from tcpdump\n",
 					   (1 - loss_and_end_limit), (int) (ranges.size() * (1 - loss_and_end_limit)), ranges.size());
 	}
 #ifndef DEBUG
@@ -1647,7 +1647,7 @@ ByteRange* RangeManager::getHighestAcked() {
    Returns duration of connection (in seconds)
 */
 uint32_t RangeManager::getDuration() {
-	map<ulong, ByteRange*>::iterator brIt_end = ranges.end();
+	map<seq64_t, ByteRange*>::iterator brIt_end = ranges.end();
 	brIt_end--;
 	return getDuration(brIt_end->second);
 }
@@ -1665,7 +1665,7 @@ void RangeManager::calculateLatencyVariation() {
 
 
 void RangeManager::registerRecvDiffs() {
-	map<ulong, ByteRange*>::iterator it, it_end;
+	map<seq64_t, ByteRange*>::iterator it, it_end;
 	it = ranges.begin();
 	it_end = ranges.end();
 	timeval *last_app_layer_tstamp = NULL;
@@ -1697,7 +1697,7 @@ void RangeManager::registerRecvDiffs() {
 
 
 void RangeManager::doDriftCompensation() {
-	map<ulong, ByteRange*>::iterator it, it_end;
+	map<seq64_t, ByteRange*>::iterator it, it_end;
 	it = analyse_range_start;
 	it_end = analyse_range_end;
 
@@ -1713,7 +1713,7 @@ void RangeManager::doDriftCompensation() {
 				lowestRecvDiff = diff;
 			}
 		}
-		if(GlobOpts::debugLevel==4 || GlobOpts::debugLevel==5){
+		if (GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5) {
 			cerr << "dcDiff: " << diff << endl;
 		}
 	}
@@ -1721,11 +1721,11 @@ void RangeManager::doDriftCompensation() {
 
 /* Calculate clock drift on CDF */
 int RangeManager::calculateClockDrift() {
-	map<ulong, ByteRange*>::iterator startIt, startDriftRange;
-	map<ulong, ByteRange*>::reverse_iterator endIt, endDriftRange;
+	map<seq64_t, ByteRange*>::iterator startIt, startDriftRange;
+	map<seq64_t, ByteRange*>::reverse_iterator endIt, endDriftRange;
 	long minDiffStart = std::numeric_limits<long>::max();
 	long minDiffEnd = std::numeric_limits<long>::max();
-	struct timeval minTimeStart, minTimeEnd, tv;
+	timeval minTimeStart, minTimeEnd, tv;
 	double durationSec, tmpDrift;
 	timerclear(&minTimeStart);
 	timerclear(&minTimeEnd);
@@ -1772,9 +1772,9 @@ int RangeManager::calculateClockDrift() {
 		printf("Using end   diff of range: %s\n", STR_RELATIVE_SEQNUM_PAIR(endDriftRange->second->getStartSeq(), endDriftRange->second->getEndSeq()));
 
 		printf("startMin: %lu\n", minDiffStart);
-		printf("startTime: %lu.%lu\n", (ulong)minTimeStart.tv_sec, (ulong)minTimeStart.tv_usec);
+		printf("startTime: %lu.%lu\n", (ulong) minTimeStart.tv_sec, (ulong) minTimeStart.tv_usec);
 		printf("endMin: %lu\n", minDiffEnd);
-		printf("endTime: %lu.%lu\n", (ulong)minTimeEnd.tv_sec, (ulong)minTimeEnd.tv_usec);
+		printf("endTime: %lu.%lu\n", (ulong) minTimeEnd.tv_sec, (ulong) minTimeEnd.tv_usec);
 		printf("DurationSec: %g\n", durationSec);
 		printf("Clock drift: %g ms/s\n", tmpDrift);
 	}
@@ -1783,7 +1783,7 @@ int RangeManager::calculateClockDrift() {
 }
 
 void RangeManager::makeByteLatencyVariationCDF() {
-	map<ulong, ByteRange*>::iterator it, it_end;
+	map<seq64_t, ByteRange*>::iterator it, it_end;
 	it = analyse_range_start;
 	it_end = analyse_range_end;
 	map<const long, int>::iterator element, end, endAggr;
@@ -1819,7 +1819,7 @@ void RangeManager::makeByteLatencyVariationCDF() {
 
 
 void RangeManager::writeSentTimesAndQueueingDelayVariance(const uint64_t first_tstamp, vector<ofstream*> streams) {
-	map<ulong, ByteRange*>::iterator it, it_end;
+	map<seq64_t, ByteRange*>::iterator it, it_end;
 	it = analyse_range_start;
 	it_end = analyse_range_end;
 	string connKey = conn->getConnKey();
@@ -1832,7 +1832,7 @@ void RangeManager::writeSentTimesAndQueueingDelayVariance(const uint64_t first_t
 		if (diff >= 0) {
 			LatencyItem lat(((uint64_t) ts) - first_tstamp, diff, connKey);
 
-			for(ofstream* stream : streams)
+			for (ofstream* stream : streams)
 				*stream << lat << endl;
 		}
 	}
@@ -1845,7 +1845,7 @@ void RangeManager::writeByteLatencyVariationCDF(ofstream *stream) {
 	nit = byteLatencyVariationCDFValues.begin();
 	nit_end = byteLatencyVariationCDFValues.end();
 
-	if (GlobOpts::debugLevel== 4 || GlobOpts::debugLevel== 5) {
+	if (GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5) {
 		cerr << "lowestRecvDiff: " << lowestRecvDiff << endl;
 	}
 
@@ -1877,17 +1877,17 @@ void LossInterval::add_total(double ranges, double all_bytes, double new_bytes) 
 	tot_new_bytes += new_bytes;
 }
 
-static inline uint64_t interval_idx(const timeval& ts, uint64_t first) {
-	uint64_t relative_ts = TV_TO_MS(ts) - first;
+static inline uint64_t interval_idx(const timeval& ts, uint64_t first_tstamp) {
+	uint64_t relative_ts = TV_TO_MS(ts) - first_tstamp;
 	return relative_ts / GlobOpts::lossAggrMs;
 }
 
-void RangeManager::calculateLossGroupedByInterval(const uint64_t first, vector<LossInterval>& all_loss, vector<LossInterval>& loss) {
+void RangeManager::calculateLossGroupedByInterval(const uint64_t first_tstamp, vector<LossInterval>& all_loss, vector<LossInterval>& loss) {
 	assert(GlobOpts::withRecv && "Writing loss grouped by interval requires receiver trace");
 
-	vector< pair<uint32_t, timeval> >::iterator lossIt, lossEnd;
-	vector<pair<timeval, uint8_t> >::iterator sentIt, sentEnd;
-	map<ulong, ByteRange*>::iterator range;
+	vector<pair<uint32_t, timeval> >::iterator lossIt, lossEnd;
+	vector<pair<timeval, sent_type> >::iterator sentIt, sentEnd;
+	map<seq64_t, ByteRange*>::iterator range;
 
 	// Extract total values from ranges
 	typedef vector<double> lossvec;
@@ -1903,7 +1903,7 @@ void RangeManager::calculateLossGroupedByInterval(const uint64_t first, vector<L
 		sentEnd = range->second->sent_tstamp_pcap.end();
 
 		if (sentIt != sentEnd && range->second->packet_sent_count > 0) {
-			uint64_t bucket_idx = interval_idx((*sentIt).first, first);
+			uint64_t bucket_idx = interval_idx((*sentIt).first, first_tstamp);
 
 			while (bucket_idx >= tc.size()) {
 				tc.push_back(0);
@@ -1917,7 +1917,7 @@ void RangeManager::calculateLossGroupedByInterval(const uint64_t first, vector<L
 		// Place sent counts and byte counts in the right bucket
 		for (; sentIt != sentEnd; ++sentIt)
 		{
-			uint64_t bucket_idx = interval_idx((*sentIt).first, first);
+			uint64_t bucket_idx = interval_idx((*sentIt).first, first_tstamp);
 
 			while (bucket_idx >= tc.size()) {
 				tc.push_back(0);
@@ -1938,7 +1938,7 @@ void RangeManager::calculateLossGroupedByInterval(const uint64_t first, vector<L
 		if (lossIt != lossEnd &&
 			range->second->packet_sent_count > 0 &&
 			lossIt->second == range->second->sent_tstamp_pcap[0].first) {
-			uint64_t bucket_idx = interval_idx(range->second->sent_tstamp_pcap[0].first, first);
+			uint64_t bucket_idx = interval_idx(range->second->sent_tstamp_pcap[0].first, first_tstamp);
 
 			while (bucket_idx >= loss.size()) {
 				loss.push_back(LossInterval(0, 0, 0));
@@ -1949,7 +1949,7 @@ void RangeManager::calculateLossGroupedByInterval(const uint64_t first, vector<L
 
 		// Place loss values in the right bucket
 		for (; lossIt != lossEnd; ++lossIt) {
-			uint64_t bucket_idx = interval_idx(lossIt->second, first);
+			uint64_t bucket_idx = interval_idx(lossIt->second, first_tstamp);
 
 			while (bucket_idx >= loss.size()) {
 				loss.push_back(LossInterval(0, 0, 0));
@@ -1980,15 +1980,15 @@ void RangeManager::calculateLossGroupedByInterval(const uint64_t first, vector<L
   The aggregation option controls of per stream or only
   aggregated result files should be made.
 */
-void RangeManager::genAckLatencyData(long first_tstamp, vector<SPNS::shared_ptr<vector <LatencyItem> > > &diff_times,
+void RangeManager::genAckLatencyData(uint64_t first_tstamp, vector<SPNS::shared_ptr<vector <LatencyItem> > > &diff_times,
 									 const string& connKey) {
-	map<ulong, ByteRange*>::iterator it, it_end;
+	map<seq64_t, ByteRange*>::iterator it, it_end;
 	it = analyse_range_start;
 	it_end = analyse_range_end;
 
 	ulong num_retr_tmp;
 	int ack_time_ms;
-	ulong send_time_ms;
+	uint64_t send_time_ms;
 
 	for (; it != it_end; it++) {
 		ack_time_ms = it->second->getSendAckTimeDiff(this);

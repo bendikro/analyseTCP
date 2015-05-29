@@ -10,7 +10,7 @@
 //        idea of the option is to split a connection into individual HTTP GETs
 #define IS_THIS_HTTP_GET 1
 #ifdef IS_THIS_HTTP_GET
-static void look_for_get_request( const struct pcap_pkthdr* header, const u_char *data );
+static void look_for_get_request( const pcap_pkthdr* header, const u_char *data );
 #endif
 
 bool conn_key_debug = false;
@@ -18,18 +18,18 @@ bool conn_key_debug = false;
 
 /* Methods for class Dump */
 Dump::Dump(string src_ip, string dst_ip, string src_port, string dst_port, string tcp_port, string fn)
-	: filename( fn )
-	, srcIp( src_ip )
-	, dstIp( dst_ip )
-	, srcPort( src_port )
-	, dstPort( dst_port )
-	, tcpPort( tcp_port )
-	, sentPacketCount( 0 )
-	, sentBytesCount( 0 )
-	, recvPacketCount( 0 )
-	, recvBytesCount( 0 )
-	, ackCount( 0 )
-	, max_payload_size( 0 )
+	: filename(fn)
+	, srcIp(src_ip)
+	, dstIp(dst_ip)
+	, srcPort(src_port)
+	, dstPort(dst_port)
+	, tcpPort(tcp_port)
+	, sentPacketCount(0)
+	, recvPacketCount(0)
+	, sentBytesCount(0)
+	, recvBytesCount(0)
+	, ackCount(0)
+	, max_payload_size(0)
 {
 	timerclear(&first_sent_time);
 	srcIp = src_ip;
@@ -39,29 +39,25 @@ Dump::Dump(string src_ip, string dst_ip, string src_port, string dst_port, strin
     tcpPort = tcp_port;
 }
 
-Dump::Dump( const vector<four_tuple_t>& connections, string fn )
-	: filename( fn )
-	, srcIp( "" )
-	, dstIp( "" )
-	, srcPort( "" )
-	, dstPort( "" )
-	, tcpPort( "" )
-    , _connections( connections )
-	, sentPacketCount( 0 )
-	, sentBytesCount( 0 )
-	, recvPacketCount( 0 )
-	, recvBytesCount( 0 )
-	, ackCount( 0 )
-	, max_payload_size( 0 )
+Dump::Dump(const vector<four_tuple_t>& connections, string fn)
+	: filename(fn)
+	, srcIp("")
+	, dstIp("")
+	, srcPort("")
+	, dstPort("")
+	, tcpPort("")
+	, _connections(connections)
+	, sentPacketCount(0)
+	, recvPacketCount(0)
+	, sentBytesCount(0)
+	, recvBytesCount(0)
+	, ackCount(0)
+	, max_payload_size(0)
 {
 	timerclear(&first_sent_time);
 }
 
 Dump::~Dump() {
-	free_resources();
-}
-
-void Dump::free_resources() {
 	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
 	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
 		delete cIt->first;
@@ -70,13 +66,12 @@ void Dump::free_resources() {
 	conns.clear();
 }
 
-
-Connection* Dump::getConn(const struct in_addr &srcIp, const struct in_addr &dstIp, const uint16_t *srcPort, const uint16_t *dstPort, const uint32_t *seq)
+Connection* Dump::getConn(const in_addr &srcIp, const in_addr &dstIp, const uint16_t *srcPort, const uint16_t *dstPort, const seq32_t *seq)
 {
-	struct ConnectionMapKey connKey;
+	ConnectionMapKey connKey;
 	map<ConnectionMapKey*, Connection*>::iterator it;
-	memcpy(&connKey.ip_src, &srcIp, sizeof(struct in_addr));
-	memcpy(&connKey.ip_dst, &dstIp, sizeof(struct in_addr));
+	memcpy(&connKey.ip_src, &srcIp, sizeof(in_addr));
+	memcpy(&connKey.ip_dst, &dstIp, sizeof(in_addr));
 	connKey.src_port = *srcPort;
 	connKey.dst_port = *dstPort;
 
@@ -92,8 +87,8 @@ Connection* Dump::getConn(const struct in_addr &srcIp, const struct in_addr &dst
 
 	Connection *tmpConn = new Connection(srcIp, srcPort, dstIp, dstPort, ntohl(*seq));
 	ConnectionMapKey *connKeyToInsert = new ConnectionMapKey();
-	memcpy(&connKeyToInsert->ip_src, &srcIp, sizeof(struct in_addr));
-	memcpy(&connKeyToInsert->ip_dst, &dstIp, sizeof(struct in_addr));
+	memcpy(&connKeyToInsert->ip_src, &srcIp, sizeof(in_addr));
+	memcpy(&connKeyToInsert->ip_dst, &dstIp, sizeof(in_addr));
 	connKeyToInsert->src_port = connKey.src_port;
 	connKeyToInsert->dst_port = connKey.dst_port;
 	conns.insert(pair<ConnectionMapKey*, Connection*>(connKeyToInsert, tmpConn));
@@ -102,12 +97,11 @@ Connection* Dump::getConn(const struct in_addr &srcIp, const struct in_addr &dst
 
 Connection* Dump::getConn(string &srcIpStr, string &dstIpStr, string &srcPortStr, string &dstPortStr)
 {
-	struct in_addr srcIp;
-	struct in_addr dstIp;
-	std::string::size_type sz;   // alias of size_t
+	in_addr srcIp;
+	in_addr dstIp;
 
-	uint16_t srcPort = htons(std::stoi(srcPortStr, &sz));
-	uint16_t dstPort = htons(std::stoi(dstPortStr, &sz));
+	uint16_t srcPort = htons(std::stoi(srcPortStr));
+	uint16_t dstPort = htons(std::stoi(dstPortStr));
 
 	if (!inet_pton(AF_INET, srcIpStr.c_str(), &srcIp)) {
 		colored_printf(RED, "Failed to convert source IP '%s'\n", srcIpStr.c_str());
@@ -125,23 +119,23 @@ void Dump::analyseSender()
 {
 	int packetCount = 0;
 	char errbuf[PCAP_ERRBUF_SIZE];
-	struct pcap_pkthdr header;
+	pcap_pkthdr header;
 	const u_char *data;
 	map<ConnectionMapKey*, Connection*>::iterator it, it_end;
 
 	pcap_t *fd = pcap_open_offline(filename.c_str(), errbuf);
-	if ( fd == NULL ) {
+	if (fd == NULL) {
 		cerr << "pcap: Could not open file: " << filename << endl;
 		exit_with_file_and_linenum(1, __FILE__, __LINE__);
 	}
 
 	stringstream       filterExp;
-	struct bpf_program compFilter;
+	bpf_program compFilter;
 
 	bool src_port_range;
 	bool dst_port_range;
 
-    if( _connections.size() == 0 )
+    if (_connections.size() == 0)
     {
 	    /* Set up pcap filter to include only outgoing tcp
 	     * packets with correct ip and port numbers.
@@ -173,7 +167,7 @@ void Dump::analyseSender()
 
         auto it  = _connections.begin();
         auto end = _connections.end();
-        for( ; it!=end; it++ )
+        for (; it!=end; it++)
         {
             filterExp << "( tcp "
                       << "&& src host " << it->ip_left() << " && src port " << it->port_left()
@@ -182,7 +176,7 @@ void Dump::analyseSender()
                       << "&& src host " << it->ip_right() << " && src port " << it->port_right()
                       << "&& dst host " << it->ip_left() << " && dst port " << it->port_left()
                       << " )";
-            if( it+1 != end ) filterExp << " || ";
+            if (it+1 != end) filterExp << " || ";
         }
     }
 
@@ -223,14 +217,14 @@ void Dump::analyseSender()
 
 	if (GlobOpts::validate_ranges) {
 		/* DEBUG: Validate range */
-		if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
+		if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
 			cerr << "---------------Begin first validation--------------" << endl;
 
 		it_end = conns.end();
 		for (it = conns.begin(); it != it_end; it++) {
 			it->second->validateRanges();
 		}
-		if(GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5 )
+		if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
 			cerr << "---------------End of first validation--------------" << endl;
 	}
 
@@ -306,7 +300,7 @@ void Dump::analyseSender()
 }
 
 
-void Dump::findTCPTimeStamp(struct DataSeg* data, uint8_t* opts, int option_length) {
+void Dump::findTCPTimeStamp(DataSeg* data, uint8_t* opts, int option_length) {
 
 	typedef struct {
 		uint8_t kind;
@@ -335,7 +329,7 @@ void Dump::findTCPTimeStamp(struct DataSeg* data, uint8_t* opts, int option_leng
 
 /* Process outgoing packets */
 void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
-	//const struct sniff_ethernet *ethernet; /* The ethernet header */
+	//const sniff_ethernet *ethernet; /* The ethernet header */
 	const sniff_ip *ip; /* The IP header */
 	const sniff_tcp *tcp; /* The TCP header */
 	u_int ipSize;
@@ -343,11 +337,11 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 	u_int tcpHdrLen;
 
 	/* Finds the different headers+payload */
-	//ethernet = (struct sniff_ethernet*) data;
-	ip = (struct sniff_ip*) (data + SIZE_ETHERNET);
+	//ethernet = (sniff_ethernet*) data;
+	ip = (sniff_ip*) (data + SIZE_ETHERNET);
 	ipSize = ntohs(ip->ip_len);
 	ipHdrLen = IP_HL(ip) * 4;
-	tcp = (struct sniff_tcp*) (data + SIZE_ETHERNET + ipHdrLen);
+	tcp = (sniff_tcp*) (data + SIZE_ETHERNET + ipHdrLen);
 	tcpHdrLen = TH_OFF(tcp) * 4;
 
 	Connection* tmpConn = getConn(ip->ip_src, ip->ip_dst, &tcp->th_sport, &tcp->th_dport, &tcp->th_seq);
@@ -404,7 +398,7 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 	sentBytesCount += sd.data.payloadSize;
 
 	/*
-	printf("Conn: %s : %s (%lu) (%s)\n", tmpConn->getConnKey().c_str(),
+	printf("Conn: %s : %s (%llu) (%s)\n", tmpConn->getConnKey().c_str(),
 		   relative_seq_pair_str(tmpConn->rm, sd.data.seq, sd.data.endSeq).c_str(),
 		   (sd.data.endSeq - sd.data.seq), get_TCP_flags_str(sd.data.flags).c_str());
 	*/
@@ -432,13 +426,13 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
  *
  * Returns the relative sequence number or std::numeric_limits<ulong>::max() if it failed.
  **/
-uint64_t Dump::get_relative_sequence_number(uint32_t seq, uint32_t firstSeq, ulong largestSeq, uint32_t largestSeqAbsolute, Connection *conn) {
-	uint64_t wrap_index;
-	uint64_t seq_relative;
+seq64_t Dump::get_relative_sequence_number(seq32_t seq, seq32_t firstSeq, seq64_t largestSeq, seq32_t largestSeqAbsolute, Connection *conn) {
+	ullint_t wrap_index;
+	seq64_t seq_relative;
 	wrap_index = firstSeq + largestSeq;
 	wrap_index += 1;
 
-	//printf("get_relative_sequence_number: seq: %u, firstSeq: %u, largestSeq: %lu, largestSeqAbsolute: %u, wrap_index: %lu\n", seq, firstSeq, largestSeq, largestSeqAbsolute, wrap_index);
+	//printf("get_relative_sequence_number: seq: %u, firstSeq: %u, largestSeq: %llu, largestSeqAbsolute: %u, wrap_index: %llu\n", seq, firstSeq, largestSeq, largestSeqAbsolute, wrap_index);
 	// Either seq has wrapped, or a retrans (or maybe reorder if netem is run on sender machine)
 	if (seq < largestSeqAbsolute) {
 		// This is an earlier sequence number
@@ -481,7 +475,7 @@ uint64_t Dump::get_relative_sequence_number(uint32_t seq, uint32_t firstSeq, ulo
 		//fprintf(stderr, "Conn: %s\n", conn->getConnKey().c_str());
 
 #if !defined(NDEBUG) && defined(DEBUG)
-		fprintf(stderr, "Encountered invalid sequence number for connection %s: %u (firstSeq=%u, largestSeq=%lu, largestSeqAbsolute=%u\n",
+		fprintf(stderr, "Encountered invalid sequence number for connection %s: %u (firstSeq=%u, largestSeq=%llu, largestSeqAbsolute=%u\n",
 				conn->getConnKey().c_str(),
 				seq,
 				firstSeq,
@@ -492,21 +486,21 @@ uint64_t Dump::get_relative_sequence_number(uint32_t seq, uint32_t firstSeq, ulo
 		//assert(0 && "Incorrect sequence number calculation!\n");
 		return std::numeric_limits<ulong>::max();
 	}
-	//printf("RETURN seq_relative: %lu\n", seq_relative);
+	//printf("RETURN seq_relative: %llu\n", seq_relative);
 	return seq_relative;
 }
 
 /* Process incoming ACKs */
-void Dump::processAcks(const struct pcap_pkthdr* header, const u_char *data) {
-	static const struct sniff_ip *ip; /* The IP header */
-	static const struct sniff_tcp *tcp; /* The TCP header */
+void Dump::processAcks(const pcap_pkthdr* header, const u_char *data) {
+	static const sniff_ip *ip; /* The IP header */
+	static const sniff_tcp *tcp; /* The TCP header */
 	static u_int ipHdrLen;
-	static uint32_t ack;
+	static seq32_t ack;
 	//static u_long eff_win;        /* window after scaling */
 	static bool ret;
-	ip = (struct sniff_ip*) (data + SIZE_ETHERNET);
+	ip = (sniff_ip*) (data + SIZE_ETHERNET);
 	ipHdrLen = IP_HL(ip) * 4;
-	tcp = (struct sniff_tcp*) (data + SIZE_ETHERNET + ipHdrLen);
+	tcp = (sniff_tcp*) (data + SIZE_ETHERNET + ipHdrLen);
 
 	static u_int tcpHdrLen;
 	static uint tcpOptionLen;
@@ -525,7 +519,7 @@ void Dump::processAcks(const struct pcap_pkthdr* header, const u_char *data) {
 	ack = ntohl(tcp->th_ack);
 
 	DataSeg seg;
-	memset(&seg, 0, sizeof(struct DataSeg));
+	memset(&seg, 0, sizeof(DataSeg));
 	seg.ack         = get_relative_sequence_number(ack, tmpConn->rm->firstSeq, tmpConn->lastLargestAckSeq, tmpConn->lastLargestAckSeqAbsolute, tmpConn);
 	seg.tstamp_pcap = header->ts;
 	seg.window = ntohs(tcp->th_win);
@@ -558,7 +552,7 @@ void Dump::processRecvd(string recvFn) {
 	string tmpSrcIp = srcIp;
 	string tmpDstIp = dstIp;
 	char errbuf[PCAP_ERRBUF_SIZE];
-	struct pcap_pkthdr h;
+	pcap_pkthdr h;
 	const u_char *data;
 	map<uint16_t, Connection*>::iterator it, it_end;
 
@@ -579,7 +573,7 @@ void Dump::processRecvd(string recvFn) {
 	}
 
 	pcap_t *fd = pcap_open_offline(recvFn.c_str(), errbuf);
-	if ( fd == NULL ) {
+	if (fd == NULL) {
 		cerr << "pcap: Could not open file: " << recvFn << endl;
 		exit_with_file_and_linenum(1, __FILE__, __LINE__);
 	}
@@ -587,7 +581,7 @@ void Dump::processRecvd(string recvFn) {
 	/* Set up pcap filter to include only incoming tcp
 	   packets with correct IP and port numbers.
 	   We exclude packets with no TCP payload. */
-	struct bpf_program compFilter;
+	bpf_program compFilter;
 	stringstream filterExp;
 
 	bool src_port_range = !isNumeric(srcPort.c_str(), 10);
@@ -641,18 +635,18 @@ void Dump::processRecvd(string recvFn) {
 }
 
 /* Process packets */
-void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data) {
-	//const struct sniff_ethernet *ethernet; /* The ethernet header */
-	const struct sniff_ip *ip; /* The IP header */
-	const struct sniff_tcp *tcp; /* The TCP header */
+void Dump::processRecvd(const pcap_pkthdr* header, const u_char *data) {
+	//const sniff_ethernet *ethernet; /* The ethernet header */
+	const sniff_ip *ip; /* The IP header */
+	const sniff_tcp *tcp; /* The TCP header */
 	Connection *tmpConn;
 
     /* Finds the different headers+payload */
-//  ethernet = (struct sniff_ethernet*)(data);
-	ip = (struct sniff_ip*) (data + SIZE_ETHERNET);
+//  ethernet = (sniff_ethernet*)(data);
+	ip = (sniff_ip*) (data + SIZE_ETHERNET);
 	u_int ipSize = ntohs(ip->ip_len);
 	u_int ipHdrLen = IP_HL(ip)*4;
-	tcp = (struct sniff_tcp*) (data + SIZE_ETHERNET + ipHdrLen);
+	tcp = (sniff_tcp*) (data + SIZE_ETHERNET + ipHdrLen);
 	u_int tcpHdrLen = TH_OFF(tcp)*4;
 
 	tmpConn = getConn(ip->ip_src, ip->ip_dst, &tcp->th_sport, &tcp->th_dport, NULL);
@@ -679,7 +673,7 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data) {
 	}
 
 	/* Prepare packet data struct */
-	struct sendData sd;
+	sendData sd;
 	sd.totalSize         = header->len;
 	sd.ipSize            = ipSize;
 	sd.ipHdrLen          = ipHdrLen;
@@ -707,7 +701,7 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data) {
 			printf("Found invalid sequence numbers in beginning of receive dump. Probably the sender tcpdump didn't start in time to save this packets\n");
 		}
 		else {
-			printf("Found invalid sequence number in received data!: %u -> %lu\n", sd.data.seq_absolute, (ulong)sd.data.seq);
+			printf("Found invalid sequence number in received data!: %u -> %llu\n", sd.data.seq_absolute, sd.data.seq);
 		}
 		return;
 	}
@@ -730,7 +724,7 @@ void Dump::processRecvd(const struct pcap_pkthdr* header, const u_char *data) {
 void Dump::calculateSojournTime() {
 
 	std::ifstream file(GlobOpts::sojourn_time_file);
-	std::string   line;
+	std::string line;
 
 	string time;
 	string k_time;
@@ -763,7 +757,6 @@ void Dump::calculateSojournTime() {
 			tmpConn = getConn(sender_ip, receiver_ip, sender_port, receiver_port);
 		}
 		catch (const std::invalid_argument ia) {
-			//catch (int e) {
 			cout << "An exception occurred. Exception Nr. " << ia.what() << '\n';
 			printf("Invalid input values: Sender IP: '%s', Sender PORT: '%s', Receiver IP: '%s', Receiver PORT: '%s'\n",
 				   sender_ip.c_str(), receiver_ip.c_str(), sender_port.c_str(), receiver_port.c_str());
@@ -777,22 +770,24 @@ void Dump::calculateSojournTime() {
 			continue;
 		}
 
-		uint32_t tmp1 = std::stoul(seq, nullptr, 0);
-		uint32_t tmp2 = std::stoul(seq2, nullptr, 0);
+		seq32_t tmp1 = std::stoul(seq);
+		seq32_t tmp2 = std::stoul(seq2);
 
 		DataSeg tmpSeg;
 		tmpSeg.seq_absolute = max(tmp1, tmp2);
 		tmpSeg.seq = get_relative_sequence_number(tmpSeg.seq_absolute, tmpConn->rm->firstSeq,
 												  tmpConn->lastLargestSojournEndSeq,
 												  tmpConn->lastLargestSojournSeqAbsolute, tmpConn);
-		tmpSeg.payloadSize = std::stoul(size, nullptr, 0);
+		tmpSeg.payloadSize = std::stoul(size);
 		tmpSeg.endSeq       = tmpSeg.seq + tmpSeg.payloadSize;
 		tmpSeg.tstamp_pcap.tv_sec = std::stoi(k_time.substr(0, k_time.find(".")));
 		tmpSeg.tstamp_pcap.tv_usec = std::stoi(k_time.substr(k_time.find(".") + 1)) / 1000.0;
 
+		/*
 		if (seq != seq2) {
-			//colored_printf(YELLOW, "seq(%s) != seq2(%s), seq3(%s) (RelSeq: %lu)\n", seq.c_str(), seq2.c_str(), seq3.c_str(), tmpSeg.seq);
+			colored_printf(YELLOW, "seq(%s) != seq2(%s), seq3(%s) (RelSeq: %llu)\n", seq.c_str(), seq2.c_str(), seq3.c_str(), tmpSeg.seq);
 		}
+		*/
 
 		try {
 			bool ret = tmpConn->rm->insert_byte_range(tmpSeg.seq, tmpSeg.endSeq, INSERT_SOJOURN, &tmpSeg, 0);
@@ -801,7 +796,6 @@ void Dump::calculateSojournTime() {
 			}
 		}
 		catch (const std::logic_error ia) {
-			//catch (int e) {
 			cout << "An exception occurred. Exception Nr. " << ia.what() << '\n';
 			printf("Invalid input values: Sender IP: '%s', Sender PORT: '%s', Receiver IP: '%s', Receiver PORT: '%s'\n",
 				   sender_ip.c_str(), receiver_ip.c_str(), sender_port.c_str(), receiver_port.c_str());
@@ -836,14 +830,14 @@ void Dump::calculateLatencyVariation() {
 }
 
 #ifdef IS_THIS_HTTP_GET
-static void look_for_get_request( const struct pcap_pkthdr* header, const u_char *data )
+static void look_for_get_request( const pcap_pkthdr* header, const u_char *data )
 {
 	const sniff_ip *ip; /* The IP header */
 	const sniff_tcp *tcp; /* The TCP header */
-	ip = (struct sniff_ip*) (data + SIZE_ETHERNET);
+	ip = (sniff_ip*) (data + SIZE_ETHERNET);
 	// u_int ipSize = ntohs(ip->ip_len);
 	u_int ipHdrLen = IP_HL(ip)*4;
-	tcp = (struct sniff_tcp*) (data + SIZE_ETHERNET + ipHdrLen);
+	tcp = (sniff_tcp*) (data + SIZE_ETHERNET + ipHdrLen);
 	u_int tcpHdrLen = TH_OFF(tcp)*4;
 
     u_char* ptr = (u_char *) (data + SIZE_ETHERNET + ipHdrLen + tcpHdrLen);

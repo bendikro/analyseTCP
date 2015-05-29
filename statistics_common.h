@@ -37,29 +37,13 @@ struct LatencyItem {
 };
 ofstream& operator<<(ofstream& stream, const LatencyItem& lat);
 
-//struct SegmentLatencyItem {
-//	long time_us;
-//	int sojourn_time_usec;
-//	vector< pair<int, int> > sojourn_times;
-//	int ack_latency_usec;
-//	string stream_id;
-//	SegmentLatencyItem(long time_us, vector< pair<int, int> > &sojourn_t, int ack_latency, string stream_id)
-//		: time_us(time_us), sojourn_times(sojourn_t), ack_latency_usec(ack_latency), stream_id(stream_id) { }
-//
-//	string str() const;
-//	string header() { return "time,latency,stream_id"; }
-//	operator string() const { return str(); }
-//};
-//ofstream& operator<<(ofstream& stream, const SegmentLatencyItem& lat);
-
-
 void update_vectors_size(vector<SPNS::shared_ptr<vector <LatencyItem> > > &vectors, ulong count);
 
 class GlobStats
 {
 public:
 	static map<const long, int> byteLatencyVariationCDFValues;
-	static uint64_t totNumBytes;
+	static ullint_t totNumBytes;
 };
 
 /* Struct used to pass aggregated data between connections */
@@ -69,8 +53,11 @@ public:
 	int analysed_duration_sec; // The duration of the part that was analysed
 	int analysed_start_sec; // The duration of the part that was analysed
 	int analysed_end_sec; // The duration of the part that was analysed
-	uint64_t totBytesSent;
-	uint64_t bytes_lost;
+	ullint_t totBytesSent;
+	ullint_t totUniqueBytes;
+	ullint_t totUniqueBytesSent;
+	ullint_t redundantBytes;
+	ullint_t bytes_lost;
 	int totRetransBytesSent;
 	int totPacketSize;
 	int nrDataPacketsSent;
@@ -86,16 +73,13 @@ public:
 	int finCount;
 	int rstCount;
 	int pureAcksCount;
-	uint64_t totUniqueBytes;
-	uint64_t totUniqueBytesSent;
-	uint64_t redundantBytes;
 	int rdb_packet_hits;
 	int rdb_packet_misses;
-	uint64_t rdb_bytes_sent;
-	uint64_t rdb_byte_misses;
-	uint64_t rdb_byte_hits;
-	uint64_t ranges_sent;
-	uint64_t ranges_lost;
+	ullint_t rdb_bytes_sent;
+	ullint_t rdb_byte_misses;
+	ullint_t rdb_byte_hits;
+	ullint_t ranges_sent;
+	ullint_t ranges_lost;
 };
 
 struct Percentiles
@@ -104,7 +88,7 @@ struct Percentiles
 	int max_char_length;
 
 	void init();
-	void compute( const vector<double>& v );
+	void compute(const vector<double>& v);
 	void print(string fmt, bool show_quartiles = true);
 };
 
@@ -113,9 +97,9 @@ class BaseStats
 	bool _is_aggregate;
 	int32_t _counter;
 public:
-	int64_t min;
-	int64_t max;
-	int64_t cum;
+	ullint_t min;
+	ullint_t max;
+	ullint_t cum;
 	bool	valid;
 
 	BaseStats() : _is_aggregate(false) {}
@@ -124,18 +108,18 @@ public:
 	void init();
 
 	// add to cum, increase _counter, update min and max
-	void add( uint64_t );
-	void add_to_aggregate( const BaseStats &rhs );
-	double	 get_avg( ) const;
-	uint32_t get_counter( ) const;
+	void add(ullint_t);
+	void add_to_aggregate(const BaseStats &rhs);
+	double get_avg() const;
+	uint32_t get_counter() const;
 
 	Percentiles	   _percentiles;
 	double		   _std_dev;
 
 	// derive _std_dev and _percentiles from _values
-	void makeStats( );
-	void sortValues( );
-	void computePercentiles( );
+	void makeStats();
+	void sortValues();
+	void computePercentiles();
 
 private:
 	vector<double> _values;

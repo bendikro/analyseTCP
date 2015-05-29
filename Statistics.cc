@@ -92,9 +92,9 @@ void Statistics::printDumpStats() {
 
 	if (GlobOpts::withRecv) {
 		map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
-		long int ranges_count = 0;
-		long int ranges_lost = 0;
-		long int ranges_sent = 0;
+		long ranges_count = 0;
+		long ranges_lost = 0;
+		long ranges_sent = 0;
 		for (cIt = dump.conns.begin(); cIt != dump.conns.end(); cIt++) {
 			ranges_count += cIt->second->rm->getByteRangesCount();
 			ranges_sent += cIt->second->rm->getByteRangesSent();
@@ -240,15 +240,16 @@ void printPacketsStats(ConnStats *cs) {
 	       "  Number of packets with bundled segments       : %10d\n"	\
 		   "  Number of packets with redundant data         : %10d\n"	\
 		   "  Number of received acks                       : %10d\n"   \
-	       "  Total bytes sent (payload)                    : %10lu\n"	\
-	       "  Number of unique bytes                        : %10lu\n"   \
+	       "  Total bytes sent (payload)                    : %10llu\n"	\
+	       "  Number of unique bytes                        : %10llu\n"   \
 	       "  Number of retransmitted bytes                 : %10d\n"	\
-		   "  Redundant bytes (bytes already sent)          : %10lu (%.2f %%)\n",
+		   "  Redundant bytes (bytes already sent)          : %10llu (%.2f %%)\n",
 		   cs->pureAcksCount, syn_fin_rst,
 		   cs->nrRetrans, cs->bundleCount, cs->nrRetrans - cs->nrRetransNoPayload + cs->bundleCount, cs->ackCount,
-           (ulong)cs->totBytesSent,
-	       (ulong)cs->totUniqueBytesSent, cs->totRetransBytesSent,
-           (ulong)(cs->totBytesSent - cs->totUniqueBytesSent),
+           cs->totBytesSent,
+	       cs->totUniqueBytesSent,
+		   cs->totRetransBytesSent,
+           (cs->totBytesSent - cs->totUniqueBytesSent),
 	       safe_div((cs->totBytesSent - cs->totUniqueBytesSent), cs->totBytesSent) * 100);
 
 	if (cs->totUniqueBytesSent != cs->totUniqueBytes) {
@@ -276,11 +277,11 @@ void printPacketsStats(ConnStats *cs) {
 		printf("  Packet loss                                   : %10.2f %%\n",  safe_div((cs->nrPacketsSentFoundInDump - cs->nrPacketsReceivedFoundInDump),
 																						  cs->nrPacketsSentFoundInDump) * 100);
 
-		printf("  Bytes Lost (actual loss on receiver side)     : %10lu\n", (ulong)cs->bytes_lost);
+		printf("  Bytes Lost (actual loss on receiver side)     : %10llu\n", cs->bytes_lost);
 		printf("  Bytes Loss                                    : %10.2f %%\n", safe_div(cs->bytes_lost, cs->totBytesSent) * 100);
 
 		if (GlobOpts::verbose > 1) {
-			printf("  Ranges Lost (actual loss on receiver side)    : %10lu\n", (ulong)cs->ranges_lost);
+			printf("  Ranges Lost (actual loss on receiver side)    : %10llu\n", cs->ranges_lost);
 			printf("  Ranges Loss                                   : %10.2f %%\n", safe_div(cs->ranges_lost, cs->ranges_sent) * 100);
 		}
 	}
@@ -291,36 +292,36 @@ void printPacketsStats(ConnStats *cs) {
 		print_stats_separator(false);
 		printf("RDB stats:\n");
 		printf("  RDB packets                                   : %10d (%.2f%% of data packets sent)\n", cs->bundleCount, safe_div(cs->bundleCount, cs->nrDataPacketsSent) * 100);
-		printf("  RDB bytes bundled                             : %10lu (%.2f%% of total bytes sent)\n", (ulong)cs->rdb_bytes_sent, safe_div(cs->rdb_bytes_sent, cs->totBytesSent) * 100);
+		printf("  RDB bytes bundled                             : %10llu (%.2f%% of total bytes sent)\n", cs->rdb_bytes_sent, safe_div(cs->rdb_bytes_sent, cs->totBytesSent) * 100);
 
 		if (GlobOpts::withRecv) {
 			printf("  RDB packet hits                               : %10d (%.2f%% of RDB packets sent)\n", cs->rdb_packet_hits, safe_div(cs->rdb_packet_hits, cs->bundleCount) * 100);
 			printf("  RDB packet misses                             : %10d (%.2f%% of RDB packets sent)\n", cs->rdb_packet_misses, safe_div(cs->rdb_packet_misses, cs->bundleCount) * 100);
-			printf("  RDB byte hits                                 : %10lu (%.2f%% of RDB bytes, %.2f%% of total bytes)\n",
-				   (ulong)cs->rdb_byte_hits, safe_div(cs->rdb_byte_hits, cs->rdb_bytes_sent) * 100, safe_div(cs->rdb_byte_hits, cs->totBytesSent) * 100);
-			printf("  RDB byte misses                               : %10lu (%.2f%% of RDB bytes, %.2f%% of total bytes)\n",
-				   (ulong)cs->rdb_byte_misses, safe_div(cs->rdb_byte_misses, cs->rdb_bytes_sent) * 100, safe_div(cs->rdb_byte_misses, cs->totBytesSent) * 100);
+			printf("  RDB byte hits                                 : %10llu (%.2f%% of RDB bytes, %.2f%% of total bytes)\n",
+				   cs->rdb_byte_hits, safe_div(cs->rdb_byte_hits, cs->rdb_bytes_sent) * 100, safe_div(cs->rdb_byte_hits, cs->totBytesSent) * 100);
+			printf("  RDB byte misses                               : %10llu (%.2f%% of RDB bytes, %.2f%% of total bytes)\n",
+				   cs->rdb_byte_misses, safe_div(cs->rdb_byte_misses, cs->rdb_bytes_sent) * 100, safe_div(cs->rdb_byte_misses, cs->totBytesSent) * 100);
 		}
 	}
 }
 
 void printStats(string prefix, string unit, BaseStats& bs) {
-	printf("  Minimum %10s                            : %7lu %s\n", prefix.c_str(), (ulong)bs.min, unit.c_str());
+	printf("  Minimum %10s                            : %7lld %s\n", prefix.c_str(), bs.min, unit.c_str());
 	printf("  Average %10s                            : %7.0f %s\n", prefix.c_str(), bs.get_avg(), unit.c_str());
-	printf("  Maximum %10s                            : %7lu %s\n", prefix.c_str(), (ulong)bs.max, unit.c_str());
+	printf("  Maximum %10s                            : %7lld %s\n", prefix.c_str(), bs.max, unit.c_str());
 }
 
 void printStatsAggr(string prefix, string unit, ConnStats *cs, BaseStats& bs,
 					BaseStats& aggregatedMin, BaseStats& aggregatedAvg, BaseStats& aggregatedMax) {
-	if (aggregatedMin.min == (numeric_limits<int64_t>::max)())
+	if (aggregatedMin.min == (numeric_limits<ullint_t>::max)())
 		aggregatedMin.min = aggregatedMin.max = 0;
 
-	printf("  Minimum %10s (min, avg, max)            :    %7lu, %7.0f, %7lu %s\n",
-		   prefix.c_str(), (ulong)aggregatedMin.min, aggregatedMin.get_avg(), (ulong)aggregatedMin.max, unit.c_str());
-	printf("  Average %10s (min, avg, max)            :    %7lu, %7.0f, %7lu %s\n",
-		   prefix.c_str(), (ulong)aggregatedAvg.min, aggregatedAvg.get_avg(), (ulong)aggregatedAvg.max, unit.c_str());
-	printf("  Maximum %10s (min, avg, max)            :    %7lu, %7.0f, %7lu %s\n",
-		   prefix.c_str(), (ulong)aggregatedMax.min, aggregatedMax.get_avg(), (ulong)aggregatedMax.max, unit.c_str());
+	printf("  Minimum %10s (min, avg, max)            :    %7llu, %7.0f, %7llu %s\n",
+		   prefix.c_str(), aggregatedMin.min, aggregatedMin.get_avg(), aggregatedMin.max, unit.c_str());
+	printf("  Average %10s (min, avg, max)            :    %7llu, %7.0f, %7llu %s\n",
+		   prefix.c_str(), aggregatedAvg.min, aggregatedAvg.get_avg(), aggregatedAvg.max, unit.c_str());
+	printf("  Maximum %10s (min, avg, max)            :    %7llu, %7.0f, %7llu %s\n",
+		   prefix.c_str(), aggregatedMax.min, aggregatedMax.get_avg(), aggregatedMax.max, unit.c_str());
 	printf("  Average of all packets in all connections     : %10d %s\n",
 		   (int) nearbyint((double) safe_div(bs.cum, cs->nrDataPacketsSent)), unit.c_str());
 }
@@ -421,7 +422,7 @@ void Statistics::writeAggByteLatencyVariationCDF() {
 
 	stream << endl << endl << "#Aggregated CDF:" << endl;
 	stream << "#Relative delay      Percentage" << endl;
-	for(; nit != nit_end; nit++){
+	for (; nit != nit_end; nit++) {
 		cdfSum += (double)(*nit).second / GlobStats::totNumBytes;
 		sprintf(print_buf, "time: %10ld    CDF: %.10f\n", (*nit).first, cdfSum);
 		stream << print_buf;

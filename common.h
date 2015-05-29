@@ -1,6 +1,27 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+/*
+  As uint64_t is defined as unsigned long on Linux (gcc/clang) and
+  unsigned long long on OSX. Printing such values is troublesome as
+  linux requires %lu, and OSX %llu. Therefore we use ullint_t and
+  llint_t for variables that must be at least 64 bits, which can be
+  printed on all platforms with %llu.
+
+  On Linux (with clang), include the following two defines to test if
+  the compiler will give warnings when compiled on OSX where
+  (u)int64_t is (unsigned) long long.
+
+#define uint64_t unsigned long long
+#define int64_t long long
+*/
+
+#define seq32_t uint32_t
+// Following types are at least 64 bit
+#define seq64_t unsigned long long
+#define ullint_t unsigned long long
+#define llint_t long long
+
 #include "config.h"
 
 #include <cstdio>
@@ -44,7 +65,7 @@
 
 using namespace std;
 
-#define safe_div(x, y) ( (y) != 0 ? ((double) (x)) / (y) : 0.0 )
+#define safe_div(x, y) ((y) != 0 ? ((double) (x)) / (y) : 0.0)
 
 /* Convert a timeval to milliseconds */
 #define TV_TO_MS(tv) ((int64_t)((tv).tv_sec * 1000L + ((tv).tv_usec / 1000L)))
@@ -96,17 +117,17 @@ public:
 
 
 struct DataSeg {
-	uint64_t seq;
-	uint64_t endSeq;
-	uint64_t rdb_end_seq;   /* end seq of rdb data */
-	uint32_t seq_absolute;  /* Absolute value of the sequence number */
-	uint64_t ack;
+	seq64_t seq;
+	seq64_t endSeq;
+	seq64_t rdb_end_seq;   /* end seq of rdb data */
+	seq32_t seq_absolute;  /* Absolute value of the sequence number */
+	seq64_t ack;
 	uint16_t window;
 	uint16_t payloadSize;       /* Payload size */
 	bool retrans : 1,       /* is a retransmission */
 		is_rdb : 1,         /* is a rdb packet */
 		in_sequence : 1;    // Is the segment expected or out of order
-	struct timeval tstamp_pcap;
+	timeval tstamp_pcap;
 	uint32_t tstamp_tcp;
 	uint32_t tstamp_tcp_echo;
 	u_char flags;
@@ -124,7 +145,7 @@ struct sendData {
 	uint ipHdrLen;      /* Ip header length */
 	uint tcpHdrLen;     /* TCP header length */
 	uint tcpOptionLen;  /* TCP header option length */
-	struct DataSeg data;
+	DataSeg data;
 };
 
 
@@ -145,7 +166,7 @@ struct sniff_ip {
 	u_char  ip_ttl;                 /* time to live */
 	u_char  ip_p;                   /* protocol */
 	u_short ip_sum;                 /* checksum */
-	struct  in_addr ip_src,ip_dst;  /* source and dest address */
+	in_addr ip_src,ip_dst;  /* source and dest address */
 };
 #define IP_HL(ip)               (((ip)->ip_vhl) & 0x0f)
 #define IP_V(ip)                (((ip)->ip_vhl) >> 4)
@@ -180,13 +201,6 @@ struct sniff_ethernet {
 	u_char  ether_dhost[ETHER_ADDR_LEN];    /* destination host address */
 	u_char  ether_shost[ETHER_ADDR_LEN];    /* source host address */
 	u_short ether_type;                     /* IP? ARP? RARP? etc */
-};
-
-struct ackData {
-	u_int totalSize;   /* Total packet size */
-	u_int ack;
-	timeval time;     /* pcap timestamp for packet */
-	bool isSyn;
 };
 
 bool endsWith(const string& s, const string& suffix);

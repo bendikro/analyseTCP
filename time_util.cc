@@ -58,11 +58,11 @@ char* sprint_readable_time_now(char *buf) {
 	return buf;
 }
 
-int get_miliseconds(struct timeval tv) {
+long get_msecs(struct timeval tv) {
 	return tv.tv_sec * 1000 + tv.tv_usec/1000;
 }
 
-int get_usecs(timeval &tv) {
+long get_usecs(timeval &tv) {
 	return tv.tv_sec * 1000000 + tv.tv_usec;
 }
 
@@ -90,8 +90,6 @@ void timevaladd(struct timeval *to, struct timeval *val) {
 	to->tv_usec += val->tv_usec;
 	timevalfix(to);
 }
-
-
 
 /*! Subtract a timeval.
     Subtract from \b to the time in \b val.  The result time can

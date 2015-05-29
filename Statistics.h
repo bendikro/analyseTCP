@@ -102,7 +102,6 @@ public:
 
 	void makeByteLatencyVariationCDF();
 
-	void genAckLatencyFiles();
 	void writePacketByteCountAndITT();
 	void writeAckLatency();
 	void write_loss_to_file();

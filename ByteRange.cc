@@ -5,7 +5,7 @@
 /* Returns the difference between the start
    of the dump and r in seconds */
 double getTimeInterval(ByteRange *start, ByteRange *end) {
-	struct timeval start_tv, current, tv;
+	timeval start_tv, current, tv;
 	double time;
 	start_tv = *(start->getSendTime());
 	current = *(end->getSendTime());
@@ -88,14 +88,14 @@ void ByteRange::print_tstamps_pcap() {
 	}
 }
 
-bool ByteRange::addSegmentEnteredKernelTime(uint64_t seq, timeval &tv) {
+bool ByteRange::addSegmentEnteredKernelTime(seq64_t seq, timeval &tv) {
 
 	if (sent_data_pkt_pcap_index == -1) {
 		//printf("sent_data_pkt_pcap_index: %hu, acked_sent: %u\n", sent_data_pkt_pcap_index, acked_sent);
 		return false;
 	}
-	uint64_t sent = get_usecs(sent_tstamp_pcap[sent_data_pkt_pcap_index].first);
-	uint64_t soj = get_usecs(tv);
+	long sent = get_usecs(sent_tstamp_pcap[sent_data_pkt_pcap_index].first);
+	long soj = get_usecs(tv);
 	if (soj > sent) {
 		char buf1[30];
 		char buf2[30];
@@ -105,22 +105,22 @@ bool ByteRange::addSegmentEnteredKernelTime(uint64_t seq, timeval &tv) {
 		//fprintf(stderr, "ByteRange seq_with_print_range() type: %d\n", sent_tstamp_pcap[sent_data_pkt_pcap_index].second);
 		if (GlobOpts::print_packets_pairs.size() == 0 ||
 			seq_with_print_range(startSeq, endSeq, print_packet_ranges_index) == 1) {
-			colored_printf(RED, "INSERT INCORRECT SOJOURN TIME for ByteRange(%lu, %lu)\n"
+			colored_printf(RED, "INSERT INCORRECT SOJOURN TIME for ByteRange(%llu, %llu)\n"
 						   "Sent time '%s' is before sojourn time '%s'\n", startSeq, endSeq,
 						   buf1, buf2);
-			printf("Seq: %lu, startSeq: %lu, endSeq: %lu\n", seq, startSeq, endSeq);
+			printf("Seq: %llu, startSeq: %llu, endSeq: %llu\n", seq, startSeq, endSeq);
 		}
 		return false;
 	}
 	sojourn_time = 1;
-	sojourn_tstamps.push_back(pair<uint64_t, timeval>(seq, tv));
+	sojourn_tstamps.push_back(pair<seq64_t, timeval>(seq, tv));
 	return true;
 }
 
 /* Get the difference between send and ack time for this range */
 int ByteRange::getSendAckTimeDiff(RangeManager *rm) {
-	struct timeval tv_diff;
-	int usec = 0;
+	timeval tv_diff;
+	long usec = 0;
 
 	if (sent_tstamp_pcap.empty() || (sent_tstamp_pcap[0].first.tv_sec == 0 && sent_tstamp_pcap[0].first.tv_usec == 0)) {
 #ifdef DEBUG
@@ -132,7 +132,7 @@ int ByteRange::getSendAckTimeDiff(RangeManager *rm) {
 	if (ackTime.tv_sec == 0 && ackTime.tv_usec == 0) {
 		// If equals, they're syn or acks
 		if (startSeq != endSeq) {
-			multimap<ulong, ByteRange*>::reverse_iterator it, it_end = rm->ranges.rend();
+			multimap<seq64_t, ByteRange*>::reverse_iterator it, it_end = rm->ranges.rend();
 			int count = 0;
 			// Goes through all the packets from the end
 			// If all the packets after this packet has no ack time, then we presume it's caused by the
@@ -149,7 +149,7 @@ int ByteRange::getSendAckTimeDiff(RangeManager *rm) {
 				}
 				count++;
 			}
-			colored_printf(RED, "Range(%lu, %lu) has no ACK time. This shouldn't really happen... Packet is %d before last packet\n", startSeq, endSeq, count);
+			colored_printf(RED, "Range(%llu, %llu) has no ACK time. This shouldn't really happen... Packet is %d before last packet\n", startSeq, endSeq, count);
 		}
 		return 0;
 	}
@@ -184,7 +184,7 @@ int ByteRange::getSendAckTimeDiff(RangeManager *rm) {
 }
 
 vector< pair<int, int> > ByteRange::getSojournTimes() {
-	struct timeval tv_diff;
+	timeval tv_diff;
 	vector< pair<int, int> > sojourn_times;
 	int usec = 0;
 
@@ -213,7 +213,7 @@ vector< pair<int, int> > ByteRange::getSojournTimes() {
 		printf("Using sent time for packet type: %d ??\n", sent_tstamp_pcap[send_tstamp_index].second);
 	}
 
-	uint64_t tmpBeginSeq = startSeq;
+	seq64_t tmpBeginSeq = startSeq;
 	for (ulong i = 0; i < sojourn_tstamps.size(); i++) {
 		timersub(&sent_tstamp_pcap[send_tstamp_index].first, &sojourn_tstamps[i].second, &tv_diff);
 		usec = get_usecs(tv_diff);
@@ -244,7 +244,7 @@ vector< pair<int, int> > ByteRange::getSojournTimes() {
 }
 
 void ByteRange::calculateRecvDiff(timeval *recv_tstamp) {
-	struct timeval tv;
+	timeval tv;
 	long ms = 0;
 	if (recv_tstamp == NULL) {
 		recv_tstamp = &received_tstamp_pcap;

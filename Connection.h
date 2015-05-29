@@ -17,9 +17,9 @@ struct PacketSize {
 class PacketSizeGroup {
 public:
 	vector<PacketSize> packetSizes;
-	uint64_t bytes;
-	uint64_t _size;
-	uint64_t size() {
+	ullint_t bytes;
+	ullint_t _size;
+	ullint_t size() {
 		return _size;
 	}
 
@@ -43,27 +43,27 @@ ofstream& operator<<(ofstream& stream, const PacketSizeGroup& psGroup);
 class Connection {
 
 public:
-	uint64_t nrPacketsSent;
-	uint64_t nrDataPacketsSent;
-	uint64_t totPacketSize;
-	uint64_t totBytesSent;
-	uint64_t totRDBBytesSent;
-	uint64_t totNewDataSent;
-	uint64_t totRetransBytesSent;
-	uint64_t nrRetrans;
-	struct in_addr srcIp;
-	struct in_addr dstIp;
-	uint64_t bundleCount; // Number of packets with RDB data
+	ullint_t nrPacketsSent;
+	ullint_t nrDataPacketsSent;
+	ullint_t totPacketSize;
+	ullint_t totBytesSent;
+	ullint_t totRDBBytesSent;
+	ullint_t totNewDataSent;
+	ullint_t totRetransBytesSent;
+	ullint_t nrRetrans;
+	in_addr srcIp;
+	in_addr dstIp;
+	ullint_t bundleCount; // Number of packets with RDB data
 	// Used for calulcating relative sequence number
-	uint64_t lastLargestStartSeq;
-	uint64_t lastLargestEndSeq;           // This is the last largest sent (relative) end sequence number
-	uint32_t lastLargestSeqAbsolute;      // This is the last largest sent (absolute) start sequence number (This value will wrap)
-	uint64_t lastLargestRecvEndSeq;       // For reveiver side analyse
-	uint32_t lastLargestRecvSeqAbsolute;  // For reveiver side analyse
-	uint64_t lastLargestAckSeq;
-	uint32_t lastLargestAckSeqAbsolute;
-	uint64_t lastLargestSojournEndSeq;       // For reveiver side analyse
-	uint32_t lastLargestSojournSeqAbsolute;  // For reveiver side analyse
+	seq64_t lastLargestStartSeq;
+	seq64_t lastLargestEndSeq;           // This is the last largest sent (relative) end sequence number
+	seq32_t lastLargestSeqAbsolute;      // This is the last largest sent (absolute) start sequence number (This value will wrap)
+	seq64_t lastLargestRecvEndSeq;       // For reveiver side analyse
+	seq32_t lastLargestRecvSeqAbsolute;  // For reveiver side analyse
+	seq64_t lastLargestAckSeq;
+	seq32_t lastLargestAckSeqAbsolute;
+	seq64_t lastLargestSojournEndSeq;       // For reveiver side analyse
+	seq32_t lastLargestSojournSeqAbsolute;  // For reveiver side analyse
 
 
 	void genByteCountGroupedByInterval();
@@ -78,9 +78,9 @@ public:
 	timeval endTime;
 	RangeManager *rm;
 
-	Connection(const struct in_addr &src_ip, const uint16_t *src_port,
-			   const struct in_addr &dst_ip, const uint16_t *dst_port,
-			   uint32_t seq) : nrPacketsSent(0), nrDataPacketsSent(0), totPacketSize(0),
+	Connection(const in_addr &src_ip, const uint16_t *src_port,
+			   const in_addr &dst_ip, const uint16_t *dst_port,
+			   seq32_t seq) : nrPacketsSent(0), nrDataPacketsSent(0), totPacketSize(0),
 							   totBytesSent(0), totRDBBytesSent(0), totNewDataSent(0),
 							   totRetransBytesSent(0), nrRetrans(0), bundleCount(0), lastLargestStartSeq(0),
 							   lastLargestEndSeq(0), lastLargestRecvEndSeq(0), lastLargestAckSeq(0),
@@ -103,10 +103,10 @@ public:
 		delete rm;
 	}
 
-	bool registerSent(struct sendData* pd);
-	void registerRange(struct sendData* sd);
-	void registerRecvd(struct sendData *sd);
-	bool registerAck(struct DataSeg *seg);
+	bool registerSent(sendData* pd);
+	void registerRange(sendData* sd);
+	void registerRecvd(sendData *sd);
+	bool registerAck(DataSeg *seg);
 	void addConnStats(ConnStats* cs);
 	PacketsStats* getBytesLatencyStats();
 	void genBytesLatencyStats(PacketsStats* bs);
@@ -120,7 +120,7 @@ public:
 		rm->genAckLatencyData(first_tstamp, diff_times, getConnKey());
 	}
 	void addRDBStats(int *rdb_sent, int *rdb_miss, int *rdb_hits, int *totBytesSent);
-	ulong getNumUniqueBytes();
+	ullint_t getNumUniqueBytes();
 	string getConnKey() { return connKey; }
 	string getSenderKey() { return senderKey; }
 	string getReceiverKey() { return receiverKey; }
@@ -128,7 +128,7 @@ public:
 	void calculateRetransAndRDBStats();
 	uint32_t getDuration(bool analyse_range_duration);
 
-	void registerPacketSize(const timeval& first_tstamp_in_dump, const timeval& pkt_tstamp, const uint64_t pkt_size, const uint16_t payloadSize);
+	void registerPacketSize(const timeval& first_tstamp_in_dump, const timeval& pkt_tstamp, const ullint_t pkt_size, const uint16_t payloadSize);
 	void writePacketByteCountAndITT(vector<ofstream*> streams);
 };
 #endif /* CONNECTION_H */
