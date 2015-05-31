@@ -109,7 +109,7 @@ public:
 
 	~Dump();
 
-	seq64_t get_relative_sequence_number(seq32_t ack, seq32_t firstSeq, seq64_t largestAckSeq, seq32_t largestAckSeqAbsolute, Connection *conn);
+	seq64_t getRelativeSequenceNumber(seq32_t ack, seq32_t firstSeq, seq64_t largestAckSeq, seq32_t largestAckSeqAbsolute, Connection *conn);
 	void analyseSender();
 	void processRecvd(string fn);
 	void calculateRetransAndRDBStats();

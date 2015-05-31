@@ -8,7 +8,6 @@ ofstream& operator<<(ofstream& stream, const PacketSizeGroup& psGroup) {
 	return stream;
 }
 
-
 string PacketSizeGroup::str() const {
 	ostringstream buffer;
 	buffer << packetSizes.size() << "," << bytes;
@@ -200,12 +199,12 @@ bool Connection::registerAck(DataSeg *seg) {
 }
 
 void Connection::calculateRetransAndRDBStats() {
-	set_analyse_range_interval();
+	setAnalyseRangeInterval();
 	rm->calculateRetransAndRDBStats();
 }
 
 // Set which ranges to analyse
-void Connection::set_analyse_range_interval() {
+void Connection::setAnalyseRangeInterval() {
 	ulong start_index = 0;
 	rm->analyse_range_start = rm->ranges.begin();
 	rm->analyse_range_end = rm->ranges.end();
@@ -424,7 +423,7 @@ void Connection::registerPacketSize(const timeval& first, const timeval& ts, con
 	packetSizeGroups[sent_time_bucket_idx].add(pSize);
 }
 
-void Connection::writePacketByteCountAndITT(vector<ofstream*> streams) {
+void Connection::writePacketByteCountAndITT(vector<csv::ofstream*> streams) {
 	size_t i, j;
 
 	uint64_t k = 0;
@@ -438,8 +437,8 @@ void Connection::writePacketByteCountAndITT(vector<ofstream*> streams) {
 			itt = (tmp - prev) / 1000L;
 			prev = tmp;
 
-			for (ofstream* stream : streams) {
-				*stream << tmp << "," << itt << "," << packetSizes[i][j].payload_size << "," << packetSizes[i][j].packet_size << endl;
+			for (csv::ofstream* stream : streams) {
+				*stream << tmp << itt << packetSizes[i][j].payload_size << packetSizes[i][j].packet_size << NEWLINE;
             }
 		}
 	}

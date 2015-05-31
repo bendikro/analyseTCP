@@ -99,10 +99,10 @@ public:
 	void registerRecvDiffs();
 	void makeByteLatencyVariationCDF();
 	void writeByteLatencyVariationCDF(ofstream *stream);
-	void writeSentTimesAndQueueingDelayVariance(const uint64_t first_tstamp, vector<ofstream*> streams);
+	void writeSentTimesAndQueueingDelayVariance(const uint64_t first_tstamp, vector<csv::ofstream*> streams);
 	int calculateClockDrift();
 	void doDriftCompensation();
-	bool insert_byte_range(seq64_t start_seq, seq64_t end_seq, insert_type type, DataSeg *data_seq, int level);
+	bool insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_type type, DataSeg *data_seq, int level);
 	void genAckLatencyData(uint64_t first_tstamp, vector<SPNS::shared_ptr<vector <LatencyItem> > > &diff_times, const string& connKey);
 	ullint_t getNumBytes() { return lastSeq; } // lastSeq is the last relative seq number
 	int getByteRangesCount() { return ranges.size(); }
@@ -122,6 +122,6 @@ public:
 	void printPacketDetails();
 };
 
-int seq_with_print_range(seq64_t start, seq64_t end, size_t &print_packet_ranges_index);
+int seqWithPrintRange(seq64_t start, seq64_t end, size_t &print_packet_ranges_index);
 
 #endif /* RANGEMANAGER_H */

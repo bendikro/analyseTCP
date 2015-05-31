@@ -1,10 +1,12 @@
+#include <memory>
+#include <stdexcept>
+
 #include "RangeManager.h"
 #include "Connection.h"
 #include "ByteRange.h"
 #include "color_print.h"
 #include "util.h"
-#include <memory>
-#include <stdexcept>
+
 
 #define RECURSION_LEVEL 1500
 
@@ -72,7 +74,7 @@ void RangeManager::insertSentRange(sendData *sd) {
 			   STR_SEQNUM_PAIR(startSeq, endSeq), sd->data.retrans, sd->data.is_rdb);
 	}
 #endif
-	insert_byte_range(startSeq, endSeq, INSERT_SENT, &(sd->data), 0);
+	insertByteRange(startSeq, endSeq, INSERT_SENT, &(sd->data), 0);
 
 	if (sd->data.payloadSize == 0) { /* First or second packet in stream */
 #ifdef DEBUG
@@ -179,14 +181,14 @@ void RangeManager::insertReceivedRange(sendData *sd) {
 		}
 	}
 	/* Insert all packets into data structure */
-	insert_byte_range(tmpSeg.seq, tmpSeg.endSeq, INSERT_RECV, &tmpSeg, 0);
+	insertByteRange(tmpSeg.seq, tmpSeg.endSeq, INSERT_RECV, &tmpSeg, 0);
 }
 
 /*
   This inserts the the data into the ranges map.
   It's called both with sent end received data ranges.
 */
-bool RangeManager::insert_byte_range(seq64_t start_seq, seq64_t end_seq, insert_type itype, DataSeg *data_seg, int level) {
+bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_type itype, DataSeg *data_seg, int level) {
 	ByteRange *last_br = NULL;
 	map<seq64_t, ByteRange*>::iterator brIt, brIt_end, brItNext;
 	brIt_end = ranges.end();
@@ -205,8 +207,8 @@ bool RangeManager::insert_byte_range(seq64_t start_seq, seq64_t end_seq, insert_
 //	if (data_seg->payloadSize == 1) {
 //		debug_print = 1;
 //	}
-	//if (start_seq <= 10000)
-	//	debug_print = 1;
+	if (start_seq == 546)
+		debug_print = 1;
 	//
 	//if (start_seq >= 21660765)
 	//	exit(0);
@@ -234,7 +236,7 @@ bool RangeManager::insert_byte_range(seq64_t start_seq, seq64_t end_seq, insert_
 	if (debug_print) {
 		if (!level)
 			printf("\n");
-		indent_print("insert_byte_range0 (%llu): (%s) (%s), itype: %d, "
+		indent_print("insertByteRange0 (%llu): (%s) (%s), itype: %d, "
 					 "retrans: %d, is_rdb: %d, SYN: %d, FIN: %d, RST: %d, tstamp_tcp: %u\n",
 					 end_seq - start_seq, STR_RELATIVE_SEQNUM_PAIR(start_seq, end_seq),
 					 STR_SEQNUM_PAIR(start_seq, end_seq), itype, data_seg->retrans, data_seg->is_rdb,
@@ -399,7 +401,7 @@ bool RangeManager::insert_byte_range(seq64_t start_seq, seq64_t end_seq, insert_
 						ByteRange *range_received;
 						ByteRange *new_br;
 						if (start_matches) {
-							new_br = cur_br->split_end(end_seq, cur_br->endSeq);
+							new_br = cur_br->splitEnd(end_seq, cur_br->endSeq);
 							if (data_seg->flags & TH_FIN) {
 								cur_br->fin += 1;
 							}
@@ -414,7 +416,7 @@ bool RangeManager::insert_byte_range(seq64_t start_seq, seq64_t end_seq, insert_
 							range_received = cur_br;
 						}
 						else if (end_matches) {
-							new_br = cur_br->split_end(start_seq, cur_br->endSeq);
+							new_br = cur_br->splitEnd(start_seq, cur_br->endSeq);
 							if (data_seg->flags & TH_FIN) {
 								new_br->fin = 1;
 							}
@@ -429,11 +431,11 @@ bool RangeManager::insert_byte_range(seq64_t start_seq, seq64_t end_seq, insert_
 						// New data fits into current range
 						else if (end_seq < cur_br->endSeq) {
 							// Split in the middle
-							new_br = cur_br->split_end(start_seq, cur_br->endSeq);
+							new_br = cur_br->splitEnd(start_seq, cur_br->endSeq);
 							if (data_seg->flags & TH_FIN) {
 								new_br->fin = 1;
 							}
-							ByteRange *new_last = new_br->split_end(end_seq, new_br->endSeq);
+							ByteRange *new_last = new_br->splitEnd(end_seq, new_br->endSeq);
 #ifdef DEBUG
 							if (debug_print) {
 								indent_print("New Range 1      : %s (%llu)\n",
@@ -449,7 +451,7 @@ bool RangeManager::insert_byte_range(seq64_t start_seq, seq64_t end_seq, insert_
 						}
 						// New data spans beyond current range
 						else {
-							new_br = cur_br->split_end(start_seq, cur_br->endSeq);
+							new_br = cur_br->splitEnd(start_seq, cur_br->endSeq);
 							range_received = new_br;
 							insert_more_recursively = 1;
 						}
@@ -498,7 +500,7 @@ bool RangeManager::insert_byte_range(seq64_t start_seq, seq64_t end_seq, insert_
 						}
 						if (insert_more_recursively) {
 							//indent_print("Recursive call2: brIt->endseq: %llu, endseq: %llu\n", brIt->second->endSeq, end_seq);
-							return insert_byte_range(new_br->endSeq, end_seq, itype, data_seg, level +1);
+							return insertByteRange(new_br->endSeq, end_seq, itype, data_seg, level +1);
 						}
 					}// END if (itype != INSERT_SOJOURN)
 					else {
@@ -539,7 +541,7 @@ bool RangeManager::insert_byte_range(seq64_t start_seq, seq64_t end_seq, insert_
 						}
 						if (insert_more_recursively) {
 							//indent_print("Sojourn recursive call2: brIt->endseq: %llu, endseq: %llu\n", cur_br->endSeq, end_seq);
-							return insert_byte_range(cur_br->endSeq, end_seq, itype, data_seg, level +1);
+							return insertByteRange(cur_br->endSeq, end_seq, itype, data_seg, level +1);
 						}
 					}
 					return true;
@@ -573,7 +575,7 @@ bool RangeManager::insert_byte_range(seq64_t start_seq, seq64_t end_seq, insert_
 				if (debug_print) {
 					printf("data_seg->retrans: %d\n", data_seg->retrans);
 					printf("this_is_rdb_data: %d\n", this_is_rdb_data);
-					indent_print("insert_byte_range2 (%llu): (%s) (%s), itype: %d, retrans: %d, is_rdb: %d, SYN: %d, FIN: %d, RST: %d\n",
+					indent_print("insertByteRange2 (%llu): (%s) (%s), itype: %d, retrans: %d, is_rdb: %d, SYN: %d, FIN: %d, RST: %d\n",
 								 end_seq - start_seq,
 								 STR_RELATIVE_SEQNUM_PAIR(start_seq, end_seq), STR_SEQNUM_PAIR(start_seq, end_seq),
 								 itype, data_seg->retrans, data_seg->is_rdb,
@@ -616,7 +618,7 @@ bool RangeManager::insert_byte_range(seq64_t start_seq, seq64_t end_seq, insert_
 			}
 		}
 		else if (itype == INSERT_SOJOURN) {
-			throw std::logic_error("Sojourn not handled 2: in insert_byte_range:"
+			throw std::logic_error("Sojourn not handled 2: in insertByteRange:"
 								   "seq: " + to_string(start_seq) +
 								   ", end seq: " + to_string(end_seq) +
 								   ", Type: " + to_string(itype)
@@ -677,7 +679,7 @@ bool RangeManager::insert_byte_range(seq64_t start_seq, seq64_t end_seq, insert_
 					}
 				}
 				else if (itype == INSERT_SOJOURN) {
-					throw std::logic_error("Sojourn not handled 3: in insert_byte_range:"
+					throw std::logic_error("Sojourn not handled 3: in insertByteRange:"
 										   "seq: " + to_string(start_seq) +
 										   ", end seq: " + to_string(end_seq) +
 										   ", Type: " + to_string(itype)
@@ -725,7 +727,7 @@ bool RangeManager::insert_byte_range(seq64_t start_seq, seq64_t end_seq, insert_
 						if (ranges.rbegin()->second == brIt->second) {
 							// The last range in the map only had pure acks, so we hijack this and add the data to it
 							brIt->second->endSeq = end_seq;
-							brIt->second->update_byte_count();
+							brIt->second->updateByteCount();
 							brIt->second->original_payload_size = brIt->second->byte_count;
 							brIt->second->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_tcp_echo, data_seg->tstamp_pcap, this_is_rdb_data, ST_PKT);
 							return true;
@@ -788,7 +790,7 @@ bool RangeManager::insert_byte_range(seq64_t start_seq, seq64_t end_seq, insert_
 				}
 
 				if (level > RECURSION_LEVEL) {
-					throw std::logic_error("Recurse level too high: " + to_string(RECURSION_LEVEL) + " in insert_byte_range:"
+					throw std::logic_error("Recurse level too high: " + to_string(RECURSION_LEVEL) + " in insertByteRange:"
 										   "seq: " + to_string(start_seq) +
 										   ", start seq: " + to_string(start_seq) +
 										   ", end seq: " + to_string(end_seq) +
@@ -799,12 +801,12 @@ bool RangeManager::insert_byte_range(seq64_t start_seq, seq64_t end_seq, insert_
 				// Recursive call to insert the remaining data
 				//indent_print("Recursive call1: brIt->endseq: %llu, endseq: %llu\n", brIt->second->endSeq, end_seq);
 				//indent_print("tstamp_tcp: %u\n", data_seg->tstamp_tcp);
-				return insert_byte_range(brIt->second->endSeq, end_seq, itype, data_seg, level +1);
+				return insertByteRange(brIt->second->endSeq, end_seq, itype, data_seg, level +1);
 			}
 			// Spans less than the range, split current range
 			else {
 				if (itype != INSERT_SOJOURN) {
-					ByteRange *new_br = brIt->second->split_end(end_seq, brIt->second->endSeq);
+					ByteRange *new_br = brIt->second->splitEnd(end_seq, brIt->second->endSeq);
 #ifdef DEBUG
 					if (debug_print) {
 						indent_print("New range ends in the middle of existing\nByteRange(%s) [%llu]\n", STR_RELATIVE_SEQNUM_PAIR(brIt->second->startSeq, new_br->endSeq), end_seq);
@@ -997,7 +999,7 @@ bool RangeManager::processAck(DataSeg *seg) {
 		}
 
 		/* ACK covers more than this range: ACK this range and continue */
-		if ((ack) > (tmpRange->getEndSeq())) {
+		if (ack > tmpRange->getEndSeq()) {
 			if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
 				cerr << "--------Ack covers more than this range: Continue to next --------" << endl;
 #ifdef DEBUG
@@ -1005,16 +1007,18 @@ bool RangeManager::processAck(DataSeg *seg) {
 				printf("  Covers more than Range(%s)\n", STR_RELATIVE_SEQNUM_PAIR(tmpRange->getStartSeq(), tmpRange->getEndSeq()));
 #endif
 			if (timercmp(&seg->tstamp_pcap, &(tmpRange->sent_tstamp_pcap[0].first), <)) {
-				printf("ACK TIME IS EARLIER THAN SEND TIME!\n");
+				fprintf(stderr, "ACK TIME IS EARLIER THAN SEND TIME!\n");
+				warn_with_file_and_linenum(__FILE__, __LINE__);
 				return false;
 			}
 
 			if (!tmpRange->isAcked()) {
 				tmpRange->insertAckTime(&seg->tstamp_pcap);
+#ifdef DEBUG
 				if (tmpRange->getNumBytes() == 0) {
 					printf("Insert acktime 2 on %s\n", tmpRange->str().c_str());
 				}
-
+#endif
 				ret = true;
 			}
 			highestAckedByteRangeIt = it;
@@ -1022,18 +1026,19 @@ bool RangeManager::processAck(DataSeg *seg) {
 		}
 
 		/* ACK covers only part of this range: split range and return */
-		if (ack > tmpRange->getStartSeq() && ack < (tmpRange->getEndSeq())) {
+		if (ack > tmpRange->getStartSeq() && ack < tmpRange->getEndSeq()) {
 #ifdef DEBUG
 			if (debug_print) {
 				printf("  Covers parts of  Range(%s)\n", STR_RELATIVE_SEQNUM_PAIR(tmpRange->getStartSeq(), tmpRange->getEndSeq()));
 			}
 #endif
-			ByteRange *new_br = tmpRange->split_end(ack, tmpRange->endSeq);
+			ByteRange *new_br = tmpRange->splitEnd(ack, tmpRange->endSeq);
 			tmpRange->insertAckTime(&seg->tstamp_pcap);
-				if (tmpRange->getNumBytes() == 0) {
-					printf("Insert acktime 3 on %s\n", tmpRange->str().c_str());
-				}
-
+#ifdef DEBUG
+			if (tmpRange->getNumBytes() == 0) {
+				printf("Insert acktime 3 on %s\n", tmpRange->str().c_str());
+			}
+#endif
 			tmpRange->tcp_window = seg->window;
 			tmpRange->ack_count++;
 
@@ -1120,7 +1125,7 @@ void RangeManager::genStats(PacketsStats *bs) {
 	int64_t latency, tmp_byte_count;
 	bs->latency.min = bs->packet_length.min = bs->itt.min = (numeric_limits<int64_t>::max)();
 	int dupack_count;
-	PacketStats psTmp;
+	SegmentStats psTmp;
 
 	for (; it != it_end; it++) {
 		// Skip if invalid (negative) latency
@@ -1137,7 +1142,7 @@ void RangeManager::genStats(PacketsStats *bs) {
 			if (it->second->sent_tstamp_pcap[i].second) {
 				if (it->second->sent_tstamp_pcap[i].second == ST_PKT) {
 					assert(it->second->sent_tstamp_pcap[i].second == ST_PKT);
-					psTmp = PacketStats(ST_PKT, conn->getConnKey(), TV_TO_MICSEC(it->second->sent_tstamp_pcap[i].first), tmp_byte_count);
+					psTmp = SegmentStats(ST_PKT, conn->getConnKey(), TV_TO_MICSEC(it->second->sent_tstamp_pcap[i].first), tmp_byte_count);
 					psTmp.sojourn_times = it->second->getSojournTimes();
 					psTmp.ack_latency_usec = it->second->getSendAckTimeDiff(this);
 				}
@@ -1152,14 +1157,14 @@ void RangeManager::genStats(PacketsStats *bs) {
 							tmp_byte_count2 += it_tmp->second->data_retrans_count * it_tmp->second->byte_count;
 						}
 					}
-					psTmp = PacketStats(ST_RTR, conn->getConnKey(), TV_TO_MICSEC(it->second->sent_tstamp_pcap[i].first), tmp_byte_count2);
+					psTmp = SegmentStats(ST_RTR, conn->getConnKey(), TV_TO_MICSEC(it->second->sent_tstamp_pcap[i].first), tmp_byte_count2);
 					//printf("RETRANS: %llu -> %llu\n", tmp_byte_count, tmp_byte_count2);
 				}
 				else if (it->second->sent_tstamp_pcap[i].second == ST_PURE_ACK) {
-					psTmp = PacketStats(ST_PURE_ACK, conn->getConnKey(), TV_TO_MICSEC(it->second->sent_tstamp_pcap[i].first), 0);
+					psTmp = SegmentStats(ST_PURE_ACK, conn->getConnKey(), TV_TO_MICSEC(it->second->sent_tstamp_pcap[i].first), 0);
 				}
 				else if (it->second->sent_tstamp_pcap[i].second == ST_RST) {
-					psTmp = PacketStats(ST_RST, conn->getConnKey(), TV_TO_MICSEC(it->second->sent_tstamp_pcap[i].first), 0);
+					psTmp = SegmentStats(ST_RST, conn->getConnKey(), TV_TO_MICSEC(it->second->sent_tstamp_pcap[i].first), 0);
 				}
 				bs->addPacketStats(psTmp);
 			}
@@ -1331,7 +1336,7 @@ bool negSojTime(ByteRange *br) {
 	return false;
 }
 
-int seq_with_print_range(seq64_t start, seq64_t end, size_t &print_packet_ranges_index) {
+int seqWithPrintRange(seq64_t start, seq64_t end, size_t &print_packet_ranges_index) {
 	while (end > GlobOpts::print_packets_pairs[print_packet_ranges_index].second) {
 		// We are at the last range so we quit printing
 		if (GlobOpts::print_packets_pairs.size() == (print_packet_ranges_index + 1)) {
@@ -1370,7 +1375,7 @@ void RangeManager::printPacketDetails() {
 			continue;
 
 		if (print_packet_ranges) {
-			int ret = seq_with_print_range(it->second->startSeq, it->second->endSeq, print_packet_ranges_index);
+			int ret = seqWithPrintRange(it->second->startSeq, it->second->endSeq, print_packet_ranges_index);
 			if (ret == -1)
 				goto endprint;
 			else if (!ret)
@@ -1387,11 +1392,11 @@ void RangeManager::printPacketDetails() {
 			printf(" %-*llu - %-*llu:", seq_char_len, get_print_seq(it->second->startSeq), seq_char_len, get_print_seq(it->second->endSeq));
 		}
 
-		printf(" snt-pkt:%d, snt-ack:%d, rcv-pkt:%d"
-			   ", sent:%d, rcv:%d, retr-pkt:%d, retr-dta:%d",
-			   it->second->packet_sent_count, it->second->acked_sent,
-			   it->second->packet_received_count, it->second->getDataSentCount(), it->second->getDataReceivedCount(),
-			   it->second->packet_retrans_count, it->second->data_retrans_count);
+		printf(" pkt[snt:%d rtr:%d acks:%d rcv:%d]", it->second->packet_sent_count,
+			   it->second->packet_retrans_count, it->second->acked_sent, it->second->packet_received_count);
+
+		printf(" dta[snt:%d rcv:%d rtr:%d]", it->second->getDataSentCount(), it->second->getDataReceivedCount(),
+			   it->second->data_retrans_count);
 
 		if (GlobOpts::verbose > 1) {
 			if (analysed_rdb_packet_count)
@@ -1405,18 +1410,7 @@ void RangeManager::printPacketDetails() {
 				printf(", rdb-miss: %-3d rdb-hit: %-3d", it->second->rdb_byte_miss, it->second->rdb_byte_hits);
 		}
 
-		int psent = 0;
-		//psent += (it->second->syn || it->second->fin || /*it->second->rst ||*/ it->second->byte_count);
-		psent += (it->second->syn + it->second->rst);
-		//psent += (it->second->syn || it->second->rst || (it->second->byte_count && it->second->packet_sent_count));
-		psent += (!it->second->byte_count ? it->second->fin : 0);
-		psent += !!it->second->byte_count;
-		psent += it->second->data_retrans_count;
-		//psent += it->second->packet_retrans_count;
-		psent += it->second->acked_sent; // Count pure acks
-
-		printf(", psent:%d", psent);
-		printf(", ACKtime:%4d", it->second->getSendAckTimeDiff(this));
+		printf(", ACKtime: %.1f", (double) it->second->getSendAckTimeDiff(this) / 1000.0);
 
 		if (not GlobOpts::sojourn_time_file.empty()) {
 			if (it->second->sojourn_time) {
@@ -1432,28 +1426,40 @@ void RangeManager::printPacketDetails() {
 			}
 		}
 
+#ifdef DEBUG
+		int psent = 0;
+		//psent += (it->second->syn || it->second->fin || /*it->second->rst ||*/ it->second->byte_count);
+		psent += (it->second->syn + it->second->rst);
+		//psent += (it->second->syn || it->second->rst || (it->second->byte_count && it->second->packet_sent_count));
+		psent += (!it->second->byte_count ? it->second->fin : 0);
+		psent += !!it->second->byte_count;
+		psent += it->second->data_retrans_count;
+		//psent += it->second->packet_retrans_count;
+		psent += it->second->acked_sent; // Count pure acks
+
 		if (psent != (it->second->packet_sent_count + it->second->packet_retrans_count + it->second->acked_sent)) {
-			colored_printf(YELLOW, " SENT MISMATCH packet_sent_count: %u != %u (syn: %u, rst: %u, fin: %u, byte_count: %u)", it->second->packet_sent_count, psent,
+			colored_printf(YELLOW, " SENT MISMATCH packet_sent_count: %u != %u (syn: %u, rst: %u, fin: %u, byte_count: %u)", psent,
+						   it->second->packet_sent_count + it->second->packet_retrans_count + it->second->acked_sent,
 						   it->second->syn, it->second->rst, it->second->fin && !it->second->byte_count, it->second->byte_count);
 		}
-
+#endif
 
 		if (GlobOpts::verbose > 1) {
 			if (GlobOpts::withRecv) {
 				printf(" RecvDiff: %4ld ", (it->second->getRecvDiff() - lowestRecvDiff));
 			}
 			if (GlobOpts::verbose) {
-				printf(" (%4ld) ", it->second->getSendAckTimeDiff(this) - (it->second->getRecvDiff() - lowestRecvDiff));
+				printf(" (%4ld)", it->second->getSendAckTimeDiff(this) - (it->second->getRecvDiff() - lowestRecvDiff));
 			}
 		}
 
 		if (it->second->syn || it->second->rst || it->second->fin) {
 			if (it->second->syn)
-				colored_printf(YELLOW, "SYN(%d) ", it->second->syn);
+				colored_printf(YELLOW, " SYN(%d)", it->second->syn);
 			if (it->second->rst)
-				colored_printf(YELLOW, "RST(%d) ", it->second->rst);
+				colored_printf(YELLOW, " RST(%d)", it->second->rst);
 			if (it->second->fin)
-				colored_printf(YELLOW, "FIN(%d)", it->second->fin);
+				colored_printf(YELLOW, " FIN(%d)", it->second->fin);
 		}
 
 		if (GlobOpts::withRecv) {
@@ -1493,14 +1499,14 @@ void RangeManager::calculateRealLoss(map<seq64_t, ByteRange*>::iterator brIt, ma
 		index++;
 
 		if (GlobOpts::withRecv) {
-			bool ret = brIt->second->match_received_type();
+			bool ret = brIt->second->matchReceivedType();
 			if (ret == false) {
 				if (index < (ranges.size() * (1 - loss_and_end_limit))) {
 					match_fails_before_end++;
 					colored_printf(YELLOW, "Failed to match %s (%s) (index: %llu) on %s\n",
 								   STR_RELATIVE_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq),
 								   STR_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq), index, conn->getConnKey().c_str());
-					brIt->second->print_tstamps_tcp();
+					brIt->second->printTstampsTcp();
 				}
 				else
 					match_fails_at_end++;
@@ -1566,7 +1572,7 @@ void RangeManager::calculateRealLoss(map<seq64_t, ByteRange*>::iterator brIt, ma
 		analysed_packet_sent_count += !brIt->second->byte_count ? brIt->second->fin : 0;
 
 		analysed_packet_sent_count += !!brIt->second->byte_count;
-		analysed_max_range_payload = max(analysed_max_range_payload, brIt->second->byte_count);
+		analysed_max_range_payload = max(analysed_max_range_payload, brIt->second->original_payload_size);
 
 		//analysed_packet_sent_count += brIt->second->packet_retrans_count;
 		analysed_packet_sent_count += brIt->second->data_retrans_count;
@@ -1681,7 +1687,7 @@ void RangeManager::registerRecvDiffs() {
 		}
 
 		/* Calculate diff and check for lowest value */
-		it->second->match_received_type();
+		it->second->matchReceivedType();
 		it->second->calculateRecvDiff(last_app_layer_tstamp);
 	}
 
@@ -1818,7 +1824,7 @@ void RangeManager::makeByteLatencyVariationCDF() {
 }
 
 
-void RangeManager::writeSentTimesAndQueueingDelayVariance(const uint64_t first_tstamp, vector<ofstream*> streams) {
+void RangeManager::writeSentTimesAndQueueingDelayVariance(const uint64_t first_tstamp, vector<csv::ofstream*> streams) {
 	map<seq64_t, ByteRange*>::iterator it, it_end;
 	it = analyse_range_start;
 	it_end = analyse_range_end;
@@ -1832,8 +1838,8 @@ void RangeManager::writeSentTimesAndQueueingDelayVariance(const uint64_t first_t
 		if (diff >= 0) {
 			LatencyItem lat(((uint64_t) ts) - first_tstamp, diff, connKey);
 
-			for (ofstream* stream : streams)
-				*stream << lat << endl;
+			for (csv::ofstream* stream : streams)
+				*stream << lat << NEWLINE;
 		}
 	}
 }
@@ -1871,13 +1877,13 @@ LossInterval& LossInterval::operator+=(const LossInterval& rhs) {
 /*
  * Set total values for the loss interval
  */
-void LossInterval::add_total(double ranges, double all_bytes, double new_bytes) {
+void LossInterval::addTotal(double ranges, double all_bytes, double new_bytes) {
 	tot_cnt_bytes += ranges;
 	tot_all_bytes += all_bytes;
 	tot_new_bytes += new_bytes;
 }
 
-static inline uint64_t interval_idx(const timeval& ts, uint64_t first_tstamp) {
+static inline uint64_t intervalIdx(const timeval& ts, uint64_t first_tstamp) {
 	uint64_t relative_ts = TV_TO_MS(ts) - first_tstamp;
 	return relative_ts / GlobOpts::lossAggrMs;
 }
@@ -1903,7 +1909,7 @@ void RangeManager::calculateLossGroupedByInterval(const uint64_t first_tstamp, v
 		sentEnd = range->second->sent_tstamp_pcap.end();
 
 		if (sentIt != sentEnd && range->second->packet_sent_count > 0) {
-			uint64_t bucket_idx = interval_idx((*sentIt).first, first_tstamp);
+			uint64_t bucket_idx = intervalIdx((*sentIt).first, first_tstamp);
 
 			while (bucket_idx >= tc.size()) {
 				tc.push_back(0);
@@ -1917,7 +1923,7 @@ void RangeManager::calculateLossGroupedByInterval(const uint64_t first_tstamp, v
 		// Place sent counts and byte counts in the right bucket
 		for (; sentIt != sentEnd; ++sentIt)
 		{
-			uint64_t bucket_idx = interval_idx((*sentIt).first, first_tstamp);
+			uint64_t bucket_idx = intervalIdx((*sentIt).first, first_tstamp);
 
 			while (bucket_idx >= tc.size()) {
 				tc.push_back(0);
@@ -1938,7 +1944,7 @@ void RangeManager::calculateLossGroupedByInterval(const uint64_t first_tstamp, v
 		if (lossIt != lossEnd &&
 			range->second->packet_sent_count > 0 &&
 			lossIt->second == range->second->sent_tstamp_pcap[0].first) {
-			uint64_t bucket_idx = interval_idx(range->second->sent_tstamp_pcap[0].first, first_tstamp);
+			uint64_t bucket_idx = intervalIdx(range->second->sent_tstamp_pcap[0].first, first_tstamp);
 
 			while (bucket_idx >= loss.size()) {
 				loss.push_back(LossInterval(0, 0, 0));
@@ -1949,7 +1955,7 @@ void RangeManager::calculateLossGroupedByInterval(const uint64_t first_tstamp, v
 
 		// Place loss values in the right bucket
 		for (; lossIt != lossEnd; ++lossIt) {
-			uint64_t bucket_idx = interval_idx(lossIt->second, first_tstamp);
+			uint64_t bucket_idx = intervalIdx(lossIt->second, first_tstamp);
 
 			while (bucket_idx >= loss.size()) {
 				loss.push_back(LossInterval(0, 0, 0));
@@ -1967,8 +1973,8 @@ void RangeManager::calculateLossGroupedByInterval(const uint64_t first_tstamp, v
 	// Set total values
 	for (uint64_t idx = 0; idx < num_buckets; ++idx) {
 		all_loss[idx] += loss[idx];
-		all_loss[idx].add_total(tc[idx], tb[idx], tn[idx]);
-		loss[idx].add_total(tc[idx], tb[idx], tn[idx]);
+		all_loss[idx].addTotal(tc[idx], tb[idx], tn[idx]);
+		loss[idx].addTotal(tc[idx], tb[idx], tn[idx]);
 	}
 }
 

@@ -356,7 +356,7 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 	sd.data.payloadSize  = sd.totalSize - (ipHdrLen + tcpHdrLen + SIZE_ETHERNET);
 	sd.data.tstamp_pcap  = header->ts;
 	sd.data.seq_absolute = ntohl(tcp->th_seq);
-	sd.data.seq          = get_relative_sequence_number(sd.data.seq_absolute, tmpConn->rm->firstSeq, tmpConn->lastLargestEndSeq, tmpConn->lastLargestSeqAbsolute, tmpConn);
+	sd.data.seq          = getRelativeSequenceNumber(sd.data.seq_absolute, tmpConn->rm->firstSeq, tmpConn->lastLargestEndSeq, tmpConn->lastLargestSeqAbsolute, tmpConn);
 	sd.data.endSeq       = sd.data.seq + sd.data.payloadSize;
 	sd.data.retrans      = false;
 	sd.data.is_rdb       = false;
@@ -426,13 +426,13 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
  *
  * Returns the relative sequence number or std::numeric_limits<ulong>::max() if it failed.
  **/
-seq64_t Dump::get_relative_sequence_number(seq32_t seq, seq32_t firstSeq, seq64_t largestSeq, seq32_t largestSeqAbsolute, Connection *conn) {
+seq64_t Dump::getRelativeSequenceNumber(seq32_t seq, seq32_t firstSeq, seq64_t largestSeq, seq32_t largestSeqAbsolute, Connection *conn) {
 	ullint_t wrap_index;
 	seq64_t seq_relative;
 	wrap_index = firstSeq + largestSeq;
 	wrap_index += 1;
 
-	//printf("get_relative_sequence_number: seq: %u, firstSeq: %u, largestSeq: %llu, largestSeqAbsolute: %u, wrap_index: %llu\n", seq, firstSeq, largestSeq, largestSeqAbsolute, wrap_index);
+	//printf("getRelativeSequenceNumber: seq: %u, firstSeq: %u, largestSeq: %llu, largestSeqAbsolute: %u, wrap_index: %llu\n", seq, firstSeq, largestSeq, largestSeqAbsolute, wrap_index);
 	// Either seq has wrapped, or a retrans (or maybe reorder if netem is run on sender machine)
 	if (seq < largestSeqAbsolute) {
 		// This is an earlier sequence number
@@ -470,7 +470,7 @@ seq64_t Dump::get_relative_sequence_number(seq32_t seq, seq32_t firstSeq, seq64_
 	if (seq_relative > 9999999999) {// TODO: Do a better check than this, e.g. checking for distance of largestSeq and seq_relative > a large number
 		// use stderr for error messages for crying out loud!!!!!
 		//fprintf(stderr, "wrap_index: %lu\n", wrap_index);
-		//fprintf(stderr, "\nget_relative_sequence_number: seq: %u, firstSeq: %u, largestSeq: %lu, largestSeqAbsolute: %u\n", seq, firstSeq, largestSeq, largestSeqAbsolute);
+		//fprintf(stderr, "\ngetRelativeSequenceNumber: seq: %u, firstSeq: %u, largestSeq: %lu, largestSeqAbsolute: %u\n", seq, firstSeq, largestSeq, largestSeqAbsolute);
 		//fprintf(stderr, "seq_relative: %lu\n", seq_relative);
 		//fprintf(stderr, "Conn: %s\n", conn->getConnKey().c_str());
 
@@ -520,7 +520,7 @@ void Dump::processAcks(const pcap_pkthdr* header, const u_char *data) {
 
 	DataSeg seg;
 	memset(&seg, 0, sizeof(DataSeg));
-	seg.ack         = get_relative_sequence_number(ack, tmpConn->rm->firstSeq, tmpConn->lastLargestAckSeq, tmpConn->lastLargestAckSeqAbsolute, tmpConn);
+	seg.ack         = getRelativeSequenceNumber(ack, tmpConn->rm->firstSeq, tmpConn->lastLargestAckSeq, tmpConn->lastLargestAckSeqAbsolute, tmpConn);
 	seg.tstamp_pcap = header->ts;
 	seg.window = ntohs(tcp->th_win);
 	seg.flags  = tcp->th_flags;
@@ -681,7 +681,7 @@ void Dump::processRecvd(const pcap_pkthdr* header, const u_char *data) {
 	sd.tcpOptionLen      = tcpHdrLen - 20;
 	sd.data.payloadSize  = ipSize - (ipHdrLen + tcpHdrLen);
 	sd.data.seq_absolute = ntohl(tcp->th_seq);
-	sd.data.seq          = get_relative_sequence_number(sd.data.seq_absolute, tmpConn->rm->firstSeq, tmpConn->lastLargestRecvEndSeq, tmpConn->lastLargestRecvSeqAbsolute, tmpConn);
+	sd.data.seq          = getRelativeSequenceNumber(sd.data.seq_absolute, tmpConn->rm->firstSeq, tmpConn->lastLargestRecvEndSeq, tmpConn->lastLargestRecvSeqAbsolute, tmpConn);
 	sd.data.endSeq       = sd.data.seq + sd.data.payloadSize;
 	sd.data.tstamp_pcap  = header->ts;
 	sd.data.is_rdb       = false;
@@ -775,7 +775,7 @@ void Dump::calculateSojournTime() {
 
 		DataSeg tmpSeg;
 		tmpSeg.seq_absolute = max(tmp1, tmp2);
-		tmpSeg.seq = get_relative_sequence_number(tmpSeg.seq_absolute, tmpConn->rm->firstSeq,
+		tmpSeg.seq = getRelativeSequenceNumber(tmpSeg.seq_absolute, tmpConn->rm->firstSeq,
 												  tmpConn->lastLargestSojournEndSeq,
 												  tmpConn->lastLargestSojournSeqAbsolute, tmpConn);
 		tmpSeg.payloadSize = std::stoul(size);
@@ -790,7 +790,7 @@ void Dump::calculateSojournTime() {
 		*/
 
 		try {
-			bool ret = tmpConn->rm->insert_byte_range(tmpSeg.seq, tmpSeg.endSeq, INSERT_SOJOURN, &tmpSeg, 0);
+			bool ret = tmpConn->rm->insertByteRange(tmpSeg.seq, tmpSeg.endSeq, INSERT_SOJOURN, &tmpSeg, 0);
 			if (!ret) {
 				break;
 			}

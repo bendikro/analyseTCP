@@ -141,6 +141,8 @@ IF (TESTS)
   TARGET_LINK_LIBRARIES (test pcap)
 ENDIF(TESTS)
 
+SET (INCLUDE_DIRS include)
+
 INCLUDE_DIRECTORIES (${INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR})
 
 # Distclean functionality (Remove cmake generated files)

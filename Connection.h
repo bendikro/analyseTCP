@@ -3,6 +3,8 @@
 
 #include "util.h"
 #include "RangeManager.h"
+#include "minicsv.h"
+
 #include <cmath>
 #include <netinet/in.h>
 
@@ -115,7 +117,7 @@ public:
 	void calculateLatencyVariation() { rm->calculateLatencyVariation(); }
 	void makeByteLatencyVariationCDF() { rm->makeByteLatencyVariationCDF(); }
 	void writeByteLatencyVariationCDF(ofstream *stream);
-	void writeSentTimesAndQueueingDelayVariance(const uint64_t first_tstamp, vector<ofstream*> streams) { rm->writeSentTimesAndQueueingDelayVariance(first_tstamp, streams); }
+	void writeSentTimesAndQueueingDelayVariance(const uint64_t first_tstamp, vector<csv::ofstream*> streams) { rm->writeSentTimesAndQueueingDelayVariance(first_tstamp, streams); }
 	void genAckLatencyData(long first_tstamp, vector<SPNS::shared_ptr<vector <LatencyItem> > > &diff_times) {
 		rm->genAckLatencyData(first_tstamp, diff_times, getConnKey());
 	}
@@ -124,11 +126,12 @@ public:
 	string getConnKey() { return connKey; }
 	string getSenderKey() { return senderKey; }
 	string getReceiverKey() { return receiverKey; }
-	void set_analyse_range_interval();
+	void setAnalyseRangeInterval();
 	void calculateRetransAndRDBStats();
 	uint32_t getDuration(bool analyse_range_duration);
 
 	void registerPacketSize(const timeval& first_tstamp_in_dump, const timeval& pkt_tstamp, const ullint_t pkt_size, const uint16_t payloadSize);
-	void writePacketByteCountAndITT(vector<ofstream*> streams);
+    void writePacketByteCountAndITT(vector<csv::ofstream*> streams);
 };
+
 #endif /* CONNECTION_H */

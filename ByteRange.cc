@@ -14,7 +14,7 @@ double getTimeInterval(ByteRange *start, ByteRange *end) {
 	return time;
 }
 
-bool ByteRange::match_received_type(bool print) {
+bool ByteRange::matchReceivedType(bool print) {
 	if (print) {
 		printf("recv timestamp: %u ", received_tstamp_tcp);
 		printf("tstamps: %lu, rdb-stamps: %lu", tstamps_tcp.size(), rdb_tstamps_tcp.size());
@@ -56,7 +56,7 @@ bool ByteRange::match_received_type(bool print) {
 	return false;
 }
 
-void ByteRange::print_tstamps_tcp() {
+void ByteRange::printTstampsTcp() {
 	printf("recv timestamp: %u ", received_tstamp_tcp);
 	printf("tstamps_tcp: %lu, rdb-stamps: %lu\n", tstamps_tcp.size(), rdb_tstamps_tcp.size());
 
@@ -69,7 +69,7 @@ void ByteRange::print_tstamps_tcp() {
 	printf("\n");
 }
 
-void ByteRange::print_tstamps_pcap() {
+void ByteRange::printTstampsPcap() {
 	ulong acktime_3 = ackTime.tv_sec * 1000000 + ackTime.tv_usec;
 	printf("acked timestamp: %lu ", acktime_3);
 
@@ -104,7 +104,7 @@ bool ByteRange::addSegmentEnteredKernelTime(seq64_t seq, timeval &tv) {
 		size_t print_packet_ranges_index = 0;
 		//fprintf(stderr, "ByteRange seq_with_print_range() type: %d\n", sent_tstamp_pcap[sent_data_pkt_pcap_index].second);
 		if (GlobOpts::print_packets_pairs.size() == 0 ||
-			seq_with_print_range(startSeq, endSeq, print_packet_ranges_index) == 1) {
+			seqWithPrintRange(startSeq, endSeq, print_packet_ranges_index) == 1) {
 			colored_printf(RED, "INSERT INCORRECT SOJOURN TIME for ByteRange(%llu, %llu)\n"
 						   "Sent time '%s' is before sojourn time '%s'\n", startSeq, endSeq,
 						   buf1, buf2);

@@ -3,9 +3,11 @@
 
 #include "common.h"
 #include <math.h>
+#include "minicsv.h"
 
 // A loss value object, used for aggregating loss over intervals
-struct LossInterval {
+class  LossInterval {
+public:
 	double cnt_bytes;		// number of ranges lost within interval
 	double all_bytes;		// number of bytes (incl. retrans) lost within interval
 	double new_bytes;		// number of bytes with new data lost within interval
@@ -19,23 +21,26 @@ struct LossInterval {
 	{ }
 
 	LossInterval& operator+=(const LossInterval& rhs);
-	void add_total(double ranges, double all_bytes, double new_bytes);
+	static void writeHeader(csv::ofstream& stream);
+	void addTotal(double ranges, double all_bytes, double new_bytes);
+
 };
-ofstream& operator<<(ofstream& ouput_stream, const LossInterval& value);
+csv::ofstream& operator<<(csv::ofstream& stream, LossInterval& v);
 
 
-struct LatencyItem {
+class LatencyItem {
+public:
 	long time_ms;
 	int latency;
 	string stream_id;
 	LatencyItem(long time_ms, int latency, string stream_id)
 		: time_ms(time_ms), latency(latency), stream_id(stream_id) { }
 
-	string str() const;
-	string header() { return "time,latency,stream_id"; }
-	operator string() const { return str(); }
+	static void writeHeader(csv::ofstream& stream) {
+		stream << "time" << "latency" << "stream_id" << NEWLINE;
+	}
 };
-ofstream& operator<<(ofstream& stream, const LatencyItem& lat);
+csv::ofstream& operator<<(csv::ofstream& stream, LatencyItem& lat);
 
 void update_vectors_size(vector<SPNS::shared_ptr<vector <LatencyItem> > > &vectors, ulong count);
 
@@ -152,25 +157,40 @@ public:
 	uint64_t send_time_us;
 	uint16_t size;
 	uint16_t itt;
-	vector< pair<int, int> > sojourn_times; // byte count, sojourn time
 	int ack_latency_usec;
 	PacketStats() {}
-	PacketStats(sent_type type, string connKey, uint64_t time, uint16_t s) : s_type(type), stream_id(connKey), send_time_us(time), size(s), itt(0) {}
+	PacketStats(sent_type type, string connKey, uint64_t time, uint16_t s)
+		: s_type(type), stream_id(connKey), send_time_us(time), size(s), itt(0)
+	{}
+	static void writeHeader(csv::ofstream& stream);
 
-	bool operator < (const PacketStats& other) const {
+	bool operator<(const PacketStats& other) const {
 		return (send_time_us < other.send_time_us);
 	}
-	string str() const;
-	string perSegmentStr() const;
-	operator string() const { return str(); }
 };
+
+csv::ofstream& operator<<(csv::ofstream& stream, PacketStats& s);
+
+class SegmentStats : public PacketStats
+{
+public:
+	vector< pair<int, int> > sojourn_times; // byte count, sojourn time
+
+	SegmentStats() {}
+	SegmentStats(sent_type type, string connKey, uint64_t time, uint16_t s)
+		: PacketStats(type, connKey, time, s)
+	{}
+	static void writeHeader(csv::ofstream& stream);
+};
+
+csv::ofstream& operator<<(csv::ofstream& stream, SegmentStats& s);
 
 /*
   Used only for producing statistics for terminal output
 */
 class PacketsStats : public StreamStats {
 public:
-	vector<PacketStats> packet_stats;
+	vector<SegmentStats> packet_stats;
 	vector<int> retrans;
 	vector<int> dupacks;
 
@@ -181,7 +201,7 @@ public:
 		StreamStats::init();
 	}
 
-	void addPacketStats(PacketStats &ps) {
+	void addPacketStats(SegmentStats &ps) {
 		packet_stats.push_back(ps);
 	}
 
@@ -191,6 +211,7 @@ public:
 
 	PacketsStats(bool _is_aggregate = false) : StreamStats(_is_aggregate) {}
 };
+
 
 /*
   Used only for producing statistics for terminal output
@@ -218,5 +239,21 @@ public:
 	}
 	void add(PacketsStats &bs);
 };
+
+
+/* Forward declarations */
+class Connection;
+
+class ConnCSVItem {
+public:
+	Connection *conn;
+	ConnStats *cs;
+	PacketsStats *ps;
+
+	ConnCSVItem(Connection &c, ConnStats &cstats, PacketsStats &p) : conn(&c), cs(&cstats), ps(&p) {}
+	static void writeHeader(csv::ofstream& stream);
+};
+csv::ofstream& operator<<(csv::ofstream& stream, ConnCSVItem& val);
+
 
 #endif /* STATISTICS_COMMON_H */

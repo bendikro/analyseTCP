@@ -1,6 +1,8 @@
 #ifndef STATISTICS_H
 #define STATISTICS_H
 
+#include "minicsv.h"
+
 class Dump;
 class Connection;
 
@@ -15,6 +17,7 @@ public:
 	virtual string getAggrFilename() = 0;
 	virtual bool getWriteHeader() = 0;
 	virtual string getHeader() = 0;
+	virtual void writeHeader(csv::ofstream& csv) = 0;
 };
 
 class StatsWriterBase : public StatsWriter
@@ -26,6 +29,7 @@ public:
 	string filenameID;
 	virtual bool getWriteHeader() { return write_header; }
 	virtual string getHeader() { return header; }
+	virtual void writeHeader(csv::ofstream& stream) { stream << getHeader(); }
 
 	virtual string getAggrFilename() {
 		return GlobOpts::prefix + filenameID + aggrPostfix;
@@ -34,11 +38,10 @@ public:
 		return GlobOpts::prefix + filenameID + "-" + conn.getConnKey() + ".dat";
 	}
 
-	ofstream* newStream(string filename) {
-		ofstream* stream = new ofstream;
-		stream->open(filename.c_str(), ios::out);
+	csv::ofstream* newOutStream(string filename) {
+        csv::ofstream* stream = new csv::ofstream(filename);
 		if (getWriteHeader())
-			*stream << getHeader() << endl;
+			writeHeader(*stream);
 		return stream;
 	}
 
@@ -55,16 +58,27 @@ public:
 	{}
 };
 
+class AggrStatsWriterBase : public StatsWriterBase
+{
+public:
+	csv::ofstream* stream;
+	virtual void begin() {
+		stream = newOutStream(getAggrFilename());
+	}
+	virtual void end() {
+		delete stream;
+	}
+};
 
 class StreamStatsWriterBase : public StatsWriterBase
 {
 public:
-	ofstream* aggrStream;
-	virtual void statsFunc(Connection &conn, vector<ofstream*> streams) = 0;
+	csv::ofstream* aggrStream;
+	virtual void statsFunc(Connection &conn, vector<csv::ofstream*> streams) = 0;
 
 	virtual void begin() {
 		if (GlobOpts::aggregate) {
-			aggrStream = newStream(getAggrFilename());
+			aggrStream = newOutStream(getAggrFilename());
 		}
 	}
 	virtual void end() {
@@ -74,13 +88,13 @@ public:
 	}
 
 	virtual void writeStats(Connection &conn) {
-		vector<ofstream*> streams;
-		ofstream* connStream;
+		vector<csv::ofstream*> streams;
+		csv::ofstream* connStream;
 		if (GlobOpts::aggregate) {
 			streams.push_back(aggrStream);
 		}
 		if (!GlobOpts::aggOnly) {
-			connStream = newStream(getConnFilename(conn));
+			connStream = newOutStream(getConnFilename(conn));
 			streams.push_back(connStream);
 		}
 		statsFunc(conn, streams);
@@ -104,15 +118,12 @@ public:
 
 	void writePacketByteCountAndITT();
 	void writeAckLatency();
-	void write_loss_to_file();
-	void writeITT(ofstream& stream, vector<PacketStats>& sent_times);
 	void writeByteLatencyVariationCDF();
 	void writeAggByteLatencyVariationCDF();
 	void writeSentTimesAndQueueingDelayVariance();
 	void writeByteCountGroupedByInterval(); // throughput
 
 	void writeStatisticsFiles(StatsWriter &conf);
-	void writeStatisticsFiles2(StatsWriter &conf);
 	void writeConnStats();
 	void writeLossStats();
 	void writePerPacketStats();

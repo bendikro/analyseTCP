@@ -1,6 +1,7 @@
 #include "common.h"
 #include "statistics_common.h"
 #include "color_print.h"
+#include "Connection.h"
 
 GlobStats globStats;
 
@@ -10,35 +11,9 @@ map<const long, int> GlobStats::byteLatencyVariationCDFValues;
 /*****************************************
  * LatencyItem
  *****************************************/
-string LatencyItem::str() const {
-	ostringstream buffer;
-	buffer << time_ms << "," << latency << "," << stream_id;
-	return buffer.str();
-}
-
-ofstream& operator<<(ofstream& stream, const LatencyItem& lat) {
-	stream << lat.str();
- 	return stream;
-}
-
-string PacketStats::str() const {
-	ostringstream buffer;
-	buffer << stream_id << "," << send_time_us << "," << itt << "," << size;
-	return buffer.str();
-}
-
-string PacketStats::perSegmentStr() const {
-	ostringstream buffer;
-	//printf("sojourn_times: %ld, type: %d\n", sojourn_times.size(), s_type);
-	if (s_type != ST_PKT) {
-		//printf("perSegmentStr skipping type: %d\n", s_type);
-		return string();
-	}
-	for (ulong i = 0; i < sojourn_times.size(); i++) {
-		buffer << stream_id << "," << send_time_us << "," << sojourn_times[i].first << "," << sojourn_times[i].second <<
-			"," << ack_latency_usec << "," << sojourn_times[i].second + ack_latency_usec << endl;
-	}
-	return buffer.str();
+csv::ofstream& operator<<(csv::ofstream& stream, LatencyItem& lat) {
+	stream << lat.time_ms << lat.latency << lat.stream_id;
+	return stream;
 }
 
 void update_vectors_size(vector<SPNS::shared_ptr<vector <LatencyItem> > > &vectors, ulong count) {
@@ -47,56 +22,180 @@ void update_vectors_size(vector<SPNS::shared_ptr<vector <LatencyItem> > > &vecto
 	}
 }
 
- /*
-  * Output a loss interval value to an output file stream
-  */
- ofstream& operator<<(ofstream& s, const LossInterval& v) {
- 	// total sent during interval
- 	s << v.tot_cnt_bytes << ",";
- 	s << v.tot_all_bytes << ",";
- 	s << (v.tot_all_bytes - v.tot_new_bytes) << ",";
- 	s << v.tot_new_bytes << ",";
+/*****************************************
+ * PacketStats
+ *****************************************/
+void PacketStats::writeHeader(csv::ofstream& stream) {
+	stream << "stream_id"
+		   << "time"
+		   << "itt"
+		   << "payload_bytes"
+		   << NEWLINE;
+}
 
- 	// total lost during interval
- 	s << v.cnt_bytes << ",";
-     s << v.all_bytes << ",";
- 	s << (v.all_bytes - v.new_bytes) << ",";
- 	s << v.new_bytes << ",";
+csv::ofstream& operator<<(csv::ofstream& stream, PacketStats& s) {
+	stream << s.stream_id
+		   << s.send_time_us
+		   << s.itt
+		   << s.size
+		   << NEWLINE;
+	return stream;
+}
 
- 	// total lost relative to sent within interval
- 	if (v.tot_cnt_bytes != 0)
- 		s << (v.cnt_bytes / v.tot_cnt_bytes) << ",";
- 	else
- 		s << 0 << ",";
+/*****************************************
+ * SegmentStats
+ *****************************************/
+void SegmentStats::writeHeader(csv::ofstream& stream) {
+	stream << "stream_id"
+		   << "time"
+		   << "payload_bytes"
+		   << "sojourn_time"
+		   << "ack_latency"
+		   << "sojourn_and_ack_latency"
+		   << NEWLINE;
+}
 
- 	if (v.tot_all_bytes != 0)
- 		s << (v.all_bytes / v.tot_all_bytes) << ",";
- 	else
- 		s << 0 << ",";
+csv::ofstream& operator<<(csv::ofstream& stream, SegmentStats& s) {
+	if (s.s_type == ST_PKT) {
+		for (ulong i = 0; i < s.sojourn_times.size(); i++) {
+			stream << s.stream_id
+				   << s.send_time_us
+				   << s.sojourn_times[i].first
+				   << s.sojourn_times[i].second
+				   << s.ack_latency_usec
+				   << s.sojourn_times[i].second + s.ack_latency_usec
+				   << NEWLINE;
+		}
+	}
+	return stream;
+}
 
- 	if ((v.tot_all_bytes - v.tot_new_bytes) != 0)
- 		s << ((v.all_bytes - v.new_bytes) / (v.tot_all_bytes - v.tot_new_bytes)) << ",";
- 	else
- 		s << 0 << ",";
+/*****************************************
+ * ConnCSVItem
+ *****************************************/
 
- 	if (v.tot_new_bytes != 0)
- 		s << (v.new_bytes / v.tot_new_bytes) << ",";
- 	else
- 		s << 0 << ",";
+void ConnCSVItem::writeHeader(csv::ofstream& csv) {
+	csv << "stream_id"
+		<< "Total packets sent (adj)"
+		<< "Total packets sent (dump)"
+		<< "Total data packets sent (adj)"
+		<< "Total data packets sent (dump)"
+		<< "Total pure acks (no payload)"
+		<< "SYN packets sent"
+		<< "FIN packets sent"
+		<< "RST packets sent"
+		<< "Number of retransmissions"
+		<< "Number of packets with bundled segments"
+		<< "Number of packets with redundant data"
+		<< "Number of received acks"
+		<< "Total bytes sent (payload)"
+		<< "Number of unique bytes"
+		<< "Number of retransmitted bytes"
+		<< "Redundant bytes (bytes already sent)"
+		<< "Estimated loss rate based on retransmission"
+		<< "Based on sent pkts (adj)"
+		<< "Based on sent pkts (dump)"
+		<< NEWLINE;
+}
 
- 	// total lost relative to lost within interval
- 	if (v.all_bytes != 0)
- 		s << ((v.all_bytes - v.new_bytes) / v.all_bytes) << ",";
- 	else
- 		s << 0 << ",";
 
- 	if (v.all_bytes != 0)
- 		s << (v.new_bytes / v.all_bytes);
- 	else
- 		s << 0;
+csv::ofstream& operator<<(csv::ofstream& os, ConnCSVItem& val)
+{
+	os << val.conn->getConnKey()
+	   << val.conn->getDuration(true)
+	   << val.cs->nrPacketsSent
+	   << val.cs->nrPacketsSentFoundInDump
+	   << val.cs->nrDataPacketsSent
+	   << val.cs->nrDataPacketsSent - (val.cs->nrPacketsSent - val.cs->nrPacketsSentFoundInDump)
+	   << val.cs->pureAcksCount
+	   << val.cs->synCount
+	   << val.cs->finCount
+	   << val.cs->rstCount
+	   << val.cs->nrRetrans
+	   << val.cs->bundleCount
+	   << val.cs->nrRetrans - val.cs->nrRetransNoPayload + val.cs->bundleCount
+	   << val.cs->ackCount
+	   << val.cs->totBytesSent
+	   << val.cs->totUniqueBytesSent
+	   << val.cs->totRetransBytesSent
+	   << val.cs->totBytesSent - val.cs->totUniqueBytesSent
+	   << safe_div((val.cs->totBytesSent - val.cs->totUniqueBytesSent), val.cs->totBytesSent) * 100
+	   << NEWLINE;
+	return os;
+}
 
- 	return s;
- }
+
+/*****************************************
+ * LossInterval
+ *****************************************/
+void LossInterval::writeHeader(csv::ofstream& stream) {
+	stream << "interval"
+		   << "ranges_sent"
+		   << "all_bytes_sent"
+		   << "old_bytes_sent"
+		   << "new_bytes_sent"
+		   << "ranges_lost"
+		   << "all_bytes_lost"
+		   << "old_bytes_lost"
+		   << "new_bytes_lost"
+		   << "ranges_lost_relative_to_interval"
+		   << "all_bytes_lost_relative_to_interval"
+		   << "old_bytes_lost_relative_to_interval"
+		   << "new_bytes_lost_relative_to_interval"
+		   << "old_bytes_lost_relative_to_all_bytes_lost"
+		   << "new_bytes_lost_relative_to_all_bytes_lost"
+		   << "ranges_lost_relative_to_total"
+		   << "all_bytes_lost_relative_to_total"
+		   << NEWLINE;
+}
+
+csv::ofstream& operator<<(csv::ofstream& s, LossInterval& v) {
+	// total sent during interval
+	s << v.tot_cnt_bytes;
+	s << v.tot_all_bytes;
+	s << (v.tot_all_bytes - v.tot_new_bytes);
+	s << v.tot_new_bytes;
+
+	// total lost during interval
+	s << v.cnt_bytes;
+	s << v.all_bytes;
+	s << (v.all_bytes - v.new_bytes);
+	s << v.new_bytes;
+
+	// total lost relative to sent within interval
+	if (v.tot_cnt_bytes != 0)
+		s << (v.cnt_bytes / v.tot_cnt_bytes);
+	else
+		s << 0;
+
+	if (v.tot_all_bytes != 0)
+		s << (v.all_bytes / v.tot_all_bytes);
+	else
+		s << 0;
+
+	if ((v.tot_all_bytes - v.tot_new_bytes) != 0)
+		s << ((v.all_bytes - v.new_bytes) / (v.tot_all_bytes - v.tot_new_bytes));
+	else
+		s << 0;
+
+	if (v.tot_new_bytes != 0)
+		s << (v.new_bytes / v.tot_new_bytes);
+	else
+		s << 0;
+
+	// total lost relative to lost within interval
+	if (v.all_bytes != 0)
+		s << ((v.all_bytes - v.new_bytes) / v.all_bytes);
+	else
+		s << 0;
+
+	if (v.all_bytes != 0)
+		s << (v.new_bytes / v.all_bytes);
+	else
+		s << 0;
+
+	return s;
+}
 
 
  /*****************************************

@@ -64,7 +64,7 @@ public:
 		acked = 0;
 		ack_count = 0;
 		send_tcp_stamp_recv_index = 0;
-		update_byte_count();
+		updateByteCount();
 		original_payload_size = byte_count;
 		packet_sent_count = 0;
 		packet_received_count = 0;
@@ -135,12 +135,12 @@ public:
 		lost_tstamps_tcp.push_back(pair<uint32_t, timeval>(tcp_tsval, tstamp_pcap));
 	}
 
-	void update_byte_count() {
+	void updateByteCount() {
 		byte_count = endSeq - startSeq;
 	}
 
 	// Split and make a new range at the end
-	ByteRange* split_end(seq64_t start, seq64_t end) {
+	ByteRange* splitEnd(seq64_t start, seq64_t end) {
 		endSeq = start;
 		return split(start, end);
 	}
@@ -156,15 +156,15 @@ public:
 		new_br->rdb_tstamps_tcp = rdb_tstamps_tcp;
 		new_br->ackTime = ackTime;
 		new_br->acked = acked;
-		update_byte_count();
+		updateByteCount();
 		new_br->sent_tstamp_pcap = sent_tstamp_pcap;
 		for (size_t i = 0; i < new_br->sent_tstamp_pcap.size(); i++)
 			new_br->sent_tstamp_pcap[i].second = ST_NONE;
 		return new_br;
 	}
 
-	bool match_received_type(bool print=false);
-	void print_tstamps_tcp();
+	bool matchReceivedType(bool print=false);
+	void printTstampsTcp();
 
 	seq64_t getStartSeq() { return startSeq; }
 	seq64_t getEndSeq() { return endSeq; }
@@ -183,7 +183,7 @@ public:
 	void setRecvDiff(long diff) { this->diff = diff; }
 	string strInfo();
 	string str();
-	void print_tstamps_pcap();
+	void printTstampsPcap();
 	timeval* getSendTime();
 	timeval* getRecvTime();
 	timeval* getAckTime();

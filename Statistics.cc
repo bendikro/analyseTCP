@@ -4,8 +4,7 @@
 
 Statistics::Statistics(Dump &d)
     : dump(d)
-{
-}
+{}
 
 void Statistics::fillWithSortedConns(map<ConnectionMapKey*, Connection*, SortedConnectionKeyComparator> &sortedConns) {
 	map<ConnectionMapKey*, Connection*>::iterator it, it_end;
@@ -112,7 +111,7 @@ void Statistics::printDumpStats() {
 	}
 }
 
-void print_stats_separator(bool final) {
+void printStatsSeparator(bool final) {
 	char c = '-';
 	if (final)
 		c = '=';
@@ -157,7 +156,7 @@ void Statistics::printStatistics() {
 
 			// ITT stats
 			printPacketITTStats(packetsStats);
-			print_stats_separator(true);
+			printStatsSeparator(true);
 		}
 
 		if (GlobOpts::aggregate) {
@@ -182,7 +181,7 @@ void Statistics::printStatistics() {
 
 			// ITT stats
 			printPacketITTStatsAggr(&csAggregated, psAggregated);
-			print_stats_separator(true);
+			printStatsSeparator(true);
 		}
 	}
 }
@@ -203,7 +202,7 @@ void printPayloadStatsAggr(ConnStats *cs, AggrPacketsStats &aggrStats) {
 
 void printPacketITTStats(PacketsStats* bs)
 {
-	print_stats_separator(false);
+	printStatsSeparator(false);
 	printf("ITT stats:\n");
 	printStats("itt", "usec", bs->itt);
 	bs->itt._percentiles.print("  %*sth percentile %-26s    : %10.0f usec\n");
@@ -211,7 +210,7 @@ void printPacketITTStats(PacketsStats* bs)
 
 void printPacketITTStatsAggr(ConnStats *cs, AggrPacketsStats &aggrStats)
 {
-	print_stats_separator(false);
+	printStatsSeparator(false);
 	printf("ITT stats (Average for all the connections)\n");
 	printStatsAggr("ITT", "usec", cs, aggrStats.aggregated.itt, aggrStats.minimum.itt, aggrStats.average.itt, aggrStats.maximum.itt);
 	aggrStats.aggregated.itt._percentiles.print("  %*sth percentile %-26s    : %10.0f usec\n");
@@ -270,7 +269,7 @@ void printPacketsStats(ConnStats *cs) {
 	}
 
 	if (GlobOpts::withRecv && cs->ranges_sent) {
-		print_stats_separator(false);
+		printStatsSeparator(false);
 		printf("Receiver side loss stats:\n");
 		printf("  Number of packets received                    : %10d\n", cs->nrPacketsReceivedFoundInDump);
 		printf("  Packets lost                                  : %10d\n", (cs->nrPacketsSentFoundInDump - cs->nrPacketsReceivedFoundInDump));
@@ -286,10 +285,10 @@ void printPacketsStats(ConnStats *cs) {
 		}
 	}
 
-	print_stats_separator(false);
+	printStatsSeparator(false);
 
 	if (cs->rdb_bytes_sent) {
-		print_stats_separator(false);
+		printStatsSeparator(false);
 		printf("RDB stats:\n");
 		printf("  RDB packets                                   : %10d (%.2f%% of data packets sent)\n", cs->bundleCount, safe_div(cs->bundleCount, cs->nrDataPacketsSent) * 100);
 		printf("  RDB bytes bundled                             : %10llu (%.2f%% of total bytes sent)\n", cs->rdb_bytes_sent, safe_div(cs->rdb_bytes_sent, cs->totBytesSent) * 100);
@@ -327,9 +326,9 @@ void printStatsAggr(string prefix, string unit, ConnStats *cs, BaseStats& bs,
 }
 
 void printBytesLatencyStatsAggr(ConnStats *cs, AggrPacketsStats &aggrStats) {
-	print_stats_separator(false);
+	printStatsSeparator(false);
 	printf("Latency stats (Average for all the connections)\n");
-	printStatsAggr("latencies", "ms", cs, aggrStats.aggregated.latency, aggrStats.minimum.latency,
+	printStatsAggr("latencies", "usec", cs, aggrStats.aggregated.latency, aggrStats.minimum.latency,
 				   aggrStats.average.latency, aggrStats.maximum.latency);
 
 	if (GlobOpts::verbose > 1) {
@@ -349,9 +348,9 @@ void printBytesLatencyStatsAggr(ConnStats *cs, AggrPacketsStats &aggrStats) {
 }
 
 void printBytesLatencyStatsConn(PacketsStats* bs) {
-	print_stats_separator(false);
+	printStatsSeparator(false);
 	printf("Latency stats:\n");
-	printStats("latency", "ms", bs->latency);
+	printStats("latency", "usec", bs->latency);
 	printBytesLatencyStats(bs);
 }
 
@@ -370,7 +369,7 @@ void printBytesLatencyStats(PacketsStats* bs) {
 			value = *curr;
 		}
 
-		print_stats_separator(false);
+		printStatsSeparator(false);
 		printf("  Max retransmissions                           : %10lu \n", bs->retrans.size());
 		for (ulong i = 0; i < bs->retrans.size(); i++) {
 			if ((GlobOpts::verbose < 3) && i > 2)
@@ -379,7 +378,7 @@ void printBytesLatencyStats(PacketsStats* bs) {
 				break;
 			printf("  %2lu. retransmission (count / accumulated)      : %6d / %d\n", i+1, bs->retrans[i], retrans_accumed[i]);
 		}
-		print_stats_separator(false);
+		printStatsSeparator(false);
 
 		vector<int> dupacks_accumed = bs->dupacks;
 		for (value = 0, curr = dupacks_accumed.rbegin(); curr != dupacks_accumed.rend(); ++curr) {
@@ -429,29 +428,12 @@ void Statistics::writeAggByteLatencyVariationCDF() {
 	}
 }
 
-
 void Statistics::makeByteLatencyVariationCDF() {
 	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
 	for (cIt = dump.conns.begin(); cIt != dump.conns.end(); cIt++) {
 		cIt->second->makeByteLatencyVariationCDF();
 	}
 }
-
-
-/*
-  Write per connection stats to file
-*/
-void Statistics::writeConnStats() {
-	map<ConnectionMapKey*, Connection*>::iterator cIt = dump.conns.begin();
-	string fname = GlobOpts::prefix + "conn-stats-all-" + ".dat";
-	ofstream stream;
-	stream.open(fname.c_str(), ios::out);
-	for (cIt = dump.conns.begin(); cIt != dump.conns.end(); cIt++) {
-		stream << cIt->second->getDuration(true) << endl;
-	}
-	stream.close();
-}
-
 
 
 /*****************************************
@@ -472,7 +454,7 @@ public:
 
 		if (!GlobOpts::aggOnly) {
 			string filename;
-			ofstream* stream = newStream(getConnFilename(conn));
+			csv::ofstream* stream = newOutStream(getConnFilename(conn));
 			writeToStream(stream, loss, conn.rm->analysed_sent_ranges_count, conn.rm->analysed_bytes_sent);
 			delete stream;
 		}
@@ -482,23 +464,25 @@ public:
 	}
 	virtual void end() {
 		if (GlobOpts::aggregate) {
-			ofstream* stream = newStream(getAggrFilename());
+			csv::ofstream* stream = newOutStream(getAggrFilename());
 			writeToStream(stream, aggr, total_count, total_bytes);
 			delete stream;
 		}
 	}
 
-	void writeToStream(ofstream* stream, SPNS::shared_ptr<vector <LossInterval> > loss,
-						   double sent_ranges_count, double bytes_count) {
+	void writeToStream(csv::ofstream* stream, SPNS::shared_ptr<vector <LossInterval> > loss,
+					   double sent_ranges_count, double bytes_count) {
 		for (uint64_t idx = 0, num = loss->size(); idx < num; ++idx) {
 			// lost ranges&bytes relative to total ranges&bytes
 			const double rel_count = loss->at(idx).cnt_bytes / (double) sent_ranges_count;
 			const double rel_bytes = loss->at(idx).all_bytes / (double) bytes_count;
-
-			*stream << idx << ",";
-			*stream << loss->at(idx) << ",";
-			*stream << rel_count << "," << rel_bytes << endl;
+			LossInterval *i = &loss->at(idx);
+			*stream << idx << *i << rel_count << rel_bytes << NEWLINE;
 		}
+	}
+
+	void writeHeader(csv::ofstream& stream) {
+		LossInterval::writeHeader(stream);
 	}
 
 	LossStatsWriter(const uint64_t tstamp)
@@ -531,63 +515,84 @@ void Statistics::writeLossStats() {
 	assert(GlobOpts::withRecv && "Calculating loss is only possible with receiver dump");
 	const uint64_t first_tstamp = TV_TO_MS(dump.first_sent_time);
 	LossStatsWriter conf(first_tstamp);
+	conf.write_header = true;
 	conf.setFilenameID("loss");
-	conf.setHeader("interval,ranges_sent,all_bytes_sent,old_bytes_sent,new_bytes_sent,ranges_lost,all_bytes_lost,old_bytes_lost,new_bytes_lost,ranges_lost_relative_to_interval,all_bytes_lost_relative_to_interval,old_bytes_lost_relative_to_interval,new_bytes_lost_relative_to_interval,old_bytes_lost_relative_to_all_bytes_lost,new_bytes_lost_relative_to_all_bytes_lost,ranges_lost_relative_to_total,all_bytes_lost_relative_to_total");
 	writeStatisticsFiles(conf);
 }
 
-class PerPacketStats : public StatsWriterBase {
+/*****************************************
+ * Write stats for each connection
+ ****************************************/
+class ConnStatsWriter : public AggrStatsWriterBase {
 public:
-	ofstream* stream;
-	virtual void begin() {
-		stream = newStream(getAggrFilename());
+	void writeHeader(csv::ofstream& csv) {
+		ConnCSVItem::writeHeader(csv);
 	}
-	virtual void end() {
-		delete stream;
-	}
+
 	virtual void writeStats(Connection &conn) {
+		ConnStats cs = ConnStats();
+		conn.addConnStats(&cs);
 		PacketsStats *packetsStats = conn.getBytesLatencyStats();
-		for (size_t i = 0; i < packetsStats->packet_stats.size(); i++) {
-			*stream << packetsStats->packet_stats[i].str() << endl;
-		}
+		ConnCSVItem citem(conn, cs, *packetsStats);
+		*stream << citem;
 	}
 };
+
+void Statistics::writeConnStats() {
+	ConnStatsWriter conf;
+	conf.write_header = true;
+	conf.setFilenameID("conn-stats");
+	conf.aggrPostfix = "-all.dat";
+	writeStatisticsFiles(conf);
+}
+
 
 /*****************************************
  * Write stats for every packet sent
  ****************************************/
+class PerPacketStatsWriter : public AggrStatsWriterBase {
+public:
+	void writeHeader(csv::ofstream& csv) {
+		PacketStats::writeHeader(csv);
+	}
+
+	virtual void writeStats(Connection &conn) {
+		PacketsStats *packetsStats = conn.getBytesLatencyStats();
+		for (size_t i = 0; i < packetsStats->packet_stats.size(); i++) {
+			*stream << *(dynamic_cast<PacketStats*>(&packetsStats->packet_stats[i]));
+		}
+	}
+};
+
 void Statistics::writePerPacketStats() {
-	PerPacketStats conf;
-	conf.setHeader("stream_id,time,itt,payload_bytes");
+	PerPacketStatsWriter conf;
+	conf.write_header = true;
 	conf.setFilenameID("per-packet-stats");
 	conf.aggrPostfix = "-all.dat";
 	writeStatisticsFiles(conf);
 }
 
 
-class PerSegmentStats : public StatsWriterBase {
+/**************************************************************
+ * Write stats per segment (chunk) written by the application
+ **************************************************************/
+class PerSegmentStatsWriter : public AggrStatsWriterBase {
 public:
-	ofstream* stream;
-	virtual void begin() {
-		stream = newStream(getAggrFilename());
+	void writeHeader(csv::ofstream& csv) {
+		SegmentStats::writeHeader(csv);
 	}
-	virtual void end() {
-		delete stream;
-	}
+
 	virtual void writeStats(Connection &conn) {
 		PacketsStats *packetsStats = conn.getBytesLatencyStats();
 		for (size_t i = 0; i < packetsStats->packet_stats.size(); i++) {
-			*stream << packetsStats->packet_stats[i].perSegmentStr();
+			*stream << packetsStats->packet_stats[i];
 		}
 	}
 };
 
-/**************************************************************
- * Write stats per segment (chunk) written by the application
- **************************************************************/
 void Statistics::writePerSegmentStats() {
-	PerSegmentStats conf;
-	conf.setHeader("stream_id,time,payload_bytes,sojourn_time,ack_latency,sojourn_and_ack_latency");
+	PerSegmentStatsWriter conf;
+	conf.write_header = true;
 	conf.setFilenameID("per-segment-stats");
 	conf.aggrPostfix = "-all.dat";
 	writeStatisticsFiles(conf);
@@ -642,12 +647,12 @@ public:
 	void writeToStream(string filenameKey, vector<SPNS::shared_ptr<vector <LatencyItem> > > &diff_times) {
 		// Write the different files (all, retr1, retr2, ...)
 		for (ulong i = 0; i < diff_times.size(); i++) {
-			ofstream* stream = newStream(getFilename(filenameKey, i));
+			csv::ofstream* stream = newOutStream(getFilename(filenameKey, i));
 			vector<LatencyItem>::iterator it, it_end;
 			it = diff_times[i]->begin();
 			it_end = diff_times[i]->end();
 			for (; it != it_end; it++) {
-				*stream << it->str() << endl;
+				*stream << *it << NEWLINE;
 			}
 			delete stream;
 		}
@@ -673,7 +678,7 @@ void Statistics::writeSentTimesAndQueueingDelayVariance() {
 	class SentTimesAndQueueingDelayVariance : public StreamStatsWriterBase {
 	public:
 		const uint64_t first_tstamp;
-		virtual void statsFunc(Connection &conn, vector<ofstream*> streams) {
+		virtual void statsFunc(Connection &conn, vector<csv::ofstream*> streams) {
 			conn.writeSentTimesAndQueueingDelayVariance(first_tstamp, streams);
 		}
 		SentTimesAndQueueingDelayVariance(const uint64_t tstamp)
@@ -693,7 +698,7 @@ void Statistics::writeSentTimesAndQueueingDelayVariance() {
 void Statistics::writePacketByteCountAndITT() {
 	class PacketByteCountAndITT : public StreamStatsWriterBase {
 	public:
-		virtual void statsFunc(Connection &conn, vector<ofstream*> streams) {
+		virtual void statsFunc(Connection &conn, vector<csv::ofstream*> streams) {
 			conn.writePacketByteCountAndITT(streams);
 		}
 	};
@@ -714,9 +719,9 @@ public:
 
 	virtual void writeStats(Connection &conn) {
 		uint64_t idx, num;
-		ofstream* connStream;
+		csv::ofstream* connStream;
 		if (!GlobOpts::aggOnly)
-			connStream = newStream(getConnFilename(conn));
+			connStream = newOutStream(getConnFilename(conn));
 
 		num = conn.packetSizeGroups.size();
 
@@ -740,7 +745,7 @@ public:
 
 	virtual void begin() {}
 	virtual void end() {
-		ofstream* aggrStream = newStream(getAggrFilename());
+		csv::ofstream* aggrStream = newOutStream(getAggrFilename());
 		uint64_t idx;
 		for (idx = 0; idx < aggrPacketSizeGroups.size(); ++idx) {
 			writeToStream(idx, aggrPacketSizeGroups[idx], *aggrStream);
@@ -748,12 +753,11 @@ public:
 		delete aggrStream;
 	}
 
-	void writeToStream(uint64_t idx, PacketSizeGroup &psGroup, ofstream &stream) {
-		stream << idx << "," << psGroup.size() << "," << psGroup.bytes << ",";
-		stream << (psGroup.bytes * 8.0) / (GlobOpts::throughputAggrMs / 1000.0) << endl;
+	void writeToStream(uint64_t idx, PacketSizeGroup &psGroup, csv::ofstream &stream) {
+		stream << idx  << psGroup.size() << psGroup.bytes
+			   << (psGroup.bytes * 8.0) / (GlobOpts::throughputAggrMs / 1000.0) << NEWLINE;
 	}
 };
-
 
 void Statistics::writeByteCountGroupedByInterval() {
 	ByteCountGroupedByInterval conf;
@@ -761,7 +765,6 @@ void Statistics::writeByteCountGroupedByInterval() {
 	conf.setHeader("interval,packet_count,byte_count,throughput");
 	writeStatisticsFiles(conf);
 }
-
 
 /*
   The function used to write different statistics to file.
