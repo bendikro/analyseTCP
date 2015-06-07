@@ -45,11 +45,11 @@ bool Connection::registerSent(sendData* sd) {
 		// 2014-08-12: This is expected for SYN retries after timeout (aka new connections)
 		if (sd->data.flags & TH_SYN) {
 
-			if (abs(sd->data.seq_absolute - rm->firstSeq) > 10) {
+			if (std::labs(sd->data.seq_absolute - rm->firstSeq) > 10) {
 				colored_fprintf(stderr, RED, "New SYN changes sequence number by more than 10 (%ld) on connection with %ld ranges already registered.\n"
 								"This is presumably due to TCP port number reused for a new connection. "
 								"Marking this connection as closed and ignore any packets in the new connection.\n",
-								labs(sd->data.seq_absolute - rm->firstSeq), rm->ranges.size());
+								std::labs(sd->data.seq_absolute - rm->firstSeq), rm->ranges.size());
 				closed = true;
 			}
 			else {

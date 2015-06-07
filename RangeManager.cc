@@ -845,10 +845,12 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 												  RECURSION_LEVEL, start_seq, end_seq, end_seq - start_seq, itype));
 				}
 				// Recursive call to insert the remaining data
+#ifdef DEBUG
 				if (debug_print) {
 					indent_print("Recursive call1: brIt->endseq: %llu, endseq: %llu\n", brIt->second->endSeq, end_seq);
 					//indent_print("tstamp_tcp: %u\n", data_seg->tstamp_tcp);
 				}
+#endif
 				return insertByteRange(brIt->second->endSeq, end_seq, itype, data_seg, level +1);
 			}
 			// Spans less than the range, split current range

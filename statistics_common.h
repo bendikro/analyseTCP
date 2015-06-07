@@ -2,7 +2,6 @@
 #define STATISTICS_COMMON_H
 
 #include "common.h"
-#include <math.h>
 #include "minicsv.h"
 
 // A loss value object, used for aggregating loss over intervals
@@ -99,7 +98,9 @@ struct Percentiles
 
 class BaseStats
 {
+#ifdef DEBUG
 	bool _is_aggregate;
+#endif
 	int32_t _counter;
 public:
 	ullint_t min;
@@ -107,8 +108,19 @@ public:
 	ullint_t cum;
 	bool	valid;
 
-	BaseStats() : _is_aggregate(false) {}
-	BaseStats(bool is_aggregate);
+	BaseStats()
+#ifdef DEBUG
+		: _is_aggregate(false)
+#endif
+{}
+    BaseStats(bool is_aggregate) :
+#ifdef DEBUG
+		_is_aggregate(is_aggregate),
+#endif
+		_counter(0)
+		, valid(true)
+	{init();}
+
 
 	void init();
 

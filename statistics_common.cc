@@ -257,11 +257,6 @@ csv::ofstream& operator<<(csv::ofstream& s, LossInterval& v) {
  /*****************************************
   * BaseStats
   *****************************************/
- BaseStats::BaseStats(bool is_aggregate)
-     : _is_aggregate(is_aggregate)
-     , _counter(0)
-     , valid(true)
- {init();}
 
  void BaseStats::init() {
      min = std::numeric_limits<uint64_t>::max();

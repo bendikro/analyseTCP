@@ -774,6 +774,7 @@ void Dump::calculateSojournTime() {
 			cout << "An exception occurred. Exception Nr. " << ia.what() << '\n';
 			printf("Invalid input values: Sender IP: '%s', Sender PORT: '%s', Receiver IP: '%s', Receiver PORT: '%s'\n",
 				   sender_ip.c_str(), receiver_ip.c_str(), sender_port.c_str(), receiver_port.c_str());
+			continue;
 		}
 
 		if (tmpConn == NULL) {
