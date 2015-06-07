@@ -112,9 +112,9 @@ public:
 	int getRedundantBytes() { return analysed_redundant_bytes; }
 	ullint_t getLostBytes() { return analysed_lost_bytes; }
 	seq64_t get_print_seq(seq64_t seq);
-	string get_print_relative_seq_pair(seq64_t start, seq64_t end);
-	seq64_t relative_seq(seq64_t seq);
-	string relative_seq_pair_str(seq64_t start, seq64_t end);
+	seq32_t absolute_seq(seq64_t seq);
+	string absolute_seq_pair_str(seq64_t start, seq64_t end);
+	string strByteRange(seq64_t start, seq64_t end);
 	void calculateRealLoss(map<seq64_t, ByteRange*>::iterator brIt, map<seq64_t, ByteRange*>::iterator brIt_end);
 	void analyseReceiverSideData();
 	void calculateRetransAndRDBStats();

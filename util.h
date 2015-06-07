@@ -18,6 +18,20 @@ std::string ipToStr(const in_addr &ip);
 std::string makeHostKey(const in_addr &ip, const uint16_t *port);
 std::string makeConnKey(const in_addr &srcIp, const in_addr &dstIp, const uint16_t *srcPort, const uint16_t *dstPort);
 
+#ifdef __linux__
+void print_stack();
+#endif
+
+template<typename ... Args>
+string strfmt(const string& format, Args ... args) {
+	size_t size = snprintf(nullptr, 0, format.c_str(), args...);
+	std::string buf;
+    buf.reserve(size + 1);
+    buf.resize(size);
+    snprintf(&buf[0], size + 1, format.c_str(), args...);
+    return buf;
+}
+
 /*
   Used to test if a sequence number comes after another
   These handle when the newest sequence number has wrapped

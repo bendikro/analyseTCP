@@ -128,22 +128,23 @@ namespace csv
 		ofstream() : after_newline(true), delimiter(',')
 		{
 		}
-		ofstream(const std::string &file)
-		{
-			ofstream(file, std::ios_base::out);
-		}
-		ofstream(const std::string &file, std::ios_base::openmode mode)
-		{
-			open(file.c_str(), mode);
-		}
+		ofstream(const std::string &file) : ofstream(file, std::ios_base::out) {}
+		ofstream(const std::string &file, std::ios_base::openmode mode) :
+			ofstream(file.c_str(), mode) {}
+
 		ofstream(const char * file, std::ios_base::openmode mode)
 		{
 			open(file, mode);
 		}
+		~ofstream() {
+			close();
+		}
+
 		void open(const char * file, std::ios_base::openmode mode)
 		{
 			init();
 			ostm.open(file, mode);
+			filename = string(file);
 		}
 		void init()
 		{
@@ -180,10 +181,13 @@ namespace csv
 		}
 		std::ofstream& get_ofstream()
 		{
+			if (!ostm.is_open())
+				throw ios_base::failure(string("File stream for file '") + filename + "' is closed!");
 			return ostm;
 		}
 	private:
 		std::ofstream ostm;
+		string filename;
 		bool after_newline;
 		char delimiter;
 	};

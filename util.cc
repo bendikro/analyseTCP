@@ -1,4 +1,5 @@
 #include "util.h"
+#include <execinfo.h>
 
 string get_TCP_flags_str(u_char flags) {
 	stringstream out;
@@ -80,20 +81,21 @@ void parse_print_packets(char* optarg)
 	}
 }
 
-// Requires #include <execinfo.h>
-//void print_stack() {
-//	void *array[10];
-//	size_t size;
-//
-//	// get void*'s for all entries on the stack
-//	size = backtrace(array, 10);
-//
-//	// print out all the frames to stderr
-//	//fprintf(stderr, "Error: signal %d:\n", sig);
-//	backtrace_symbols_fd(array, size, STDERR_FILENO);
-//	//exit(1);
-//}
 
+#ifdef __linux__
+void print_stack() {
+	void *array[10];
+	size_t size;
+
+	// get void*'s for all entries on the stack
+	size = backtrace(array, 10);
+
+	// print out all the frames to stderr
+	//fprintf(stderr, "Error: signal %d:\n", sig);
+	backtrace_symbols_fd(array, size, STDERR_FILENO);
+	//exit(1);
+}
+#endif
 
 /**
  * Parse the long_options data structure to ensure an optstring that

@@ -1,20 +1,14 @@
-#include "Dump.h"
-#include "color_print.h"
-#include "util.h"
 #include <memory>
 #include <string.h>
 
+#include "Dump.h"
+#include "color_print.h"
+#include "util.h"
 #include "Statistics.h"
-
-// griff: temporary, meant to become a CLI option
-//        idea of the option is to split a connection into individual HTTP GETs
-#define IS_THIS_HTTP_GET 1
-#ifdef IS_THIS_HTTP_GET
-static void look_for_get_request( const pcap_pkthdr* header, const u_char *data );
-#endif
 
 bool conn_key_debug = false;
 
+static void look_for_get_request(const pcap_pkthdr* header, const u_char *data);
 
 /* Methods for class Dump */
 Dump::Dump(string src_ip, string dst_ip, string src_port, string dst_port, string tcp_port, string fn)
@@ -348,35 +342,45 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 
 	/* Prepare packet data struct */
 	sendData sd;
-	sd.totalSize         = header->len;
-	sd.ipSize            = ipSize;
-	sd.ipHdrLen          = ipHdrLen;
-	sd.tcpHdrLen         = tcpHdrLen;
-	sd.tcpOptionLen      = tcpHdrLen - 20;
-	sd.data.payloadSize  = sd.totalSize - (ipHdrLen + tcpHdrLen + SIZE_ETHERNET);
-	sd.data.tstamp_pcap  = header->ts;
-	sd.data.seq_absolute = ntohl(tcp->th_seq);
-	sd.data.seq          = getRelativeSequenceNumber(sd.data.seq_absolute, tmpConn->rm->firstSeq, tmpConn->lastLargestEndSeq, tmpConn->lastLargestSeqAbsolute, tmpConn);
-	sd.data.endSeq       = sd.data.seq + sd.data.payloadSize;
-	sd.data.retrans      = false;
-	sd.data.is_rdb       = false;
-	sd.data.rdb_end_seq  = 0;
-	sd.data.flags        = tcp->th_flags;
+	sd.totalSize           = header->len;
+	sd.ipSize              = ipSize;
+	sd.ipHdrLen            = ipHdrLen;
+	sd.tcpHdrLen           = tcpHdrLen;
+	sd.tcpOptionLen        = tcpHdrLen - 20;
+	sd.data.payloadSize    = sd.totalSize - (ipHdrLen + tcpHdrLen + SIZE_ETHERNET);
+	sd.data.tstamp_pcap    = header->ts;
+	sd.data.seq_absolute   = ntohl(tcp->th_seq);
+	sd.data.seq            = getRelativeSequenceNumber(sd.data.seq_absolute, tmpConn->rm->firstSeq, tmpConn->lastLargestEndSeq, tmpConn->lastLargestSeqAbsolute, tmpConn);
+	sd.data.endSeq         = sd.data.seq + sd.data.payloadSize;
+	sd.data.retrans        = false;
+	sd.data.is_rdb         = false;
+	sd.data.rdb_end_seq    = 0;
+	sd.data.flags          = tcp->th_flags;
+	sd.data.tstamp_tcp      = 0;
+	sd.data.tstamp_tcp_echo = 0;
 
 	uint16_t payloadSize = ipSize - (ipHdrLen + tcpHdrLen); // This gives incorrect result on some packets where the ipSize is wrong (0 in a test trace)
 	if (sd.data.payloadSize != payloadSize) {
 		colored_fprintf(stderr, RED, "Found invalid packet length value in IP header:\n");
 		fprintf(stderr, "%s: (seq: %s): Length reported as %d, but correct value is %d.\n", tmpConn->getConnKey().c_str(),
-				tmpConn->rm->relative_seq_pair_str(sd.data.seq, sd.data.endSeq).c_str(),
+				tmpConn->rm->absolute_seq_pair_str(sd.data.seq, sd.data.endSeq).c_str(),
 				ipSize, sd.totalSize - SIZE_ETHERNET);
 	}
 
 	if (sd.data.seq == std::numeric_limits<ulong>::max()) {
-		if (sd.data.flags & TH_SYN) {
-			fprintf(stdout, "Found invalid sequence numbers in beginning of sender dump. Probably old SYN packets\n");
-			return;
+		if (tmpConn->closed) {
+			// Probably closed due to port reuse
 		}
-		printf("Found invalid sequence numbers in beginning of sender dump. Probably the sender dump has retransmissions of packets before the first packet in dump\n");
+		else {
+			if (sd.data.flags & TH_SYN) {
+				fprintf(stderr, "Found invalid sequence number (%u) in beginning of sender dump. Probably old SYN packets (Conn: %s)\n",
+						sd.data.seq_absolute, tmpConn->getConnKey().c_str());
+				return;
+			}
+			fprintf(stderr, "Found invalid sequence number (%u) in beginning of sender dump. "
+					"Probably the sender dump has retransmissions of packets before the first packet in dump (Conn: %s)\n",
+					sd.data.seq_absolute, tmpConn->getConnKey().c_str());
+		}
 		return;
 	}
 
@@ -390,9 +394,8 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 	/* define/compute tcp payload (segment) offset */
 	//sd.data.data = (u_char *) (data + SIZE_ETHERNET + ipHdrLen + tcpHdrLen);
 
-#ifdef IS_THIS_HTTP_GET
-    look_for_get_request( header, data );
-#endif
+	if (GlobOpts::look_for_get_request)
+		look_for_get_request(header, data);
 
 	sentPacketCount++;
 	sentBytesCount += sd.data.payloadSize;
@@ -407,11 +410,12 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 		max_payload_size = sd.data.payloadSize;
 	}
 
-	if (tmpConn->registerSent(&sd))
+	if (tmpConn->registerSent(&sd)) {
 		tmpConn->registerRange(&sd);
 
-	if (GlobOpts::withThroughput) {
-		tmpConn->registerPacketSize(first_sent_time, header->ts, header->len, sd.data.payloadSize);
+		if (GlobOpts::withThroughput) {
+			tmpConn->registerPacketSize(first_sent_time, header->ts, header->len, sd.data.payloadSize);
+		}
 	}
 }
 
@@ -526,7 +530,13 @@ void Dump::processAcks(const pcap_pkthdr* header, const u_char *data) {
 	seg.flags  = tcp->th_flags;
 
 	if (seg.ack == std::numeric_limits<ulong>::max()) {
-		fprintf(stdout, "Invalid sequence number for ACK! (SYN=%d)\n", !!(seg.flags & TH_SYN));
+		if (tmpConn->closed) {
+			// Probably closed due to port reuse
+		}
+		else {
+			fprintf(stderr, "Invalid sequence number for ACK(%u)! (SYN=%d) on connection: %s\n",
+					ack, !!(seg.flags & TH_SYN), tmpConn->getConnKey().c_str());
+		}
 		return;
 	}
 
@@ -536,7 +546,7 @@ void Dump::processAcks(const pcap_pkthdr* header, const u_char *data) {
 	ret = tmpConn->registerAck(&seg);
 	if (!ret) {
 		if (GlobOpts::validate_ranges) {
-			printf("DUMP - failed to register ACK!\n");
+			fprintf(stderr, "DUMP - failed to register ACK(%llu) on connection: %s\n", seg.ack, tmpConn->getConnKey().c_str());
 		}
 	}
 	else {
@@ -690,18 +700,23 @@ void Dump::processRecvd(const pcap_pkthdr* header, const u_char *data) {
 	sd.data.in_sequence  = 0;
 	sd.data.flags        = tcp->th_flags;
 	sd.data.window       = ntohs(tcp->th_win);
+	sd.data.tstamp_tcp      = 0;
+	sd.data.tstamp_tcp_echo = 0;
 
 	if (sd.data.seq == std::numeric_limits<ulong>::max()) {
 		if (sd.data.flags & TH_SYN) {
-			fprintf(stdout, "Found invalid sequence numbers in beginning of receive dump. Probably an old SYN packet\n");
+			fprintf(stderr, "Found invalid sequence numbers in beginning of receive dump. Probably an old SYN packet (Conn: %s)\n",
+					tmpConn->getConnKey().c_str());
 			return;
 		}
 
 		if (tmpConn->lastLargestRecvEndSeq == 0) {
-			printf("Found invalid sequence numbers in beginning of receive dump. Probably the sender tcpdump didn't start in time to save this packets\n");
+			fprintf(stderr, "Found invalid sequence numbers in beginning of receive dump. "
+				   "Probably the sender tcpdump didn't start in time to save this packets (Conn: %s)\n",
+				   tmpConn->getConnKey().c_str());
 		}
 		else {
-			printf("Found invalid sequence number in received data!: %u -> %llu\n", sd.data.seq_absolute, sd.data.seq);
+			fprintf(stderr, "Found invalid sequence number in received data!: %u -> %llu\n", sd.data.seq_absolute, sd.data.seq);
 		}
 		return;
 	}
@@ -714,9 +729,8 @@ void Dump::processRecvd(const pcap_pkthdr* header, const u_char *data) {
 	recvPacketCount++;
 	recvBytesCount += sd.data.payloadSize;
 
-#ifdef IS_THIS_HTTP_GET
-    look_for_get_request( header, data );
-#endif
+	if (GlobOpts::look_for_get_request)
+		look_for_get_request(header, data);
 
 	tmpConn->registerRecvd(&sd);
 }
@@ -829,7 +843,6 @@ void Dump::calculateLatencyVariation() {
 	}
 }
 
-#ifdef IS_THIS_HTTP_GET
 static void look_for_get_request( const pcap_pkthdr* header, const u_char *data )
 {
 	const sniff_ip *ip; /* The IP header */
@@ -859,5 +872,3 @@ static void look_for_get_request( const pcap_pkthdr* header, const u_char *data 
         }
     }
 }
-#endif
-

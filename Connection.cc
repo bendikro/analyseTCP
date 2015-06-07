@@ -32,19 +32,32 @@ bool Connection::registerSent(sendData* sd) {
 	if (sd->data.endSeq > lastLargestEndSeq && lastLargestEndSeq +1 != sd->data.seq) {
 #ifdef DEBUG
 		if (debug) {
-			printf("CONN: %s\n", getConnKey().c_str());
-			colored_printf(RED, "Sending unexpected sequence number: %llu, lastlargest: %llu\n",
-						   sd->data.seq, lastLargestEndSeq);
+			colored_fprintf(stderr, RED, "CONN: %s\nSending unexpected sequence number: %llu, lastlargest: %llu\n",
+							getConnKey().c_str(), sd->data.seq, lastLargestEndSeq);
 		}
 #endif
+		if (closed) {
+			ignored_count++;
+			return false;
+		}
+
 		// For some reason, seq can increase even if no data was sent, some issue with multiple SYN packets.
 		// 2014-08-12: This is expected for SYN retries after timeout (aka new connections)
 		if (sd->data.flags & TH_SYN) {
-			//printf("Changing firstSeq from %u to %u\n", rm->firstSeq, sd->data.seq_absolute);
-			rm->firstSeq = sd->data.seq_absolute;
-			//printf("Changing SD seq from (%llu - %llu) to (%d - %d)\n", sd->data.seq, sd->data.endSeq, 0, 0);
-			sd->data.seq = 0;
-			sd->data.endSeq = 0;
+
+			if (abs(sd->data.seq_absolute - rm->firstSeq) > 10) {
+				colored_fprintf(stderr, RED, "New SYN changes sequence number by more than 10 (%ld) on connection with %ld ranges already registered.\n"
+								"This is presumably due to TCP port number reused for a new connection. "
+								"Marking this connection as closed and ignore any packets in the new connection.\n",
+								labs(sd->data.seq_absolute - rm->firstSeq), rm->ranges.size());
+				closed = true;
+			}
+			else {
+				rm->firstSeq = sd->data.seq_absolute;
+				//printf("Changing SD seq from (%llu - %llu) to (%d - %d)\n", sd->data.seq, sd->data.endSeq, 0, 0);
+				sd->data.seq = 0;
+				sd->data.endSeq = 0;
+			}
 		}
 	}
 
@@ -63,7 +76,7 @@ bool Connection::registerSent(sendData* sd) {
 #ifdef DEBUG
 	if (debug) {
 		printf("\nRegisterSent (%llu): %s\n", (sd->data.endSeq - sd->data.seq),
-		rm->relative_seq_pair_str(sd->data.seq, END_SEQ(sd->data.endSeq)).c_str());
+		rm->absolute_seq_pair_str(sd->data.seq, END_SEQ(sd->data.endSeq)).c_str());
 	}
 #endif
 
@@ -118,7 +131,7 @@ bool Connection::registerSent(sendData* sd) {
 		}
 		lastLargestEndSeq = sd->data.endSeq;
 		lastLargestSeqAbsolute = sd->data.seq_absolute + sd->data.payloadSize;
-	} else if (lastLargestStartSeq > 0 && sd->data.seq <= lastLargestStartSeq) { /* All seen before */
+	} else if (lastLargestStartSeq > 0 && sd->data.endSeq <= lastLargestStartSeq) { /* All seen before */
 		if (GlobOpts::debugLevel == 6) {
 			printf("\nRetrans - lastLargestStartSeq: %llu > 0 && sd->data.seq: %llu <= lastLargestStartSeq: %llu\n",
 				   rm->get_print_seq(lastLargestStartSeq), rm->get_print_seq(sd->data.seq),

@@ -98,7 +98,6 @@ The Ranges Loss does not correspond directly to packets, as the packets may be s
 ##Notes
 
 * FIN segments with payload may be counted as two segments.
-* Sender IP is required
 
 * Negative packet loss values when analysing sender and receiver dumps
 

@@ -56,19 +56,19 @@ public:
 	in_addr srcIp;
 	in_addr dstIp;
 	ullint_t bundleCount; // Number of packets with RDB data
-	// Used for calulcating relative sequence number
+	// Used for calculating relative sequence number
 	seq64_t lastLargestStartSeq;
 	seq64_t lastLargestEndSeq;           // This is the last largest sent (relative) end sequence number
 	seq32_t lastLargestSeqAbsolute;      // This is the last largest sent (absolute) start sequence number (This value will wrap)
-	seq64_t lastLargestRecvEndSeq;       // For reveiver side analyse
-	seq32_t lastLargestRecvSeqAbsolute;  // For reveiver side analyse
+	seq64_t lastLargestRecvEndSeq;       // For receiver side analyse
+	seq32_t lastLargestRecvSeqAbsolute;  // For receiver side analyse
 	seq64_t lastLargestAckSeq;
 	seq32_t lastLargestAckSeqAbsolute;
-	seq64_t lastLargestSojournEndSeq;       // For reveiver side analyse
-	seq32_t lastLargestSojournSeqAbsolute;  // For reveiver side analyse
+	seq64_t lastLargestSojournEndSeq;       // For receiver side analyse
+	seq32_t lastLargestSojournSeqAbsolute;  // For receiver side analyse
 
-
-	void genByteCountGroupedByInterval();
+	bool closed;
+	int ignored_count;
 
 	vector< vector<PacketSize> > packetSizes;
 	vector<PacketSizeGroup> packetSizeGroups;
@@ -83,10 +83,12 @@ public:
 	Connection(const in_addr &src_ip, const uint16_t *src_port,
 			   const in_addr &dst_ip, const uint16_t *dst_port,
 			   seq32_t seq) : nrPacketsSent(0), nrDataPacketsSent(0), totPacketSize(0),
-							   totBytesSent(0), totRDBBytesSent(0), totNewDataSent(0),
-							   totRetransBytesSent(0), nrRetrans(0), bundleCount(0), lastLargestStartSeq(0),
-							   lastLargestEndSeq(0), lastLargestRecvEndSeq(0), lastLargestAckSeq(0),
-							   lastLargestSojournEndSeq(0), lastLargestSojournSeqAbsolute(0)
+							  totBytesSent(0), totRDBBytesSent(0), totNewDataSent(0),
+							  totRetransBytesSent(0), nrRetrans(0), bundleCount(0), lastLargestStartSeq(0),
+							  lastLargestEndSeq(0), lastLargestRecvEndSeq(0), lastLargestAckSeq(0),
+							  lastLargestSojournEndSeq(0), lastLargestSojournSeqAbsolute(0), closed(false),
+							  ignored_count(0)
+
 	{
 		srcIp                      = src_ip;
 		dstIp                      = dst_ip;
@@ -114,6 +116,7 @@ public:
 	void genBytesLatencyStats(PacketsStats* bs);
 	void validateRanges();
 	timeval get_duration() ;
+	void genByteCountGroupedByInterval();
 	void calculateLatencyVariation() { rm->calculateLatencyVariation(); }
 	void makeByteLatencyVariationCDF() { rm->makeByteLatencyVariationCDF(); }
 	void writeByteLatencyVariationCDF(ofstream *stream);

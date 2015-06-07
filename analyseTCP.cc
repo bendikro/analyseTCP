@@ -68,6 +68,7 @@ static option long_options[] = {
 	{"colored-print",               no_argument,       0, 'k'},
 	{"help",                        no_argument,       0, 'h'},
 	{"validate-ranges",             no_argument,       0, 'V'},
+	{"look-for-get-request",        no_argument,       0, 'G'},
 	{"verbose",                     optional_argument, 0, 'v'},
 	{"debug",                       required_argument, 0, 'd'},
 	{"analyse-start",               required_argument, 0, OPT_ANALYSE_START},
@@ -89,8 +90,8 @@ void usage(char* argv, string usage_str, int exit_status=1, int help_level=1)
 	printf(" -s <sender ip>      : Sender ip.\n");
 	printf(" -g <pcap-file>      : Receiver-side dumpfile.\n");
 	printf(" -r <receiver ip>    : Receiver ip. If not given, analyse all receiver IPs.\n");
-	printf(" -q <sender port>    : Sender port. If not given, analyse all sender ports.\n");
-	printf(" -p <receiver port>  : Receiver port. If not given, analyse all receiver ports.\n");
+	printf(" -q <sender port>    : Sender port. If not given, analyse all sender ports. Port range may be specified with <start>-<end>\n");
+	printf(" -p <receiver port>  : Receiver port. If not given, analyse all receiver ports. Port range may be specified with <start>-<end>\n");
 	printf(" -m <IP>             : Sender side external NAT address as seen on receiver-side dump\n");
 	printf(" -n <IP>             : Receiver side local address as seen on receiver-side dump\n");
 	printf(" -o <output-dir>     : Output directory to write the result files in.\n");
@@ -148,6 +149,7 @@ void usage(char* argv, string usage_str, int exit_status=1, int help_level=1)
 		printf("                       Example for 90th, 99th and 99.9th: -i90,99,99.9\n");
 	}
 	printf(" -y<seq-num-range>   : Print details for each packet. Provide an option sequence number or range of seq to print.\n");
+	printf(" -G                  : Look for GET request in the packet payload. (experimental)\n");
 	printf(" -j                  : Use relative sequence numbers in terminal output from option -y.\n");
 	printf(" -v<level>           : Control verbose level. v0 hides most output, v3 gives maximum verbosity.\n");
 	printf(" -k                  : Use colors in terminal output.\n");
@@ -333,6 +335,9 @@ void parse_cmd_args(int argc, char *argv[], string OPTSTRING, string usage_str) 
 			GlobOpts::print_packets = true;
 			if (optarg)
 				parse_print_packets(optarg);
+			break;
+		case 'G':
+			GlobOpts::look_for_get_request = true;
 			break;
 		case 'd':
 			GlobOpts::debugLevel = atoi(optarg);

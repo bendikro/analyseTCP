@@ -119,7 +119,6 @@ public:
 	Connection* getConn(string &srcIpStr, string &dstIpStr, string &srcPortStr, string &dstPortStr);
 	void calculateLatencyVariation();
 	void calculateSojournTime();
-
 	friend class Statistics;
 };
 

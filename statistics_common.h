@@ -252,6 +252,7 @@ public:
 
 	ConnCSVItem(Connection &c, ConnStats &cstats, PacketsStats &p) : conn(&c), cs(&cstats), ps(&p) {}
 	static void writeHeader(csv::ofstream& stream);
+
 };
 csv::ofstream& operator<<(csv::ofstream& stream, ConnCSVItem& val);
 

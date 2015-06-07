@@ -113,6 +113,7 @@ public:
 	static int analyse_duration;
 	static string sojourn_time_file;
 	static bool oneway_delay_variance;
+	static bool look_for_get_request;
 };
 
 

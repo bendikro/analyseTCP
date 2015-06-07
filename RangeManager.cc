@@ -22,25 +22,37 @@ RangeManager::~RangeManager() {
 }
 
 
-#define STR_RELATIVE_SEQNUM_PAIR(seq_start, seq_end) relative_seq_pair_str(seq_start, END_SEQ(seq_end)).c_str()
+#define STR_ABSOLUTE_SEQNUM_PAIR(seq_start, seq_end) absolute_seq_pair_str(seq_start, END_SEQ(seq_end)).c_str()
 #define STR_SEQNUM_PAIR(seq_start, seq_end) seq_pair_str(seq_start, seq_end).c_str()
+#define STR_PRELATIVE_SEQNUM_PAIR(seq_start, seq_end) seq_pair_str(get_print_seq(seq_start), get_print_seq(seq_end)).c_str()
 
 string seq_pair_str(seq64_t start, seq64_t end) {
 	return to_string(start) + "," + to_string(end);
 }
 
-string RangeManager::relative_seq_pair_str(seq64_t start, seq64_t end) {
-	return seq_pair_str(relative_seq(start), relative_seq(end));
+string RangeManager::absolute_seq_pair_str(seq64_t start, seq64_t end) {
+	return seq_pair_str(absolute_seq(start), absolute_seq(end));
 }
 
-seq64_t RangeManager::relative_seq(seq64_t seq) {
+/*
+  Based on the relative sequence number (starting at 0 for the stream)
+  return the absolute sequence number (as found in the TCP header)
+ */
+seq32_t RangeManager::absolute_seq(seq64_t seq) {
 	seq64_t wrap_index;
 	wrap_index = (firstSeq + seq) / 4294967296L;
-	//	printf("relative_seq: seq: %llu, first + seq: %llu, wrap_index: %lu\n", seq, firstSeq + seq, wrap_index);
+	//	printf("absolute_seq: seq: %llu, first + seq: %llu, wrap_index: %lu\n", seq, firstSeq + seq, wrap_index);
 	seq64_t res = seq + firstSeq;
 	res -= ((seq64_t) wrap_index * 4294967296L);
-	//printf("relative_seq  ret: %lu\n", res);
-	return res;
+	//printf("absolute_seq  ret: %lu\n", res);
+	return (seq32_t) res;
+}
+
+string RangeManager::strByteRange(seq64_t seq_start, seq64_t seq_end) {
+	return strfmt("ByteRange(%lld)[%s (%s)] ", seq_end - seq_start,
+				  STR_SEQNUM_PAIR(seq_start, seq_end),
+				  STR_ABSOLUTE_SEQNUM_PAIR(seq_start, seq_end)
+				  );
 }
 
 /*
@@ -50,15 +62,8 @@ seq64_t RangeManager::relative_seq(seq64_t seq) {
 seq64_t RangeManager::get_print_seq(seq64_t seq) {
 	if (GlobOpts::relative_seq)
 		return seq;
-	return relative_seq(seq);
+	return absolute_seq(seq);
 }
-
-string RangeManager::get_print_relative_seq_pair(seq64_t start, seq64_t end) {
-	if (GlobOpts::relative_seq)
-		return relative_seq_pair_str(start, end);
-	return seq_pair_str(start, end);
-}
-
 
 /* Register all bytes with a common send time as a range */
 void RangeManager::insertSentRange(sendData *sd) {
@@ -70,7 +75,7 @@ void RangeManager::insertSentRange(sendData *sd) {
 	if (debug_print) {
 		printf("\ninsertSentRange (%llu): (%s) (%s), retrans: %d, is_rdb: %d\n",
                (seq64_t) (endSeq - startSeq),
-			   STR_RELATIVE_SEQNUM_PAIR(startSeq, endSeq),
+			   STR_ABSOLUTE_SEQNUM_PAIR(startSeq, endSeq),
 			   STR_SEQNUM_PAIR(startSeq, endSeq), sd->data.retrans, sd->data.is_rdb);
 	}
 #endif
@@ -207,8 +212,11 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 //	if (data_seg->payloadSize == 1) {
 //		debug_print = 1;
 //	}
-	if (start_seq == 546)
-		debug_print = 1;
+	//if (start_seq >= 222036 && start_seq <= 232036)
+	//	debug_print = 1;
+
+	//if (start_seq < 1000)
+	//	debug_print = 1;
 	//
 	//if (start_seq >= 21660765)
 	//	exit(0);
@@ -238,8 +246,8 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 			printf("\n");
 		indent_print("insertByteRange0 (%llu): (%s) (%s), itype: %d, "
 					 "retrans: %d, is_rdb: %d, SYN: %d, FIN: %d, RST: %d, tstamp_tcp: %u\n",
-					 end_seq - start_seq, STR_RELATIVE_SEQNUM_PAIR(start_seq, end_seq),
-					 STR_SEQNUM_PAIR(start_seq, end_seq), itype, data_seg->retrans, data_seg->is_rdb,
+					 end_seq - start_seq, STR_SEQNUM_PAIR(start_seq, end_seq), STR_ABSOLUTE_SEQNUM_PAIR(start_seq, end_seq),
+					 itype, data_seg->retrans, data_seg->is_rdb,
 					 !!(data_seg->flags & TH_SYN), !!(data_seg->flags & TH_FIN),
 					 !!(data_seg->flags & TH_RST), data_seg->tstamp_tcp);
 	}
@@ -258,12 +266,12 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 			if (ranges.find(start_seq -1) != brIt_end) {
 				start_seq -= 1;
 				end_seq = start_seq;
-			}
 #ifdef DEBUG
-			if (debug_print) {
-				indent_print("Pure ack! Decrease SEQ with 1: %llu\n", start_seq);
-			}
+				if (debug_print) {
+					indent_print("Pure ack! Decrease SEQ with 1: %llu\n", start_seq);
+				}
 #endif
+			}
 		}
 	}
 
@@ -274,14 +282,14 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 #ifdef DEBUG
 		if (debug_print) {
 			indent_print("NOT FOUND: itype:%d, %s (%llu)\n",
-						 itype, STR_RELATIVE_SEQNUM_PAIR(start_seq, end_seq), end_seq - start_seq);
+						 itype, STR_ABSOLUTE_SEQNUM_PAIR(start_seq, end_seq), end_seq - start_seq);
 		}
 #endif
 		if (itype == INSERT_RECV) {
 #ifdef DEBUG
 			indent_print("Received non-existent byte range (%llu): (%s) (%s), itype: %d, retrans: %d, is_rdb: %d\n",
 						 end_seq == start_seq ? 0 : end_seq - start_seq +1,
-						 STR_RELATIVE_SEQNUM_PAIR(start_seq, end_seq), STR_SEQNUM_PAIR(start_seq, end_seq),
+						 STR_SEQNUM_PAIR(start_seq, end_seq), STR_ABSOLUTE_SEQNUM_PAIR(start_seq, end_seq),
 						 itype, data_seg->retrans, data_seg->is_rdb);
 			indent_print("Connection: %s\n", conn->getConnKey().c_str());
 #endif
@@ -291,7 +299,7 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 #ifdef DEBUG
 		if (debug_print) {
 			indent_print("Adding: %s (start_seq: %llu)\n",
-						 STR_RELATIVE_SEQNUM_PAIR(start_seq, end_seq), start_seq);
+						 STR_ABSOLUTE_SEQNUM_PAIR(start_seq, end_seq), start_seq);
 		}
 #endif
 
@@ -350,7 +358,7 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 		highIt = ranges.upper_bound(end_seq);
 		seq64_t new_end_seq = end_seq;
 
-		// This is retransmitted or packet containing rdb data
+		// This may be retransmission or packet containing rdb data
 		if (start_seq < lastSeq) {
 #ifdef DEBUG
 			// Some Non-rdb packets are registered as RDB because of segmentation-offloading
@@ -364,7 +372,7 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 				lowIt--;
 			if (lowIt == highIt) {
 				printf("lowIt == highIt, start_seq: %llu\n", start_seq);
-				printf("lowIt: (%s)\n", STR_RELATIVE_SEQNUM_PAIR(lowIt->second->startSeq, lowIt->second->endSeq));
+				printf("lowIt: (%s)\n", STR_ABSOLUTE_SEQNUM_PAIR(lowIt->second->startSeq, lowIt->second->endSeq));
 				assert(0);
 			}
 			// Search for existing ranges for this data
@@ -375,8 +383,8 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 #ifdef DEBUG
 					if (lowIt->second->startSeq == start_seq) {
 						printf("New Data is at the beginning of existing range!!\n");
-						printf("Existing Range: %s\n", STR_RELATIVE_SEQNUM_PAIR(lowIt->second->startSeq, lowIt->second->endSeq));
-						printf("New data Range: %s\n", STR_RELATIVE_SEQNUM_PAIR(start_seq, end_seq));
+						printf("Existing Range: %s\n", STR_ABSOLUTE_SEQNUM_PAIR(lowIt->second->startSeq, lowIt->second->endSeq));
+						printf("New data Range: %s\n", STR_ABSOLUTE_SEQNUM_PAIR(start_seq, end_seq));
 					}
 					//assert(lowIt->second->startSeq != start_seq && "New Data is at beginning of existing range!!\n");
 #endif
@@ -390,8 +398,8 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 					if (debug_print) {
 						indent_print("ITYPE: %d, rdb: %d, retrans: %d\n", itype, data_seg->is_rdb, data_seg->retrans);
 						indent_print("Found existing range with matching data\n            for: %s!\n",
-									 STR_RELATIVE_SEQNUM_PAIR(start_seq, end_seq));
-						indent_print("Old Range        : %s (%llu)\n", STR_RELATIVE_SEQNUM_PAIR(cur_br->startSeq, cur_br->endSeq),
+									 STR_ABSOLUTE_SEQNUM_PAIR(start_seq, end_seq));
+						indent_print("Old Range        : %s (%llu)\n", STR_ABSOLUTE_SEQNUM_PAIR(cur_br->startSeq, cur_br->endSeq),
 									 (cur_br->endSeq - cur_br->startSeq) +1);
 					}
 #endif
@@ -408,9 +416,9 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 #ifdef DEBUG
 							if (debug_print) {
 								indent_print("New Range 1      : %s (%llu)\n",
-											 STR_RELATIVE_SEQNUM_PAIR(cur_br->startSeq, cur_br->endSeq), (cur_br->endSeq - cur_br->startSeq) +1);
+											 STR_ABSOLUTE_SEQNUM_PAIR(cur_br->startSeq, cur_br->endSeq), (cur_br->endSeq - cur_br->startSeq) +1);
 								indent_print("New Range 2      : %s (%llu)\n",
-											 STR_RELATIVE_SEQNUM_PAIR(new_br->startSeq, new_br->endSeq), (new_br->endSeq - new_br->startSeq) +1);
+											 STR_ABSOLUTE_SEQNUM_PAIR(new_br->startSeq, new_br->endSeq), (new_br->endSeq - new_br->startSeq) +1);
 							}
 #endif
 							range_received = cur_br;
@@ -422,8 +430,8 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 							}
 #ifdef DEBUG
 							if (debug_print) {
-								indent_print("New Range 1      : %s (%llu)\n", STR_RELATIVE_SEQNUM_PAIR(cur_br->startSeq, cur_br->endSeq), (cur_br->endSeq - cur_br->startSeq) +1);
-								indent_print("New Range 2      : %s (%llu)\n", STR_RELATIVE_SEQNUM_PAIR(new_br->startSeq, new_br->endSeq), (new_br->endSeq - new_br->startSeq) +1);
+								indent_print("New Range 1      : %s (%llu)\n", STR_ABSOLUTE_SEQNUM_PAIR(cur_br->startSeq, cur_br->endSeq), (cur_br->endSeq - cur_br->startSeq) +1);
+								indent_print("New Range 2      : %s (%llu)\n", STR_ABSOLUTE_SEQNUM_PAIR(new_br->startSeq, new_br->endSeq), (new_br->endSeq - new_br->startSeq) +1);
 							}
 #endif
 							range_received = new_br;
@@ -439,11 +447,11 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 #ifdef DEBUG
 							if (debug_print) {
 								indent_print("New Range 1      : %s (%llu)\n",
-											 STR_RELATIVE_SEQNUM_PAIR(cur_br->startSeq, cur_br->endSeq), (cur_br->endSeq - cur_br->startSeq) +1);
+											 STR_ABSOLUTE_SEQNUM_PAIR(cur_br->startSeq, cur_br->endSeq), (cur_br->endSeq - cur_br->startSeq) +1);
 								indent_print("New Range 2      : %s (%llu)\n",
-											 STR_RELATIVE_SEQNUM_PAIR(new_br->startSeq, new_br->endSeq), (new_br->endSeq - new_br->startSeq) +1);
+											 STR_ABSOLUTE_SEQNUM_PAIR(new_br->startSeq, new_br->endSeq), (new_br->endSeq - new_br->startSeq) +1);
 								indent_print("New Range 3      : %s (%llu)\n",
-											 STR_RELATIVE_SEQNUM_PAIR(new_last->startSeq, new_last->endSeq), (new_last->endSeq - new_last->startSeq) +1);
+											 STR_ABSOLUTE_SEQNUM_PAIR(new_last->startSeq, new_last->endSeq), (new_last->endSeq - new_last->startSeq) +1);
 							}
 #endif
 							ranges.insert(pair<seq64_t, ByteRange*>(new_last->startSeq, new_last));
@@ -472,7 +480,7 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 							if (data_seg->retrans == 0) {
 								fprintf(stderr, "NOT RETRANS? Conn: %s\n", conn->getConnKey().c_str());
 								indent_print("range_received : %s (%d)\n",
-											 STR_RELATIVE_SEQNUM_PAIR(range_received->startSeq, range_received->endSeq), range_received->getNumBytes());
+											 STR_ABSOLUTE_SEQNUM_PAIR(range_received->startSeq, range_received->endSeq), range_received->getNumBytes());
 
 							}
 							//assert("Retrans?" && data_seg->retrans != 0);
@@ -537,7 +545,7 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 						// New data spans beyond current range
 						else {
 							insert_more_recursively = 1;
-							//indent_print("New data spans beyond current range. Range(%s), data end: %llu\n", STR_RELATIVE_SEQNUM_PAIR(cur_br->startSeq, cur_br->endSeq), end_seq);
+							//indent_print("New data spans beyond current range. Range(%s), data end: %llu\n", STR_ABSOLUTE_SEQNUM_PAIR(cur_br->startSeq, cur_br->endSeq), end_seq);
 						}
 						if (insert_more_recursively) {
 							//indent_print("Sojourn recursive call2: brIt->endseq: %llu, endseq: %llu\n", cur_br->endSeq, end_seq);
@@ -577,11 +585,13 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 					printf("this_is_rdb_data: %d\n", this_is_rdb_data);
 					indent_print("insertByteRange2 (%llu): (%s) (%s), itype: %d, retrans: %d, is_rdb: %d, SYN: %d, FIN: %d, RST: %d\n",
 								 end_seq - start_seq,
-								 STR_RELATIVE_SEQNUM_PAIR(start_seq, end_seq), STR_SEQNUM_PAIR(start_seq, end_seq),
+								 STR_ABSOLUTE_SEQNUM_PAIR(start_seq, end_seq), STR_SEQNUM_PAIR(start_seq, end_seq),
 								 itype, data_seg->retrans, data_seg->is_rdb,
 								 !!(data_seg->flags & TH_SYN), !!(data_seg->flags & TH_FIN), !!(data_seg->flags & TH_RST));
 				}
-				assert(this_is_rdb_data == 0 && "Shouldn't be RDB?!\n");
+				//assert(this_is_rdb_data == 0 && "Shouldn't be RDB?!\n");
+				//throw std::logic_error(strfmt("Expected either RDB or retrans packet: %s, Type: %d, Conn: %s\n",
+				//							  strByteRange(start_seq, end_seq).c_str(), itype, conn->getConnKey().c_str()));
 			}
 
 			if ((new_end_seq - start_seq) > 100) {
@@ -618,11 +628,13 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 			}
 		}
 		else if (itype == INSERT_SOJOURN) {
+#ifdef DEBUG
 			throw std::logic_error("Sojourn not handled 2: in insertByteRange:"
 								   "seq: " + to_string(start_seq) +
 								   ", end seq: " + to_string(end_seq) +
 								   ", Type: " + to_string(itype)
 				);
+#endif
 		}
 #endif
 	}
@@ -630,8 +642,10 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 	else {
 #ifdef DEBUG
 		if (debug_print) {
-			indent_print("FOUND START: itype:%d, %s (%llu)\n", itype, STR_RELATIVE_SEQNUM_PAIR(start_seq, end_seq), end_seq - start_seq);
-			indent_print("brIt(%llu): %s, new endseq: %llu\n", brIt->second->endSeq - brIt->second->startSeq, STR_RELATIVE_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq), get_print_seq(end_seq));
+			indent_print("FOUND START: itype:%d, %s (%llu)\n", itype, STR_ABSOLUTE_SEQNUM_PAIR(start_seq, end_seq), end_seq - start_seq);
+			indent_print("brIt(%llu): %s, new endseq: %llu (%llu, %llu)\n", brIt->second->endSeq - brIt->second->startSeq,
+						 STR_PRELATIVE_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq), get_print_seq(end_seq),
+						 brIt->second->startSeq, get_print_seq(brIt->second->startSeq));
 
 			if (brIt->second->endSeq < brIt->second->startSeq) {
 				colored_printf(RED, "Startseq is greater than Endseq!!\n");
@@ -679,11 +693,13 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 					}
 				}
 				else if (itype == INSERT_SOJOURN) {
+#ifdef DEBUG
 					throw std::logic_error("Sojourn not handled 3: in insertByteRange:"
-										   "seq: " + to_string(start_seq) +
-										   ", end seq: " + to_string(end_seq) +
-										   ", Type: " + to_string(itype)
+						"seq: " + to_string(start_seq) +
+						", end seq: " + to_string(end_seq) +
+						", Type: " + to_string(itype)
 						);
+#endif
 				}
 			}
 #ifdef DEBUG
@@ -712,17 +728,21 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 			if (brIt->second->endSeq < end_seq) {
 #ifdef DEBUG
 				if (debug_print) {
-					indent_print("Overlaps multiple byte ranges: %s\n", STR_RELATIVE_SEQNUM_PAIR(start_seq, end_seq));
-					indent_print("Increase count of %s\n", STR_RELATIVE_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq));
+					indent_print("%s overlaps byte ranges:  %s\n", strByteRange(start_seq, end_seq).c_str(),
+								 strByteRange(brIt->second->startSeq, brIt->second->endSeq).c_str());
+					indent_print("Increase count of %s\n", strByteRange(brIt->second->startSeq, brIt->second->endSeq).c_str());
 					indent_print("Setting is_rdb : %d\n", data_seg->is_rdb);
 					indent_print("Setting retrans: %d\n", data_seg->retrans);
+					indent_print("Is last: %d\n", std::end(ranges) == brIt );
+					indent_print("It index: %ld, total count: %ld\n", std::distance(ranges.begin(), brIt), ranges.size());
 				}
 #endif
 				if (itype == INSERT_SENT) {
 					//assert("sent_count is 0!" && brIt->second->sent_count > 0);
 
-					// This means this has only pure acks registered
+					// The starting sequence number was already registered as a pure ack.
 					if (brIt->second->byte_count == 0) {
+
 						// We are at the last range in the map
 						if (ranges.rbegin()->second == brIt->second) {
 							// The last range in the map only had pure acks, so we hijack this and add the data to it
@@ -731,6 +751,37 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 							brIt->second->original_payload_size = brIt->second->byte_count;
 							brIt->second->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_tcp_echo, data_seg->tstamp_pcap, this_is_rdb_data, ST_PKT);
 							return true;
+						}
+
+						map<seq64_t, ByteRange*>::iterator brItNext = std::next(brIt);
+						if (brIt->second->endSeq != brItNext->second->startSeq) {
+							// We have a gap in the ranges that we can fill either fully or partially.
+							brIt->second->endSeq = min(brItNext->second->startSeq, end_seq);
+							brIt->second->updateByteCount();
+							brIt->second->original_payload_size = brIt->second->byte_count;
+							brIt->second->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_tcp_echo, data_seg->tstamp_pcap, this_is_rdb_data, ST_PKT);
+							if (brIt->second->endSeq < end_seq) {
+								// The gap was filled, but more data remains to be added
+								return insertByteRange(brIt->second->endSeq, end_seq, itype, data_seg, level +1);
+							}
+							else {
+								// The segment filled the gap either fully or partially
+								return true;
+							}
+						}
+						else {
+							// There is no gap, so add 1 byte to this range and add the rest recursively
+							// An alternative would be to merge this range with the next
+							brIt->second->endSeq = brIt->second->endSeq + 1;
+							brIt->second->updateByteCount();
+							//brIt->second->original_payload_size = brIt->second->byte_count;
+							brIt->second->increase_sent(data_seg->tstamp_tcp, data_seg->tstamp_tcp_echo, data_seg->tstamp_pcap, this_is_rdb_data, ST_PKT);
+							if (brIt->second->endSeq < end_seq) {
+								return insertByteRange(brIt->second->endSeq, end_seq, itype, data_seg, level +1);
+							}
+							else {
+								return true;
+							}
 						}
 					}
 					else {
@@ -769,7 +820,7 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 					if (debug_print) {
 						indent_print("received_tstamp_tcp: %d\n", brIt->second->received_tstamp_tcp);
 						indent_print("Conn: %s\n", conn->getConnKey().c_str());
-						indent_print("Range: %s\n", STR_RELATIVE_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq));
+						indent_print("Range: %s\n", STR_ABSOLUTE_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq));
 					}
 #endif
 					assert(brIt->second->received_tstamp_tcp && "TEST\n");
@@ -781,7 +832,7 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 					}
 
 					//indent_print("Sojourn recursive call3: ByteRange(%s): start_seq: %llu, end_seq: %llu\n",
-					//			 STR_RELATIVE_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq), start_seq, end_seq);
+					//			 STR_ABSOLUTE_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq), start_seq, end_seq);
 					brItNext = brIt;
 					if ((++brItNext) == ranges.end()) {
 						// This is the last element, so cannot continue calling recursively.
@@ -790,17 +841,14 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 				}
 
 				if (level > RECURSION_LEVEL) {
-					throw std::logic_error("Recurse level too high: " + to_string(RECURSION_LEVEL) + " in insertByteRange:"
-										   "seq: " + to_string(start_seq) +
-										   ", start seq: " + to_string(start_seq) +
-										   ", end seq: " + to_string(end_seq) +
-										   ", Type: " + to_string(itype)
-											//,, DataSeg *data_seg, int level
-						);
+					throw std::logic_error(strfmt("Recurse level too high: %d in insertByteRange: start seq: %llu, end seq: %llu, size: %llu, Type: %d\n",
+												  RECURSION_LEVEL, start_seq, end_seq, end_seq - start_seq, itype));
 				}
 				// Recursive call to insert the remaining data
-				//indent_print("Recursive call1: brIt->endseq: %llu, endseq: %llu\n", brIt->second->endSeq, end_seq);
-				//indent_print("tstamp_tcp: %u\n", data_seg->tstamp_tcp);
+				if (debug_print) {
+					indent_print("Recursive call1: brIt->endseq: %llu, endseq: %llu\n", brIt->second->endSeq, end_seq);
+					//indent_print("tstamp_tcp: %u\n", data_seg->tstamp_tcp);
+				}
 				return insertByteRange(brIt->second->endSeq, end_seq, itype, data_seg, level +1);
 			}
 			// Spans less than the range, split current range
@@ -809,9 +857,9 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 					ByteRange *new_br = brIt->second->splitEnd(end_seq, brIt->second->endSeq);
 #ifdef DEBUG
 					if (debug_print) {
-						indent_print("New range ends in the middle of existing\nByteRange(%s) [%llu]\n", STR_RELATIVE_SEQNUM_PAIR(brIt->second->startSeq, new_br->endSeq), end_seq);
-						indent_print("Split Range into: (%s), (%s)\n", STR_RELATIVE_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq),
-									 STR_RELATIVE_SEQNUM_PAIR(new_br->startSeq, new_br->endSeq));
+						indent_print("New range ends in the middle of existing\nByteRange(%s) [%llu]\n", STR_ABSOLUTE_SEQNUM_PAIR(brIt->second->startSeq, new_br->endSeq), end_seq);
+						indent_print("Split Range into: (%s), (%s)\n", STR_ABSOLUTE_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq),
+									 STR_ABSOLUTE_SEQNUM_PAIR(new_br->startSeq, new_br->endSeq));
 					}
 #endif
 					if (itype == INSERT_SENT) {
@@ -960,7 +1008,7 @@ bool RangeManager::processAck(DataSeg *seg) {
 				cerr << "--------Ack equivalent with last range --------" << endl;
 #ifdef DEBUG
 			if (debug_print)
-				printf("  Covers just this Range(%s)\n", STR_RELATIVE_SEQNUM_PAIR(tmpRange->getStartSeq(), tmpRange->getEndSeq()));
+				printf("  Covers just this Range(%s)\n", STR_ABSOLUTE_SEQNUM_PAIR(tmpRange->getStartSeq(), tmpRange->getEndSeq()));
 #endif
 			if (!tmpRange->isAcked()) {
 				tmpRange->tcp_window = seg->window;
@@ -1004,7 +1052,7 @@ bool RangeManager::processAck(DataSeg *seg) {
 				cerr << "--------Ack covers more than this range: Continue to next --------" << endl;
 #ifdef DEBUG
 			if (debug_print)
-				printf("  Covers more than Range(%s)\n", STR_RELATIVE_SEQNUM_PAIR(tmpRange->getStartSeq(), tmpRange->getEndSeq()));
+				printf("  Covers more than Range(%s)\n", STR_ABSOLUTE_SEQNUM_PAIR(tmpRange->getStartSeq(), tmpRange->getEndSeq()));
 #endif
 			if (timercmp(&seg->tstamp_pcap, &(tmpRange->sent_tstamp_pcap[0].first), <)) {
 				fprintf(stderr, "ACK TIME IS EARLIER THAN SEND TIME!\n");
@@ -1015,9 +1063,9 @@ bool RangeManager::processAck(DataSeg *seg) {
 			if (!tmpRange->isAcked()) {
 				tmpRange->insertAckTime(&seg->tstamp_pcap);
 #ifdef DEBUG
-				if (tmpRange->getNumBytes() == 0) {
-					printf("Insert acktime 2 on %s\n", tmpRange->str().c_str());
-				}
+				//if (tmpRange->getNumBytes() == 0) {
+				//	fprintf(stderr, "Insert acktime 2 on %s\n", tmpRange->str().c_str());
+				//}
 #endif
 				ret = true;
 			}
@@ -1029,7 +1077,7 @@ bool RangeManager::processAck(DataSeg *seg) {
 		if (ack > tmpRange->getStartSeq() && ack < tmpRange->getEndSeq()) {
 #ifdef DEBUG
 			if (debug_print) {
-				printf("  Covers parts of  Range(%s)\n", STR_RELATIVE_SEQNUM_PAIR(tmpRange->getStartSeq(), tmpRange->getEndSeq()));
+				printf("  Covers parts of  Range(%s)\n", STR_ABSOLUTE_SEQNUM_PAIR(tmpRange->getStartSeq(), tmpRange->getEndSeq()));
 			}
 #endif
 			ByteRange *new_br = tmpRange->splitEnd(ack, tmpRange->endSeq);
@@ -1102,16 +1150,17 @@ bool RangeManager::processAck(DataSeg *seg) {
 		fprintf(stderr, "Conn: %s\n", conn->getConnKey().c_str());
 		fprintf(stderr, "RangeManager::processAck: Possible error when processing ack: %llu (%llu)\n", get_print_seq(ack), ack);
 		fprintf(stderr, "Range(%s) (%s)\n",
-				STR_RELATIVE_SEQNUM_PAIR(tmpRange->getStartSeq(), tmpRange->getEndSeq()), STR_SEQNUM_PAIR(tmpRange->getStartSeq(), tmpRange->getEndSeq()));
+				STR_ABSOLUTE_SEQNUM_PAIR(tmpRange->getStartSeq(), tmpRange->getEndSeq()), STR_SEQNUM_PAIR(tmpRange->getStartSeq(), tmpRange->getEndSeq()));
 		ByteRange *tmp = ranges.begin()->second;
-		fprintf(stderr, "First Range(%s) (%s)\n", STR_RELATIVE_SEQNUM_PAIR(tmp->getStartSeq(), tmp->getEndSeq()), STR_SEQNUM_PAIR(tmp->getStartSeq(), tmp->getEndSeq()));
+		fprintf(stderr, "First Range(%s) (%s)\n", STR_ABSOLUTE_SEQNUM_PAIR(tmp->getStartSeq(), tmp->getEndSeq()), STR_SEQNUM_PAIR(tmp->getStartSeq(), tmp->getEndSeq()));
 
 		printf("tmpRange FIN: %d\n", prev->second->fin);
 		warn_with_file_and_linenum(__FILE__, __LINE__);
 		break;
 	}
-	if (!ret)
-		printf("ByteRange - Failed to find packet for ack: %llu\n", ack);
+	if (!ret) {
+		fprintf(stderr, "Failed to find packet for ack: %llu on connection: %s\n", ack, conn->getConnKey().c_str());
+	}
 
 	return ret;
 }
@@ -1294,9 +1343,9 @@ void RangeManager::validateContent() {
 				cerr << "RangeManager::validateContent: Byte-stream in ranges not continuous. Exiting." << endl;
 				fprintf(stderr, "payload_len: %d\n", it->second->getNumBytes());
 
-				fprintf(stderr, "Prev Range (%s) Len: %u\n", STR_RELATIVE_SEQNUM_PAIR(prev->second->getStartSeq(), prev->second->getEndSeq()),
+				fprintf(stderr, "Prev Range (%s) Len: %u\n", STR_ABSOLUTE_SEQNUM_PAIR(prev->second->getStartSeq(), prev->second->getEndSeq()),
 					   prev->second->getNumBytes());
-				fprintf(stderr, "Curr Range (%s) Len: %u\n", STR_RELATIVE_SEQNUM_PAIR(it->second->getStartSeq(), it->second->getEndSeq()),
+				fprintf(stderr, "Curr Range (%s) Len: %u\n", STR_ABSOLUTE_SEQNUM_PAIR(it->second->getStartSeq(), it->second->getEndSeq()),
 					   it->second->getNumBytes());
 				cerr << "tmpEndSeq           : " << get_print_seq(tmpEndSeq) << endl;
 				cerr << "Conn KEY           : " << conn->getConnKey() << endl;
@@ -1384,8 +1433,8 @@ void RangeManager::printPacketDetails() {
 
 		printf("R(%*u, %*u):", range_paylad_len, it->second->getNumBytes(), range_paylad_len, it->second->original_payload_size);
 		if (GlobOpts::debugLevel) {
-			printf(" %-*llu - %-*llu: (%-*llu - %-*llu):",
-				   seq_char_len, relative_seq(it->second->startSeq), seq_char_len, relative_seq(it->second->endSeq),
+			printf(" %-*u - %-*u: (%-*llu - %-*llu):",
+				   seq_char_len, absolute_seq(it->second->startSeq), seq_char_len, absolute_seq(it->second->endSeq),
 				   rel_seq_char_len, it->second->startSeq, rel_seq_char_len, it->second->endSeq);
 		}
 		else {
@@ -1504,7 +1553,7 @@ void RangeManager::calculateRealLoss(map<seq64_t, ByteRange*>::iterator brIt, ma
 				if (index < (ranges.size() * (1 - loss_and_end_limit))) {
 					match_fails_before_end++;
 					colored_printf(YELLOW, "Failed to match %s (%s) (index: %llu) on %s\n",
-								   STR_RELATIVE_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq),
+								   STR_ABSOLUTE_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq),
 								   STR_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq), index, conn->getConnKey().c_str());
 					brIt->second->printTstampsTcp();
 				}
@@ -1711,7 +1760,7 @@ void RangeManager::doDriftCompensation() {
 		double diff = (double) it->second->getRecvDiff();
 		/* Compensate for drift */
 		if (diff > 0) {
-			//printf("(%s) diff: %g", STR_RELATIVE_SEQNUM_PAIR(it->second->getStartSeq(), it->second->getEndSeq()), diff);
+			//printf("(%s) diff: %g", STR_ABSOLUTE_SEQNUM_PAIR(it->second->getStartSeq(), it->second->getEndSeq()), diff);
 			diff -= ((drift * getDuration(it->second)));
 			it->second->setRecvDiff(diff);
 			//printf(" -= (%g * %g) = %g -> %g \n", drift, getDuration(it->second), (drift * getDuration(it->second)), diff);
@@ -1774,8 +1823,8 @@ int RangeManager::calculateClockDrift() {
 	tmpDrift = (double) (minDiffEnd - minDiffStart) / durationSec;
 
 	if (GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5) {
-		printf("Using start diff of range: %s\n", STR_RELATIVE_SEQNUM_PAIR(startDriftRange->second->getStartSeq(), startDriftRange->second->getEndSeq()));
-		printf("Using end   diff of range: %s\n", STR_RELATIVE_SEQNUM_PAIR(endDriftRange->second->getStartSeq(), endDriftRange->second->getEndSeq()));
+		printf("Using start diff of range: %s\n", STR_ABSOLUTE_SEQNUM_PAIR(startDriftRange->second->getStartSeq(), startDriftRange->second->getEndSeq()));
+		printf("Using end   diff of range: %s\n", STR_ABSOLUTE_SEQNUM_PAIR(endDriftRange->second->getStartSeq(), endDriftRange->second->getEndSeq()));
 
 		printf("startMin: %lu\n", minDiffStart);
 		printf("startTime: %lu.%lu\n", (ulong) minTimeStart.tv_sec, (ulong) minTimeStart.tv_usec);

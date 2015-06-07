@@ -31,6 +31,7 @@ int GlobOpts::analyse_end               = 0;
 int GlobOpts::analyse_duration          = 0;
 string GlobOpts::sojourn_time_file      = "";
 bool GlobOpts::oneway_delay_variance    = false;
+bool GlobOpts::look_for_get_request     = false;
 vector <pair<uint64_t, uint64_t> > GlobOpts::print_packets_pairs;
 
 bool operator==(const timeval& lhs, const timeval& rhs) {
