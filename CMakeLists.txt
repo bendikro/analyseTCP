@@ -65,7 +65,7 @@ SET (INCLUDE_FILES arpa/inet.h netinet/in.h sys/socket.h getopt.h)
 CHECK_TYPE_SIZE(ulong HAVE_ULONG)
 
 # Set compiler flags for all configurations
-SET (CMAKE_CXX_FLAGS "-Wall -Wno-long-long -Wno-variadic-macros")
+SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-long-long -Wno-variadic-macros")
 SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 # Clang warns about unused argument -std=c++11 in the linker command
@@ -81,19 +81,23 @@ SET (CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 # To activate: cmake -DCMAKE_BUILD_TYPE=Debug ..
 SET (CMAKE_CXX_FLAGS_DEBUG "-g3 -Wall -DDEBUG -Wextra -pedantic")
 
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED on)
+
+# test for C++11 flags
+include(TestCXXAcceptsFlag)
+CHECK_CXX_ACCEPTS_FLAG("-std=c++11" CXX_FLAG_CXX11)
+
+IF (NOT CXX_FLAG_CXX11)
+  MESSAGE(FATAL_ERROR "Compiler does not support c++11.")
+ENDIF(NOT CXX_FLAG_CXX11)
+
 # Must be below the compiler flags
 INCLUDE(FindSharedPtr)
 FIND_SHARED_PTR()
-IF (SHARED_PTR_FOUND)
-#  IF (SHARED_PTR_TR1_MEMORY_HEADER)
-#    SET(HAVE_TR1_MEMORY)
-#  ENDIF (SHARED_PTR_TR1_MEMORY_HEADER)
-#  IF (SHARED_PTR_TR1_NAMESPACE)
-#    SET(HAVE_TR1_NAMESPACE)
-#  ENDIF (SHARED_PTR_TR1_NAMESPACE)
-ELSE (SHARED_PTR_FOUND)
+IF (NOT SHARED_PTR_FOUND)
   MESSAGE(FATAL_ERROR "Unable to find shared_ptr.")
-ENDIF (SHARED_PTR_FOUND)
+ENDIF (NOT SHARED_PTR_FOUND)
 
 
 CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h)
@@ -155,6 +159,7 @@ IF (UNIX OR APPLE)
     analyseTCP
     cmake_install.cmake
     CMakeCache.txt
+    config.h
     )
 
   SET(DISTCLEAN_DIRS

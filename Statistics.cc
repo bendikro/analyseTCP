@@ -719,7 +719,7 @@ public:
 
 	virtual void writeStats(Connection &conn) {
 		uint64_t idx, num;
-		csv::ofstream* connStream;
+		csv::ofstream* connStream = NULL;
 		if (!GlobOpts::aggOnly)
 			connStream = newOutStream(getConnFilename(conn));
 

@@ -22,6 +22,9 @@ std::string makeConnKey(const in_addr &srcIp, const in_addr &dstIp, const uint16
 void print_stack();
 #endif
 
+// Used to avoid variable unused compiler warnings where necessary
+#define UNUSED(x) (void)(x)
+
 template<typename ... Args>
 string strfmt(const string& format, Args ... args) {
 	size_t size = snprintf(nullptr, 0, format.c_str(), args...);
