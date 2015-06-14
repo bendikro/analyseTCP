@@ -160,11 +160,11 @@ public:
 	string stream_id;
 	uint64_t send_time_us;
 	uint16_t size;
-	uint16_t itt;
+	uint32_t itt_usec;
 	int ack_latency_usec;
 	PacketStats() {}
 	PacketStats(sent_type type, string connKey, uint64_t time, uint16_t s)
-		: s_type(type), stream_id(connKey), send_time_us(time), size(s), itt(0)
+		: s_type(type), stream_id(connKey), send_time_us(time), size(s), itt_usec(0)
 	{}
 	static void writeHeader(csv::ofstream& stream);
 

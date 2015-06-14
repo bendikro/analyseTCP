@@ -36,7 +36,7 @@ void PacketStats::writeHeader(csv::ofstream& stream) {
 csv::ofstream& operator<<(csv::ofstream& stream, PacketStats& s) {
 	stream << s.stream_id
 		   << s.send_time_us
-		   << s.itt
+		   << s.itt_usec
 		   << s.size
 		   << NEWLINE;
 	return stream;

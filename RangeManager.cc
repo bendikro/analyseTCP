@@ -1252,11 +1252,11 @@ void RangeManager::genStats(PacketsStats *bs) {
 	std::sort(bs->packet_stats.begin(), bs->packet_stats.end());
 
 	PacketStats prev = bs->packet_stats[0];
-	uint16_t itt;
+	uint32_t itt;
 	for (size_t i = 1; i < bs->packet_stats.size(); i++) {
 		itt = (bs->packet_stats[i].send_time_us - prev.send_time_us);
 		bs->itt.add(itt);
-		bs->packet_stats[i].itt = itt;
+		bs->packet_stats[i].itt_usec = itt;
 		prev = bs->packet_stats[i];
 	}
 
