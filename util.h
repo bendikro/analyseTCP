@@ -8,8 +8,8 @@
 
 class RangeManager;
 
-bool isNumeric(const char* pszInput, int nNumberBase);
-void parse_print_packets(char* optarg);
+bool isNumeric(const char* pszInput, size_t nNumberBase);
+void parse_print_packets();
 std::pair <std::string,std::string>  make_optstring(option long_options[]);
 void print_stack(void);
 std::string get_TCP_flags_str(u_char flags);
@@ -26,13 +26,13 @@ void print_stack();
 #define UNUSED(x) (void)(x)
 
 template<typename ... Args>
-string strfmt(const string& format, Args ... args) {
-	size_t size = snprintf(nullptr, 0, format.c_str(), args...);
+std::string strfmt(const char *format, Args ... args) {
+	size_t size = (size_t) snprintf(nullptr, (size_t) 0, format, args...);
 	std::string buf;
-    buf.reserve(size + 1);
-    buf.resize(size);
-    snprintf(&buf[0], size + 1, format.c_str(), args...);
-    return buf;
+	buf.reserve(size + 1);
+	buf.resize(size);
+	snprintf(&buf[0], size + 1, format, args...);
+	return buf;
 }
 
 /*

@@ -2,10 +2,8 @@
 #define RANGEMANAGER_H
 
 #include "common.h"
-#include "time_util.h"
 #include "statistics_common.h"
-
-using namespace std;
+#include "time_util.h"
 
 enum received_type {DEF, DATA, RDB, RETR};
 
@@ -46,19 +44,19 @@ public:
 	ullint_t rdb_byte_miss;
 	ullint_t rdb_byte_hits;
 	ullint_t analysed_lost_bytes;
-	int analysed_lost_ranges_count;
-	int analysed_sent_ranges_count;
+	ullint_t analysed_lost_ranges_count;
+	ullint_t analysed_sent_ranges_count;
 	int ack_count;
 	ullint_t analysed_bytes_sent, analysed_bytes_sent_unique, analysed_bytes_retransmitted, analysed_redundant_bytes;
 	int analysed_packet_sent_count, analysed_retr_packet_count, analysed_retr_packet_count_in_dump,
 		analysed_retr_no_payload_packet_count, analysed_rdb_packet_count, analysed_ack_count,
-		analysed_packet_sent_count_in_dump, analysed_packet_received_count, analysed_ranges_count, analysed_sent_pure_ack_count,
+		analysed_packet_sent_count_in_dump, analysed_packet_received_count, analysed_sent_pure_ack_count,
 		analysed_data_packet_count,
 		analysed_syn_count, analysed_fin_count, analysed_rst_count, analysed_pure_acks_count;
 	uint16_t analysed_max_range_payload;
 
 	map<seq64_t, ByteRange*>::iterator analyse_range_start, analyse_range_last, analyse_range_end;
-	uint64_t analyse_time_sec_start, analyse_time_sec_end;
+	long analyse_time_sec_start, analyse_time_sec_end;
 
 	Connection *conn;
 public:
@@ -73,7 +71,7 @@ public:
 		analysed_retr_no_payload_packet_count(0),
 		analysed_rdb_packet_count(0), analysed_ack_count(0),
 		analysed_packet_sent_count_in_dump(0), analysed_packet_received_count(0),
-		analysed_ranges_count(0), analysed_sent_pure_ack_count(0), analysed_data_packet_count(0),
+		analysed_sent_pure_ack_count(0), analysed_data_packet_count(0),
 		analysed_syn_count(0), analysed_fin_count(0), analysed_rst_count(0), analysed_pure_acks_count(0),
 		analysed_max_range_payload(0)
 	{
@@ -92,24 +90,24 @@ public:
 	void genStats(PacketsStats* bs);
 	ByteRange* getLastRange() {	return ranges.rbegin()->second;	}
 	ByteRange* getHighestAcked();
-	uint32_t getDuration();
+	double getDuration();
 	double getDuration(ByteRange *brLast);
 	void validateContent();
 	void calculateLatencyVariation();
 	void registerRecvDiffs();
 	void makeByteLatencyVariationCDF();
 	void writeByteLatencyVariationCDF(ofstream *stream);
-	void writeSentTimesAndQueueingDelayVariance(const uint64_t first_tstamp, vector<csv::ofstream*> streams);
+	void writeSentTimesAndQueueingDelayVariance(const int64_t first_tstamp, vector<csv::ofstream*> streams);
 	int calculateClockDrift();
 	void doDriftCompensation();
 	bool insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_type type, DataSeg *data_seq, int level);
-	void genAckLatencyData(uint64_t first_tstamp, vector<SPNS::shared_ptr<vector <LatencyItem> > > &diff_times, const string& connKey);
+	void genAckLatencyData(const int64_t first_tstamp, vector<SPNS::shared_ptr<vector <LatencyItem> > > &diff_times, const string& connKey);
 	ullint_t getNumBytes() { return lastSeq; } // lastSeq is the last relative seq number
-	int getByteRangesCount() { return ranges.size(); }
-	int getAnalysedByteRangesCount() { return ranges.size(); }
-	int getByteRangesLost() { return analysed_lost_ranges_count; }
-	int getByteRangesSent() { return analysed_sent_ranges_count; }
-	int getRedundantBytes() { return analysed_redundant_bytes; }
+	size_t getByteRangesCount() { return ranges.size(); }
+	size_t getAnalysedByteRangesCount() { return ranges.size(); }
+	ullint_t getByteRangesLost() { return analysed_lost_ranges_count; }
+	ullint_t getByteRangesSent() { return analysed_sent_ranges_count; }
+	ullint_t getRedundantBytes() { return analysed_redundant_bytes; }
 	ullint_t getLostBytes() { return analysed_lost_bytes; }
 	seq64_t get_print_seq(seq64_t seq);
 	seq32_t absolute_seq(seq64_t seq);
@@ -118,10 +116,11 @@ public:
 	void calculateRealLoss(map<seq64_t, ByteRange*>::iterator brIt, map<seq64_t, ByteRange*>::iterator brIt_end);
 	void analyseReceiverSideData();
 	void calculateRetransAndRDBStats();
-	void calculateLossGroupedByInterval(const uint64_t first_tstamp, vector<LossInterval>& aggr_loss, vector<LossInterval>& loss);
+	void calculateLossGroupedByInterval(const int64_t first_tstamp, vector<LossInterval>& aggr_loss, vector<LossInterval>& loss);
 	void printPacketDetails();
 };
 
 int seqWithPrintRange(seq64_t start, seq64_t end, size_t &print_packet_ranges_index);
+double getTimeInterval(ByteRange *start, ByteRange *end);
 
 #endif /* RANGEMANAGER_H */

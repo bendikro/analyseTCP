@@ -12,8 +12,7 @@ struct PacketSize {
 	timeval time;
 	uint16_t packet_size;
 	uint16_t payload_size;
-	PacketSize(timeval t, uint16_t ps, uint16_t pls) : time(t), packet_size(ps), payload_size(pls) {
-	}
+	PacketSize(timeval t, uint16_t ps, uint16_t pls) : time(t), packet_size(ps), payload_size(pls) {}
 };
 
 class PacketSizeGroup {
@@ -120,8 +119,8 @@ public:
 	void calculateLatencyVariation() { rm->calculateLatencyVariation(); }
 	void makeByteLatencyVariationCDF() { rm->makeByteLatencyVariationCDF(); }
 	void writeByteLatencyVariationCDF(ofstream *stream);
-	void writeSentTimesAndQueueingDelayVariance(const uint64_t first_tstamp, vector<csv::ofstream*> streams) { rm->writeSentTimesAndQueueingDelayVariance(first_tstamp, streams); }
-	void genAckLatencyData(long first_tstamp, vector<SPNS::shared_ptr<vector <LatencyItem> > > &diff_times) {
+	void writeSentTimesAndQueueingDelayVariance(const int64_t first_tstamp, vector<csv::ofstream*> streams) { rm->writeSentTimesAndQueueingDelayVariance(first_tstamp, streams); }
+	void genAckLatencyData(const int64_t first_tstamp, vector<SPNS::shared_ptr<vector <LatencyItem> > > &diff_times) {
 		rm->genAckLatencyData(first_tstamp, diff_times, getConnKey());
 	}
 	void addRDBStats(int *rdb_sent, int *rdb_miss, int *rdb_hits, int *totBytesSent);
@@ -133,7 +132,7 @@ public:
 	void calculateRetransAndRDBStats();
 	uint32_t getDuration(bool analyse_range_duration);
 
-	void registerPacketSize(const timeval& first_tstamp_in_dump, const timeval& pkt_tstamp, const ullint_t pkt_size, const uint16_t payloadSize);
+	void registerPacketSize(const timeval& first_tstamp_in_dump, const timeval& pkt_tstamp, const uint32_t pkt_size, const uint16_t payloadSize);
     void writePacketByteCountAndITT(vector<csv::ofstream*> streams);
 };
 

@@ -8,6 +8,10 @@
 
 typedef enum {SEC_PREC, MSEC_PREC, USEC_PREC} TIME_PREC;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 char* sprint_exact_time_sep(char *buf, struct timeval t, char sep, TIME_PREC precision);
 char* sprint_time_us_prec(char *buf, struct timeval t);
 char* sprint_time_ms_prec(char *buf, struct timeval t);
@@ -16,8 +20,12 @@ char* sprint_time_sec_prec(char *buf, struct timeval t);
 char* sprint_readable_time_now(char *buf);
 struct timeval sprint_readable_time_diff(char *buf, struct timeval oldest, struct timeval newest);
 struct timeval sprint_readable_time_now_diff(char *buf, struct timeval old_time);
-long get_msecs(struct timeval tv);
-long get_usecs(timeval &tv);
+long get_msecs(struct timeval *tv);
+long get_usecs(struct timeval *tv);
+
+#ifdef __cplusplus
+}
+#endif
 
 #define tval_pair(tval) tval.tv_sec, tval.tv_usec
 

@@ -79,7 +79,6 @@ static option long_options[] = {
 	{0, 0, 0, 0}
 };
 
-
 void usage(char* argv, string usage_str, int exit_status=1, int help_level=1)
 {
 	printf("Usage: %s [%s]\n", argv, usage_str.c_str());
@@ -334,7 +333,7 @@ void parse_cmd_args(int argc, char *argv[], string OPTSTRING, string usage_str) 
 		case 'y':
 			GlobOpts::print_packets = true;
 			if (optarg)
-				parse_print_packets(optarg);
+				parse_print_packets();
 			break;
 		case 'G':
 			GlobOpts::look_for_get_request = true;

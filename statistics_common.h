@@ -15,8 +15,8 @@ public:
 	double tot_all_bytes;	// total number of bytes sent within interval
 	double tot_new_bytes;	// total number of bytes sent with new data within interval
 
-	LossInterval(double ranges, double all_bytes, double new_bytes)
-		: cnt_bytes(ranges), all_bytes(all_bytes), new_bytes(new_bytes)
+	LossInterval(double ranges, double _all_bytes, double _new_bytes)
+		: cnt_bytes(ranges), all_bytes(_all_bytes), new_bytes(_new_bytes)
 		, tot_cnt_bytes(0), tot_all_bytes(0), tot_new_bytes(0)
 	{ }
 
@@ -30,11 +30,11 @@ csv::ofstream& operator<<(csv::ofstream& stream, LossInterval& v);
 
 class LatencyItem {
 public:
-	long time_ms;
-	int latency;
+	int time_ms; // This is relative time, i.e. time starts on 0 for first packet
+	int latency_ms;
 	string stream_id;
-	LatencyItem(long time_ms, int latency, string stream_id)
-		: time_ms(time_ms), latency(latency), stream_id(stream_id) { }
+	LatencyItem(int64_t time, int latency, string _stream_id)
+		: time_ms(static_cast<int>(time)), latency_ms(latency), stream_id(_stream_id) { }
 
 	static void writeHeader(csv::ofstream& stream) {
 		stream << "time" << "latency" << "stream_id" << NEWLINE;
@@ -100,7 +100,7 @@ struct Percentiles
 class BaseStats
 {
 	bool _is_aggregate;
-	int32_t _counter;
+	uint32_t _counter;
 public:
 	ullint_t min;
 	ullint_t max;
@@ -158,12 +158,12 @@ class PacketStats
 public:
 	sent_type s_type;
 	string stream_id;
-	uint64_t send_time_us;
-	uint16_t size;
-	uint32_t itt_usec;
+	int64_t send_time_us;
+	uint32_t size;
+	int itt_usec;
 	int ack_latency_usec;
 	PacketStats() {}
-	PacketStats(sent_type type, string connKey, uint64_t time, uint16_t s)
+	PacketStats(sent_type type, string connKey, int64_t time, uint32_t s)
 		: s_type(type), stream_id(connKey), send_time_us(time), size(s), itt_usec(0)
 	{}
 	static void writeHeader(csv::ofstream& stream);
@@ -181,7 +181,7 @@ public:
 	vector< pair<int, int> > sojourn_times; // byte count, sojourn time
 
 	SegmentStats() {}
-	SegmentStats(sent_type type, string connKey, uint64_t time, uint16_t s)
+	SegmentStats(sent_type type, string connKey, int64_t time, uint32_t s)
 		: PacketStats(type, connKey, time, s)
 	{}
 	static void writeHeader(csv::ofstream& stream);

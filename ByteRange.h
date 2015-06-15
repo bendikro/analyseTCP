@@ -2,8 +2,8 @@
 #define BYTERANGE_H
 
 #include "RangeManager.h"
-#include "time_util.h"
 #include "common.h"
+#include "time_util.h"
 
 using namespace std;
 
@@ -22,8 +22,8 @@ public:
 	uint8_t data_sent_count;           // Count number of times this byte range has been sent (incl. retransmissions)
 	uint8_t data_retrans_count;        // Count number of times this byte range has been retransmitted
 	uint8_t rdb_count;                 // Count number of times this byte range has been transmitted as redundant (rdb) data
-	uint8_t rdb_byte_miss;
-	uint8_t rdb_byte_hits;
+	uint8_t rdb_miss_count;
+	uint8_t rdb_hit_count;
 
 	vector< pair<seq64_t, timeval> > sojourn_tstamps; // endseq for segment, tstamp when entered kernel
 	vector< pair<timeval, sent_type> > sent_tstamp_pcap; // pcap tstamp for when packet was sent, sent_type {ST_NONE, ST_PKT, ST_RTR, ST_PURE_ACK};
@@ -74,8 +74,8 @@ public:
 		recv_type = DEF;
 		recv_type_num = 1;
 		received_tstamp_tcp = 0;
-		rdb_byte_miss = 0;
-		rdb_byte_hits = 0;
+		rdb_miss_count = 0;
+		rdb_hit_count = 0;
 		diff = 0;
 		tcp_window = 0;
 		ackTime.tv_sec = 0;
@@ -129,14 +129,15 @@ public:
 			data_sent_count++;
 
 		if (sent_t == ST_PKT)
-			sent_data_pkt_pcap_index = sent_tstamp_pcap.size();
+			sent_data_pkt_pcap_index = static_cast<int16_t>(sent_tstamp_pcap.size());
 
 		sent_tstamp_pcap.push_back(pair<timeval, sent_type>(tstamp_pcap, sent_t));
 		lost_tstamps_tcp.push_back(pair<uint32_t, timeval>(tcp_tsval, tstamp_pcap));
 	}
 
 	void updateByteCount() {
-		byte_count = endSeq - startSeq;
+		assert((endSeq - startSeq) < std::numeric_limits<uint16_t>::max());
+		byte_count = static_cast<uint16_t>(endSeq - startSeq);
 	}
 
 	// Split and make a new range at the end
@@ -168,19 +169,19 @@ public:
 
 	seq64_t getStartSeq() { return startSeq; }
 	seq64_t getEndSeq() { return endSeq; }
-	int getSendAckTimeDiff(RangeManager *rm);
-	int getNumRetrans() { return packet_retrans_count; }
+	long getSendAckTimeDiff(RangeManager *rm);
+	uint8_t getNumRetrans() { return packet_retrans_count; }
 	uint8_t getNumBundled() { return rdb_count; }
 	uint16_t getNumBytes() { return byte_count; }
-	inline uint16_t getDataSentCount() { return data_sent_count; }
-	inline uint16_t getDataReceivedCount() { return data_received_count; }
-	int getOrinalPayloadSize() { return original_payload_size; }
+	uint16_t getDataSentCount() { return data_sent_count; }
+	uint16_t getDataReceivedCount() { return data_received_count; }
+	uint16_t getOrinalPayloadSize() { return original_payload_size; }
 	int getTotalBytesTransfered() { return byte_count + byte_count * data_retrans_count + byte_count * rdb_count; }
 	bool isAcked() { return acked; }
 	void insertAckTime(timeval *tv) { ackTime = *tv; acked = 1; }
 	void calculateRecvDiff(timeval *recv_tstamp = NULL);
 	long getRecvDiff() { return diff; }
-	void setRecvDiff(long diff) { this->diff = diff; }
+	void setRecvDiff(long _diff) { diff = _diff; }
 	string strInfo();
 	string str();
 	void printTstampsPcap();
@@ -191,7 +192,5 @@ public:
 	vector< pair<int, int> > getSojournTimes();
 	bool addSegmentEnteredKernelTime(seq64_t seq, timeval &tv);
 };
-
-double getTimeInterval(ByteRange *start, ByteRange *end);
 
 #endif /* BYTERANGE_H */

@@ -15,10 +15,14 @@ string PacketSizeGroup::str() const {
 }
 
 uint32_t Connection::getDuration(bool analyse_range_duration) {
-	if (analyse_range_duration)
-		return getTimeInterval(rm->analyse_range_start->second, rm->analyse_range_last->second);
-	else
-		return rm->getDuration();
+	double d;
+	if (analyse_range_duration) {
+		d = getTimeInterval(rm->analyse_range_start->second, rm->analyse_range_last->second);
+	}
+	else {
+		d = rm->getDuration();
+	}
+	return static_cast<uint32_t>(d);
 }
 
 /* Count bundled and retransmitted packets from sent data */
@@ -296,7 +300,6 @@ void Connection::setAnalyseRangeInterval() {
 			}
 		}
 	}
-	rm->analysed_ranges_count = std::distance(rm->analyse_range_start, rm->analyse_range_end);
 }
 
 /* Generate statistics for each connection.
@@ -421,8 +424,8 @@ ullint_t Connection::getNumUniqueBytes() {
 	return unique_data_bytes;
 }
 
-void Connection::registerPacketSize(const timeval& first, const timeval& ts, const ullint_t ps, const uint16_t payloadSize) {
-	const uint64_t relative_ts = TV_TO_MS(ts) - TV_TO_MS(first);
+void Connection::registerPacketSize(const timeval& first, const timeval& ts, const uint32_t ps, const uint16_t payloadSize) {
+	const uint64_t relative_ts = static_cast<uint64_t>(TV_TO_MS(ts) - TV_TO_MS(first));
 	const uint64_t sent_time_bucket_idx = relative_ts / GlobOpts::throughputAggrMs;
 
 	while (sent_time_bucket_idx >= packetSizes.size()) {
@@ -431,7 +434,7 @@ void Connection::registerPacketSize(const timeval& first, const timeval& ts, con
 		PacketSizeGroup empty2;
 		packetSizeGroups.push_back(empty2);
 	}
-	PacketSize pSize(ts, ps, payloadSize);
+	PacketSize pSize(ts, static_cast<uint16_t>(ps), payloadSize);
 	packetSizes[sent_time_bucket_idx].push_back(pSize);
 	packetSizeGroups[sent_time_bucket_idx].add(pSize);
 }
@@ -442,8 +445,8 @@ void Connection::writePacketByteCountAndITT(vector<csv::ofstream*> streams) {
 	uint64_t k = 0;
 	while (packetSizes[k].empty()) k++;
 
-	uint64_t prev = TV_TO_MICSEC(packetSizes[k][0].time);
-	uint64_t itt, tmp;
+	int64_t prev = TV_TO_MICSEC(packetSizes[k][0].time);
+	int64_t itt, tmp;
 	for (i = 0; i < packetSizes.size(); ++i) {
 		for (j = 0; j < packetSizes[i].size(); ++j) {
 			tmp = TV_TO_MICSEC(packetSizes[i][j].time);

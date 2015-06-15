@@ -64,26 +64,6 @@ SET (INCLUDE_FILES arpa/inet.h netinet/in.h sys/socket.h getopt.h)
 
 CHECK_TYPE_SIZE(ulong HAVE_ULONG)
 
-# Set compiler flags for all configurations
-SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-long-long -Wno-variadic-macros")
-SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-
-# Clang warns about unused argument -std=c++11 in the linker command
-if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Qunused-arguments")
-endif()
-
-# Add NDEBUG only for release version
-# To activate: cmake -DCMAKE_BUILD_TYPE=Release ..
-SET (CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
-
-# Set debug compiler flags
-# To activate: cmake -DCMAKE_BUILD_TYPE=Debug ..
-SET (CMAKE_CXX_FLAGS_DEBUG "-g3 -Wall -DDEBUG -Wextra -pedantic")
-
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_STANDARD_REQUIRED on)
-
 # test for C++11 flags
 include(TestCXXAcceptsFlag)
 CHECK_CXX_ACCEPTS_FLAG("-std=c++11" CXX_FLAG_CXX11)
@@ -91,6 +71,26 @@ CHECK_CXX_ACCEPTS_FLAG("-std=c++11" CXX_FLAG_CXX11)
 IF (NOT CXX_FLAG_CXX11)
   MESSAGE(FATAL_ERROR "Compiler does not support c++11.")
 ENDIF(NOT CXX_FLAG_CXX11)
+
+# Set compiler flags for all configurations
+SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11") # We need c++11
+SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic") # Decent level of warnings
+SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-long-long -Wno-variadic-macros")
+SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wshadow")
+
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wconversion -Wsign-conversion") # These two options are useless with gcc, as it's way too strict (See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=40752)
+  SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wfloat-equal") # Also too strict in gcc
+  SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Qunused-arguments") # Clang warns about unused argument -std=c++11 in the linker command without this
+endif()
+
+# Add NDEBUG only for release version
+# To activate: cmake -DCMAKE_BUILD_TYPE=Release ..
+SET (CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -Wno-unused-parameter")
+
+# Set debug compiler flags
+# To activate: cmake -DCMAKE_BUILD_TYPE=Debug ..
+SET (CMAKE_CXX_FLAGS_DEBUG "-g3 -DDEBUG")
 
 # Must be below the compiler flags
 INCLUDE(FindSharedPtr)
@@ -111,12 +111,12 @@ SET (BASE_SRC
   ByteRange.cc ByteRange.h
   common.cc common.h
   fourTuple.cc fourTuple.h
-  color_print.cc color_print.h
   util.cc util.h)
 
 # Prepare sources for app.
 SET (TCP_SRC ${BASE_SRC}
   analyseTCP.cc
+  color_print.cc color_print.h
   time_util.cc time_util.h)
 
 SET (DASH_SRC ${BASE_SRC}

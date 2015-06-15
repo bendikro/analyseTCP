@@ -46,8 +46,8 @@ public:
 
     std::string ip_left() const    { return addr_to_string( _ip_left ); }
     std::string ip_right() const   { return addr_to_string( _ip_right ); }
-    std::string port_left() const  { return port_to_string( _ip_left ); }
-    std::string port_right() const { return port_to_string( _ip_right ); }
+    std::string port_left() const  { return port_to_string( _port_left ); }
+    std::string port_right() const { return port_to_string( _port_right ); }
 
     std::string to_string( ) const;
 

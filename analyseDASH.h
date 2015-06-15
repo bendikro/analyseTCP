@@ -1,14 +1,11 @@
 /*************************************************************************************
 **************************************************************************************
 **                                                                                  **
-**  analyseDASH - Tool for analysing sets of tcpdumps to understand how DASH flows  **
-**                behave per segment.                                               **
-**                                                                                  **
 **  Copyright (C) 2007      Andreas Petlund  - andreas@petlund.no                   **
-**                      and Kristian Evensen - kristrev@ifi.uio.no                  **
-**                2012-2014 Bendik Rønning Opstad  - bendikro@gmail.com             **
+**                          Kristian Evensen - kristrev@ifi.uio.no                  **
+**                2012-2015 Bendik Rønning Opstad  - bendikro@gmail.com             **
 **                          Jonas Sæther Markussen - jonassm@ifi.uio.no             **
-**                2015      Carsten Griwodz  - griff@simula.no                      **
+**                2015      Carsten Griwodz        - griff@simula.no                **
 **                                                                                  **
 **     This program is free software; you can redistribute it and/or modify         **
 **     it under the terms of the GNU General Public License as published by         **

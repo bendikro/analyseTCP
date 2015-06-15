@@ -76,7 +76,7 @@ void Statistics::printDumpStats() {
 
 	cout << endl;
 	colored_printf(YELLOW, "General info for entire dump:\n");
-	printf("  %s:%s -> %s:%s\n", dump.srcIp.c_str(), dump.srcPort.c_str(), dump.dstIp.c_str(), dump.dstPort.c_str());
+	printf("  %s:%s -> %s:%s\n", dump.filterSrcIp.c_str(), dump.filterSrcPort.c_str(), dump.filterDstIp.c_str(), dump.filterDstPort.c_str());
 	cout << "  Filename: " << dump.filename << endl;
 	cout << "  Sent Packet Count     : " << dump.sentPacketCount << endl;
 	cout << "  Received Packet Count : " << dump.recvPacketCount << endl;
@@ -442,7 +442,7 @@ void Statistics::makeByteLatencyVariationCDF() {
 class LossStatsWriter : public StatsWriterBase
 {
 public:
-	const uint64_t first_tstamp;
+	const int64_t first_tstamp;
 	SPNS::shared_ptr<vector <LossInterval> > aggr;
 	double total_count = 0, total_bytes = 0;
 
@@ -485,7 +485,7 @@ public:
 		LossInterval::writeHeader(stream);
 	}
 
-	LossStatsWriter(const uint64_t tstamp)
+	LossStatsWriter(const long tstamp)
 		: first_tstamp(tstamp)
 	{}
 };
@@ -513,7 +513,7 @@ public:
  */
 void Statistics::writeLossStats() {
 	assert(GlobOpts::withRecv && "Calculating loss is only possible with receiver dump");
-	const uint64_t first_tstamp = TV_TO_MS(dump.first_sent_time);
+	const int64_t first_tstamp = TV_TO_MS(dump.first_sent_time);
 	LossStatsWriter conf(first_tstamp);
 	conf.write_header = true;
 	conf.setFilenameID("loss");
@@ -605,7 +605,7 @@ void Statistics::writePerSegmentStats() {
 class AckLatencyWriter : public StatsWriterBase
 {
 public:
-	const uint64_t first_tstamp;
+	const int64_t first_tstamp;
 	vector<SPNS::shared_ptr<vector <LatencyItem> > > aggrDiffTimes;
 
 	virtual void writeStats(Connection &conn) {
@@ -632,7 +632,7 @@ public:
 		writeToStream("aggr", aggrDiffTimes);
 	}
 
-	string getFilename(string filenameKey, int index) {
+	string getFilename(string filenameKey, ulong index) {
 		stringstream filename_tmp("");
 		filename_tmp << GlobOpts::prefix;
 		filename_tmp << filenameID;
@@ -657,13 +657,13 @@ public:
 			delete stream;
 		}
 	}
-	AckLatencyWriter(const uint64_t tstamp)
+	AckLatencyWriter(const long tstamp)
 		: first_tstamp(tstamp)
 	{}
 };
 
 void Statistics::writeAckLatency() {
-	const uint64_t first_tstamp = TV_TO_MS(dump.first_sent_time);
+	const int64_t first_tstamp = TV_TO_MS(dump.first_sent_time);
 	AckLatencyWriter conf(first_tstamp);
 	conf.setFilenameID("latency");
 	conf.setHeader("time,latency,stream_id");
@@ -677,15 +677,15 @@ void Statistics::writeAckLatency() {
 void Statistics::writeSentTimesAndQueueingDelayVariance() {
 	class SentTimesAndQueueingDelayVariance : public StreamStatsWriterBase {
 	public:
-		const uint64_t first_tstamp;
+		const int64_t first_tstamp;
 		virtual void statsFunc(Connection &conn, vector<csv::ofstream*> streams) {
 			conn.writeSentTimesAndQueueingDelayVariance(first_tstamp, streams);
 		}
-		SentTimesAndQueueingDelayVariance(const uint64_t tstamp)
+		SentTimesAndQueueingDelayVariance(const long tstamp)
 			: first_tstamp(tstamp)
 		{}
 	};
-	const uint64_t first_tstamp = TV_TO_MS(dump.first_sent_time);
+	const int64_t first_tstamp = TV_TO_MS(dump.first_sent_time);
 	SentTimesAndQueueingDelayVariance conf(first_tstamp);
 	conf.setHeader("time,latency_variance,stream_id");
 	conf.setFilenameID("queueing-delay");

@@ -78,14 +78,14 @@ four_tuple_t::four_tuple_t( const char* arg )
         str = strsep( &connection, "-" );
         if( str != 0 )
         {
-            _port_left = strtol( str, 0, 10 );
+            _port_left = static_cast<uint16_t>(strtol( str, 0, 10 ));
             str = strsep( &connection, ":" );
             if( str != 0 )
             {
                 _ip_right = inet_addr( str );
                 if( connection )
                 {
-                    _port_right = strtol( connection, 0, 10 );
+                    _port_right = static_cast<uint16_t>(strtol( connection, 0, 10 ));
                     cerr << "Parsed connection " << to_string() << endl;
                     _valid = true;
                 }

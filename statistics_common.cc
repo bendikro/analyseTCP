@@ -1,7 +1,8 @@
 #include "common.h"
 #include "statistics_common.h"
-#include "color_print.h"
 #include "Connection.h"
+#include "color_print.h"
+
 
 GlobStats globStats;
 
@@ -12,7 +13,7 @@ map<const long, int> GlobStats::byteLatencyVariationCDFValues;
  * LatencyItem
  *****************************************/
 csv::ofstream& operator<<(csv::ofstream& stream, LatencyItem& lat) {
-	stream << lat.time_ms << lat.latency << lat.stream_id;
+	stream << lat.time_ms << lat.latency_ms << lat.stream_id;
 	return stream;
 }
 
@@ -128,6 +129,26 @@ csv::ofstream& operator<<(csv::ofstream& os, ConnCSVItem& val)
 /*****************************************
  * LossInterval
  *****************************************/
+/*
+ * Sum two loss interval values together
+ */
+LossInterval& LossInterval::operator+=(const LossInterval& rhs) {
+	cnt_bytes += rhs.cnt_bytes;
+	all_bytes += rhs.all_bytes;
+	new_bytes += rhs.new_bytes;
+	return *this;
+}
+
+/*
+ * Set total values for the loss interval
+ */
+void LossInterval::addTotal(double ranges, double _all_bytes, double _new_bytes) {
+	tot_cnt_bytes += ranges;
+	tot_all_bytes += _all_bytes;
+	tot_new_bytes += _new_bytes;
+}
+
+
 void LossInterval::writeHeader(csv::ofstream& stream) {
 	stream << "interval"
 		   << "ranges_sent"
@@ -163,33 +184,33 @@ csv::ofstream& operator<<(csv::ofstream& s, LossInterval& v) {
 	s << v.new_bytes;
 
 	// total lost relative to sent within interval
-	if (v.tot_cnt_bytes != 0)
+	if (v.tot_cnt_bytes != 0.0)
 		s << (v.cnt_bytes / v.tot_cnt_bytes);
 	else
 		s << 0;
 
-	if (v.tot_all_bytes != 0)
+	if (v.tot_all_bytes != 0.0)
 		s << (v.all_bytes / v.tot_all_bytes);
 	else
 		s << 0;
 
-	if ((v.tot_all_bytes - v.tot_new_bytes) != 0)
+	if ((v.tot_all_bytes - v.tot_new_bytes) != 0.0)
 		s << ((v.all_bytes - v.new_bytes) / (v.tot_all_bytes - v.tot_new_bytes));
 	else
 		s << 0;
 
-	if (v.tot_new_bytes != 0)
+	if (v.tot_new_bytes != 0.0)
 		s << (v.new_bytes / v.tot_new_bytes);
 	else
 		s << 0;
 
 	// total lost relative to lost within interval
-	if (v.all_bytes != 0)
+	if (v.all_bytes != 0.0)
 		s << ((v.all_bytes - v.new_bytes) / v.all_bytes);
 	else
 		s << 0;
 
-	if (v.all_bytes != 0)
+	if (v.all_bytes != 0.0)
 		s << (v.new_bytes / v.all_bytes);
 	else
 		s << 0;
@@ -214,7 +235,7 @@ csv::ofstream& operator<<(csv::ofstream& s, LossInterval& v) {
  			colored_printf(YELLOW, "Invalid percentile '%s'\n", token.c_str());
  			continue;
  		}
- 		max_char_length = token.length();
+		max_char_length = static_cast<int>(token.length());
  		percentiles.insert(pair<string, double>(token, 0));
      }
  }
@@ -298,8 +319,8 @@ csv::ofstream& operator<<(csv::ofstream& s, LossInterval& v) {
          cerr << "WARNING: rhs is invalid in " << __FILE__ << ":" << __LINE__ << endl;
          return;
      }
-     this->min = std::min<int64_t>(this->min, rhs.min);
-     this->max = std::max<int64_t>(this->max, rhs.max);
+     this->min = std::min<ullint_t>(this->min, rhs.min);
+     this->max = std::max<ullint_t>(this->max, rhs.max);
      this->cum += rhs.cum;
 	 _values.insert(_values.end(), rhs._values.begin(), rhs._values.end());
      _counter += rhs._values.size();
@@ -355,21 +376,21 @@ void BaseStats::computePercentiles()
  {
 	if (bs.latency.get_counter()) {
 		aggregated.latency.add_to_aggregate(bs.latency);
-		average.latency.add(bs.latency.get_avg());
+		average.latency.add(static_cast<ullint_t>(bs.latency.get_avg()));
 		minimum.latency.add(bs.latency.min);
 		maximum.latency.add(bs.latency.max);
 	}
 
 	if (bs.packet_length.get_counter()) {
 		aggregated.packet_length.add_to_aggregate(bs.packet_length);
-		average.packet_length.add(bs.packet_length.get_avg());
+		average.packet_length.add(static_cast<ullint_t>(bs.packet_length.get_avg()));
 		minimum.packet_length.add(bs.packet_length.min);
 		maximum.packet_length.add(bs.packet_length.max);
 	}
 
 	if (bs.itt.get_counter()) {
 		aggregated.itt.add_to_aggregate(bs.itt);
-		average.itt.add(bs.itt.get_avg());
+		average.itt.add(static_cast<ullint_t>(bs.itt.get_avg()));
 		minimum.itt.add(bs.itt.min);
 		maximum.itt.add(bs.itt.max);
 	}

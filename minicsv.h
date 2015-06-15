@@ -92,27 +92,27 @@ namespace csv
 		}
 		std::string get_delimited_str()
 		{
-			std::string str = "";
+			std::string dStr = "";
 			char ch = '\0';
 			do
 			{
-				if(pos>=this->str.size())
+				if(pos >= this->str.size())
 				{
 					this->str = "";
 
-					return str;
+					return dStr;
 				}
 
 				ch = this->str[pos];
 				++(pos);
-				if(ch==delimiter||ch=='\r'||ch=='\n')
+				if(ch == delimiter || ch == '\r' || ch == '\n')
 					break;
 
-				str += ch;
+				dStr += ch;
 			}
 			while(true);
 
-			return str;
+			return dStr;
 		}
 	private:
 		std::ifstream istm;
@@ -144,7 +144,7 @@ namespace csv
 		{
 			init();
 			ostm.open(file, mode);
-			filename = string(file);
+			filename = std::string(file);
 		}
 		void init()
 		{
@@ -182,12 +182,12 @@ namespace csv
 		std::ofstream& get_ofstream()
 		{
 			if (!ostm.is_open())
-				throw ios_base::failure(string("File stream for file '") + filename + "' is closed!");
+				throw std::ios_base::failure(string("File stream for file '") + filename + "' is closed!");
 			return ostm;
 		}
 	private:
 		std::ofstream ostm;
-		string filename;
+		std::string filename;
 		bool after_newline;
 		char delimiter;
 	};

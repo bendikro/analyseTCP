@@ -13,11 +13,11 @@ static void look_for_get_request(const pcap_pkthdr* header, const u_char *data);
 /* Methods for class Dump */
 Dump::Dump(string src_ip, string dst_ip, string src_port, string dst_port, string tcp_port, string fn)
 	: filename(fn)
-	, srcIp(src_ip)
-	, dstIp(dst_ip)
-	, srcPort(src_port)
-	, dstPort(dst_port)
-	, tcpPort(tcp_port)
+	, filterSrcIp(src_ip)
+	, filterDstIp(dst_ip)
+	, filterSrcPort(src_port)
+	, filterDstPort(dst_port)
+	, filterTCPPort(tcp_port)
 	, sentPacketCount(0)
 	, recvPacketCount(0)
 	, sentBytesCount(0)
@@ -26,20 +26,15 @@ Dump::Dump(string src_ip, string dst_ip, string src_port, string dst_port, strin
 	, max_payload_size(0)
 {
 	timerclear(&first_sent_time);
-	srcIp = src_ip;
-	dstIp = dst_ip;
-	srcPort = src_port;
-	dstPort = dst_port;
-    tcpPort = tcp_port;
 }
 
 Dump::Dump(const vector<four_tuple_t>& connections, string fn)
 	: filename(fn)
-	, srcIp("")
-	, dstIp("")
-	, srcPort("")
-	, dstPort("")
-	, tcpPort("")
+	, filterSrcIp("")
+	, filterDstIp("")
+	, filterSrcPort("")
+	, filterDstPort("")
+	, filterTCPPort("")
 	, _connections(connections)
 	, sentPacketCount(0)
 	, recvPacketCount(0)
@@ -60,12 +55,12 @@ Dump::~Dump() {
 	conns.clear();
 }
 
-Connection* Dump::getConn(const in_addr &srcIp, const in_addr &dstIp, const uint16_t *srcPort, const uint16_t *dstPort, const seq32_t *seq)
+Connection* Dump::getConn(const in_addr &srcIpAddr, const in_addr &dstIpAddr, const uint16_t *srcPort, const uint16_t *dstPort, const seq32_t *seq)
 {
 	ConnectionMapKey connKey;
 	map<ConnectionMapKey*, Connection*>::iterator it;
-	memcpy(&connKey.ip_src, &srcIp, sizeof(in_addr));
-	memcpy(&connKey.ip_dst, &dstIp, sizeof(in_addr));
+	memcpy(&connKey.ip_src, &srcIpAddr, sizeof(in_addr));
+	memcpy(&connKey.ip_dst, &dstIpAddr, sizeof(in_addr));
 	connKey.src_port = *srcPort;
 	connKey.dst_port = *dstPort;
 
@@ -79,10 +74,10 @@ Connection* Dump::getConn(const in_addr &srcIp, const in_addr &dstIp, const uint
 		return NULL;
 	}
 
-	Connection *tmpConn = new Connection(srcIp, srcPort, dstIp, dstPort, ntohl(*seq));
+	Connection *tmpConn = new Connection(srcIpAddr, srcPort, dstIpAddr, dstPort, ntohl(*seq));
 	ConnectionMapKey *connKeyToInsert = new ConnectionMapKey();
-	memcpy(&connKeyToInsert->ip_src, &srcIp, sizeof(in_addr));
-	memcpy(&connKeyToInsert->ip_dst, &dstIp, sizeof(in_addr));
+	memcpy(&connKeyToInsert->ip_src, &srcIpAddr, sizeof(in_addr));
+	memcpy(&connKeyToInsert->ip_dst, &dstIpAddr, sizeof(in_addr));
 	connKeyToInsert->src_port = connKey.src_port;
 	connKeyToInsert->dst_port = connKey.dst_port;
 	conns.insert(pair<ConnectionMapKey*, Connection*>(connKeyToInsert, tmpConn));
@@ -91,20 +86,20 @@ Connection* Dump::getConn(const in_addr &srcIp, const in_addr &dstIp, const uint
 
 Connection* Dump::getConn(string &srcIpStr, string &dstIpStr, string &srcPortStr, string &dstPortStr)
 {
-	in_addr srcIp;
-	in_addr dstIp;
+	in_addr srcIpAddr;
+	in_addr dstIpAddr;
 
-	uint16_t srcPort = htons(std::stoi(srcPortStr));
-	uint16_t dstPort = htons(std::stoi(dstPortStr));
+	uint16_t srcPort = htons(static_cast<uint16_t>(std::stoul(srcPortStr)));
+	uint16_t dstPort = htons(static_cast<uint16_t>(std::stoul(dstPortStr)));
 
-	if (!inet_pton(AF_INET, srcIpStr.c_str(), &srcIp)) {
+	if (!inet_pton(AF_INET, srcIpStr.c_str(), &srcIpAddr)) {
 		colored_printf(RED, "Failed to convert source IP '%s'\n", srcIpStr.c_str());
 	}
 
-	if (!inet_pton(AF_INET, dstIpStr.c_str(), &dstIp)) {
+	if (!inet_pton(AF_INET, dstIpStr.c_str(), &dstIpAddr)) {
 		colored_printf(RED, "Failed to convert destination IP '%s'\n", srcIpStr.c_str());
 	}
-	return getConn(srcIp, dstIp, &srcPort, &dstPort, NULL);
+	return getConn(srcIpAddr, dstIpAddr, &srcPort, &dstPort, NULL);
 }
 
 /* Traverse the pcap dump and call methods for processing the packets
@@ -115,7 +110,6 @@ void Dump::analyseSender()
 	char errbuf[PCAP_ERRBUF_SIZE];
 	pcap_pkthdr header;
 	const u_char *data;
-	map<ConnectionMapKey*, Connection*>::iterator it, it_end;
 
 	pcap_t *fd = pcap_open_offline(filename.c_str(), errbuf);
 	if (fd == NULL) {
@@ -123,7 +117,7 @@ void Dump::analyseSender()
 		exit_with_file_and_linenum(1, __FILE__, __LINE__);
 	}
 
-	stringstream       filterExp;
+	stringstream filterExp;
 	bpf_program compFilter;
 
 	bool src_port_range;
@@ -134,22 +128,22 @@ void Dump::analyseSender()
 	    /* Set up pcap filter to include only outgoing tcp
 	     * packets with correct ip and port numbers.
 	     */
-	    src_port_range = !isNumeric(srcPort.c_str(), 10);
-	    dst_port_range = !isNumeric(dstPort.c_str(), 10);
+	    src_port_range = !isNumeric(filterSrcPort.c_str(), 10);
+	    dst_port_range = !isNumeric(filterDstPort.c_str(), 10);
 
 	    filterExp << "tcp";
-	    if (!srcIp.empty())
-		    filterExp << " && src host " << srcIp;
-	    if (!srcPort.empty()) {
-		    filterExp << " && src " << (src_port_range ? "portrange " : "port ") << srcPort;
+	    if (!filterSrcIp.empty())
+		    filterExp << " && src host " << filterSrcIp;
+	    if (!filterSrcPort.empty()) {
+		    filterExp << " && src " << (src_port_range ? "portrange " : "port ") << filterSrcPort;
 	    }
-	    if (!dstIp.empty())
-		    filterExp << " && dst host " << dstIp;
-	    if (!dstPort.empty())
-		    filterExp << " && dst " << (dst_port_range ? "portrange " : "port ") << dstPort;
+	    if (!filterDstIp.empty())
+		    filterExp << " && dst host " << filterDstIp;
+	    if (!filterDstPort.empty())
+		    filterExp << " && dst " << (dst_port_range ? "portrange " : "port ") << filterDstPort;
 
-        if (!tcpPort.empty())
-		    filterExp << " && tcp port " << tcpPort;
+        if (!filterTCPPort.empty())
+		    filterExp << " && tcp port " << filterTCPPort;
 
 	    // Earlier, only packets with TCP payload were used.
 	    //filterExp << " && (ip[2:2] - ((ip[0]&0x0f)<<2) - (tcp[12]>>2)) >= 1";
@@ -214,8 +208,8 @@ void Dump::analyseSender()
 		if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
 			cerr << "---------------Begin first validation--------------" << endl;
 
-		it_end = conns.end();
-		for (it = conns.begin(); it != it_end; it++) {
+		auto it_end = conns.end();
+		for (auto it = conns.begin(); it != it_end; it++) {
 			it->second->validateRanges();
 		}
 		if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
@@ -230,18 +224,18 @@ void Dump::analyseSender()
 
 	filterExp.str("");
 	filterExp << "tcp";
-	if (!dstIp.empty())
-		filterExp << " && src host " << dstIp;
-	if (!dstPort.empty())
-		filterExp << " && src " << (dst_port_range ? "portrange " : "port ") << dstPort;
+	if (!filterDstIp.empty())
+		filterExp << " && src host " << filterDstIp;
+	if (!filterDstPort.empty())
+		filterExp << " && src " << (dst_port_range ? "portrange " : "port ") << filterDstPort;
 
-	if (!srcIp.empty())
-		filterExp << " && dst host " << srcIp;
-	if (!srcPort.empty())
-		filterExp << " && dst " << (src_port_range ? "portrange " : "port ") << srcPort;
+	if (!filterSrcIp.empty())
+		filterExp << " && dst host " << filterSrcIp;
+	if (!filterSrcPort.empty())
+		filterExp << " && dst " << (src_port_range ? "portrange " : "port ") << filterSrcPort;
 
-	if (!tcpPort.empty())
-		filterExp << " && tcp port " << tcpPort;
+	if (!filterTCPPort.empty())
+		filterExp << " && tcp port " << filterTCPPort;
 
 	filterExp << " && ((tcp[tcpflags] & tcp-ack) == tcp-ack)";
 
@@ -283,8 +277,8 @@ void Dump::analyseSender()
 		/* DEBUG: Validate ranges */
 		if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
 			cerr << "---------------Begin second validation--------------" << endl;
-		it_end = conns.end();
-		for (it = conns.begin(); it != it_end; it++) {
+		auto it_end = conns.end();
+		for (auto it = conns.begin(); it != it_end; it++) {
 			it->second->validateRanges();
 		}
 
@@ -294,13 +288,13 @@ void Dump::analyseSender()
 }
 
 
-void Dump::findTCPTimeStamp(DataSeg* data, uint8_t* opts, int option_length) {
+void Dump::findTCPTimeStamp(DataSeg* data, uint8_t* opts, uint option_length) {
 
 	typedef struct {
 		uint8_t kind;
 		uint8_t size;
 	} tcp_option_t;
-	int offset = 0;
+	uint offset = 0;
 
 	while (*opts != 0 && offset < option_length) {
 		tcp_option_t* _opt = (tcp_option_t*) (opts + offset);
@@ -347,7 +341,7 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 	sd.ipHdrLen            = ipHdrLen;
 	sd.tcpHdrLen           = tcpHdrLen;
 	sd.tcpOptionLen        = tcpHdrLen - 20;
-	sd.data.payloadSize    = sd.totalSize - (ipHdrLen + tcpHdrLen + SIZE_ETHERNET);
+	sd.data.payloadSize    = static_cast<uint16_t>(sd.totalSize - (ipHdrLen + tcpHdrLen + SIZE_ETHERNET));
 	sd.data.tstamp_pcap    = header->ts;
 	sd.data.seq_absolute   = ntohl(tcp->th_seq);
 	sd.data.seq            = getRelativeSequenceNumber(sd.data.seq_absolute, tmpConn->rm->firstSeq, tmpConn->lastLargestEndSeq, tmpConn->lastLargestSeqAbsolute, tmpConn);
@@ -359,7 +353,7 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 	sd.data.tstamp_tcp      = 0;
 	sd.data.tstamp_tcp_echo = 0;
 
-	uint16_t payloadSize = ipSize - (ipHdrLen + tcpHdrLen); // This gives incorrect result on some packets where the ipSize is wrong (0 in a test trace)
+	uint32_t payloadSize = ipSize - (ipHdrLen + tcpHdrLen); // This gives incorrect result on some packets where the ipSize is wrong (0 in a test trace)
 	if (sd.data.payloadSize != payloadSize) {
 		colored_fprintf(stderr, RED, "Found invalid packet length value in IP header:\n");
 		fprintf(stderr, "%s: (seq: %s): Length reported as %d, but correct value is %d.\n", tmpConn->getConnKey().c_str(),
@@ -478,7 +472,7 @@ seq64_t Dump::getRelativeSequenceNumber(seq32_t seq, seq32_t firstSeq, seq64_t l
 		//fprintf(stderr, "seq_relative: %lu\n", seq_relative);
 		//fprintf(stderr, "Conn: %s\n", conn->getConnKey().c_str());
 
-#if !defined(NDEBUG) && defined(DEBUG)
+#if !defined(NDEBUG)
 		fprintf(stderr, "Encountered invalid sequence number for connection %s: %u (firstSeq=%u, largestSeq=%llu, largestSeqAbsolute=%u\n",
 				conn->getConnKey().c_str(),
 				seq,
@@ -559,26 +553,25 @@ void Dump::processAcks(const pcap_pkthdr* header, const u_char *data) {
 /* Analyse receiver dump - create CDFs */
 void Dump::processRecvd(string recvFn) {
 	int packetCount = 0;
-	string tmpSrcIp = srcIp;
-	string tmpDstIp = dstIp;
+	string tmpSrcIp = filterSrcIp;
+	string tmpDstIp = filterDstIp;
 	char errbuf[PCAP_ERRBUF_SIZE];
 	pcap_pkthdr h;
 	const u_char *data;
-	map<uint16_t, Connection*>::iterator it, it_end;
 
 	colored_printf(YELLOW, "Processing receiver dump...\n");
 
 	if (!GlobOpts::sendNatIP.empty()) {
 		cerr << "sender side NATing handled" << endl;
 		tmpSrcIp = GlobOpts::sendNatIP;
-		cerr << "srcIp: " << srcIp << endl;
+		cerr << "srcIp: " << filterSrcIp << endl;
 		cerr << "tmpSrcIp: " << tmpSrcIp << endl;
 	}
 
 	if (!GlobOpts::recvNatIP.empty()) {
 		cerr << "receiver side NATing handled" << endl;
 		tmpDstIp = GlobOpts::recvNatIP;
-		cerr << "dstIp: " << dstIp << endl;
+		cerr << "filterDstIp: " << filterDstIp << endl;
 		cerr << "tmpDstIp: " << tmpDstIp << endl;
 	}
 
@@ -594,8 +587,8 @@ void Dump::processRecvd(string recvFn) {
 	bpf_program compFilter;
 	stringstream filterExp;
 
-	bool src_port_range = !isNumeric(srcPort.c_str(), 10);
-	bool dst_port_range = !isNumeric(dstPort.c_str(), 10);
+	bool src_port_range = !isNumeric(filterSrcPort.c_str(), 10);
+	bool dst_port_range = !isNumeric(filterDstPort.c_str(), 10);
 
 	filterExp.str("");
 	filterExp << "tcp";
@@ -603,10 +596,10 @@ void Dump::processRecvd(string recvFn) {
 		filterExp << " && src host " << tmpSrcIp;
 	if (!tmpDstIp.empty())
 		filterExp << " && dst host " << tmpDstIp;
-	if (!srcPort.empty())
-		filterExp << " && src " << (src_port_range ? "portrange " : "port ") << srcPort;
-	if (!dstPort.empty())
-		filterExp << " && dst " << (dst_port_range ? "portrange " : "port ") << dstPort;
+	if (!filterSrcPort.empty())
+		filterExp << " && src " << (src_port_range ? "portrange " : "port ") << filterSrcPort;
+	if (!filterDstPort.empty())
+		filterExp << " && dst " << (dst_port_range ? "portrange " : "port ") << filterDstPort;
 
 	//filterExp << " && (ip[2:2] - ((ip[0]&0x0f)<<2) - (tcp[12]>>2)) >= 1";
 
@@ -689,7 +682,7 @@ void Dump::processRecvd(const pcap_pkthdr* header, const u_char *data) {
 	sd.ipHdrLen          = ipHdrLen;
 	sd.tcpHdrLen         = tcpHdrLen;
 	sd.tcpOptionLen      = tcpHdrLen - 20;
-	sd.data.payloadSize  = ipSize - (ipHdrLen + tcpHdrLen);
+	sd.data.payloadSize  = static_cast<uint16_t>(sd.totalSize - (ipHdrLen + tcpHdrLen + SIZE_ETHERNET));
 	sd.data.seq_absolute = ntohl(tcp->th_seq);
 	sd.data.seq          = getRelativeSequenceNumber(sd.data.seq_absolute, tmpConn->rm->firstSeq, tmpConn->lastLargestRecvEndSeq, tmpConn->lastLargestRecvSeqAbsolute, tmpConn);
 	sd.data.endSeq       = sd.data.seq + sd.data.payloadSize;
@@ -702,6 +695,15 @@ void Dump::processRecvd(const pcap_pkthdr* header, const u_char *data) {
 	sd.data.window       = ntohs(tcp->th_win);
 	sd.data.tstamp_tcp      = 0;
 	sd.data.tstamp_tcp_echo = 0;
+
+	uint32_t payloadSize = ipSize - (ipHdrLen + tcpHdrLen); // This gives incorrect result on some packets where the ipSize is wrong (0 in a test trace)
+	if (sd.data.payloadSize != payloadSize) {
+		colored_fprintf(stderr, RED, "Found invalid packet length value in IP header in receiver trace:\n");
+		fprintf(stderr, "%s: (seq: %s): Length reported as %d, but correct value is %d.\n", tmpConn->getConnKey().c_str(),
+				tmpConn->rm->absolute_seq_pair_str(sd.data.seq, sd.data.endSeq).c_str(),
+				ipSize, sd.totalSize - SIZE_ETHERNET);
+	}
+
 
 	if (sd.data.seq == std::numeric_limits<ulong>::max()) {
 		if (sd.data.flags & TH_SYN) {
@@ -785,18 +787,18 @@ void Dump::calculateSojournTime() {
 			continue;
 		}
 
-		seq32_t tmp1 = std::stoul(seq);
-		seq32_t tmp2 = std::stoul(seq2);
+		seq32_t tmp1 = static_cast<seq32_t>(std::stoul(seq));
+		seq32_t tmp2 = static_cast<seq32_t>(std::stoul(seq2));
 
 		DataSeg tmpSeg;
 		tmpSeg.seq_absolute = max(tmp1, tmp2);
 		tmpSeg.seq = getRelativeSequenceNumber(tmpSeg.seq_absolute, tmpConn->rm->firstSeq,
 												  tmpConn->lastLargestSojournEndSeq,
 												  tmpConn->lastLargestSojournSeqAbsolute, tmpConn);
-		tmpSeg.payloadSize = std::stoul(size);
+		tmpSeg.payloadSize = static_cast<uint16_t>(std::stoul(size));
 		tmpSeg.endSeq       = tmpSeg.seq + tmpSeg.payloadSize;
 		tmpSeg.tstamp_pcap.tv_sec = std::stoi(k_time.substr(0, k_time.find(".")));
-		tmpSeg.tstamp_pcap.tv_usec = std::stoi(k_time.substr(k_time.find(".") + 1)) / 1000.0;
+		tmpSeg.tstamp_pcap.tv_usec = std::stoi(k_time.substr(k_time.find(".") + 1)) / 1000;
 
 		/*
 		if (seq != seq2) {
@@ -824,23 +826,20 @@ void Dump::calculateSojournTime() {
 
 
 void Dump::calculateRetransAndRDBStats() {
-	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
-	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
-		cIt->second->calculateRetransAndRDBStats();
+	for (auto& it : conns) {
+		it.second->calculateRetransAndRDBStats();
 	}
 }
 
 void Dump::printPacketDetails() {
-	map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
-	for (cIt = conns.begin(); cIt != conns.end(); cIt++) {
-		cIt->second->rm->printPacketDetails();
+	for (auto& it : conns) {
+		it.second->rm->printPacketDetails();
 	}
 }
 
 void Dump::calculateLatencyVariation() {
-	map<ConnectionMapKey*, Connection*>::iterator it;
-	for (it = conns.begin(); it != conns.end(); ++it) {
-		it->second->calculateLatencyVariation();
+	for (auto& it : conns) {
+		it.second->calculateLatencyVariation();
 	}
 }
 
@@ -857,7 +856,7 @@ static void look_for_get_request( const pcap_pkthdr* header, const u_char *data 
     u_char* ptr = (u_char *) (data + SIZE_ETHERNET + ipHdrLen + tcpHdrLen);
     if( (ptr - data) < header->caplen )
     {
-        u_int payload_len = header->caplen - ( ptr - data );
+        u_int payload_len = static_cast<u_int>(header->caplen - ( ptr - data ));
         if( payload_len > 3 )
         {
             if( not strncmp( (const char*)ptr, "GET", 3 ) )

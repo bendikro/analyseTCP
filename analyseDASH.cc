@@ -31,7 +31,6 @@
 #include "fourTuple.h"
 #include "Dump.h"
 #include "Statistics.h"
-// #include "color_print.h"
 #include <getopt.h>
 #include <sys/stat.h>
 #include <arpa/inet.h>

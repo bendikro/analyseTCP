@@ -27,7 +27,7 @@ char* _colored_sprintf(uint32_t max_size, char *buf, int fg_color, const char *f
 
 	// Add color
 	if (fg_color != NO_COLOR && !disable_colors) {
-		char *tmp = static_cast<char*>(malloc(strlen(buf) + 30));
+		char *tmp = (char*) malloc(strlen(buf) + 30);
 		if (tmp == NULL) {
 			printf("Failed to allocate memory (colored_sprintf)!\n");
 			return 0;
@@ -46,7 +46,7 @@ char* _colored_sprintf(uint32_t max_size, char *buf, int fg_color, const char *f
 }
 
 void _colored_printf(FILE *stream, uint32_t max_size, int fg_color, const char *format, va_list args) {
-	char *buf = static_cast<char*>(malloc(max_size));
+	char *buf = (char*) malloc(max_size);
 	if (buf == NULL) {
 		printf("Failed to allocate memory (colored_printf)!\n");
 		return;

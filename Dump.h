@@ -74,11 +74,11 @@ private:
 	timeval first_sent_time;
 	string filename;
 
-	string srcIp;
-	string dstIp;
-	string srcPort; /* specify tcp.src in filter */
-	string dstPort; /* specify tcp.dst in filter */
-	string tcpPort; /* specify tcp.port in filter */
+	string filterSrcIp;
+	string filterDstIp;
+	string filterSrcPort; /* specify tcp.src in filter */
+	string filterDstPort; /* specify tcp.dst in filter */
+	string filterTCPPort; /* specify tcp.port in filter */
 	vector<four_tuple_t> _connections;
 
 	llint_t sentPacketCount;
@@ -114,8 +114,8 @@ public:
 	void processRecvd(string fn);
 	void calculateRetransAndRDBStats();
 	void printPacketDetails();
-	void findTCPTimeStamp(DataSeg* data, uint8_t* opts, int option_length);
-	Connection* getConn(const in_addr &srcIp, const in_addr &dstIp, const uint16_t *srcPort, const uint16_t *dstPort, const seq32_t *seq);
+	void findTCPTimeStamp(DataSeg* data, uint8_t* opts, uint option_length);
+	Connection* getConn(const in_addr &srcIpAddr, const in_addr &dstIpAddr, const uint16_t *srcPort, const uint16_t *dstPort, const seq32_t *seq);
 	Connection* getConn(string &srcIpStr, string &dstIpStr, string &srcPortStr, string &dstPortStr);
 	void calculateLatencyVariation();
 	void calculateSojournTime();

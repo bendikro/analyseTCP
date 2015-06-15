@@ -110,7 +110,7 @@ public:
 	static string percentiles;
 	static int analyse_start;
 	static int analyse_end;
-	static int analyse_duration;
+	static long analyse_duration;
 	static string sojourn_time_file;
 	static bool oneway_delay_variance;
 	static bool look_for_get_request;

@@ -2,18 +2,6 @@
 #include "color_print.h"
 #include "time_util.h"
 
-/* Returns the difference between the start
-   of the dump and r in seconds */
-double getTimeInterval(ByteRange *start, ByteRange *end) {
-	timeval start_tv, current, tv;
-	double time;
-	start_tv = *(start->getSendTime());
-	current = *(end->getSendTime());
-	timersub(&current, &start_tv, &tv);
-	time = (tv.tv_sec * 1000 + (tv.tv_usec / 1000)) / 1000.0;
-	return time;
-}
-
 bool ByteRange::matchReceivedType(bool print) {
 	if (print) {
 		printf("recv timestamp: %u ", received_tstamp_tcp);
@@ -39,14 +27,14 @@ bool ByteRange::matchReceivedType(bool print) {
 			}
 		}
 	}
-	for (uint8_t i = 0; i < rdb_tstamps_tcp.size(); i++) {
+	for (ulong i = 0; i < rdb_tstamps_tcp.size(); i++) {
 		if (print) {
 			printf(" rdb_timestamp: %u\n", rdb_tstamps_tcp[i]);
 		}
 
 		if (rdb_tstamps_tcp[i] == received_tstamp_tcp) {
 			recv_type = RDB;
-			recv_type_num = i + 1;
+			recv_type_num = static_cast<uint8_t>(i + 1);
 			return true;
 		}
 	}
@@ -70,16 +58,16 @@ void ByteRange::printTstampsTcp() {
 }
 
 void ByteRange::printTstampsPcap() {
-	ulong acktime_3 = ackTime.tv_sec * 1000000 + ackTime.tv_usec;
-	printf("acked timestamp: %lu ", acktime_3);
+	long acktime_3 = get_usecs(&ackTime);
+	printf("acked timestamp: %ld ", acktime_3);
 
 	timeval tmp;
-	ulong ms = 0;
+	long ms = 0;
 	for (ulong i = 0; i < sent_tstamp_pcap.size(); i++) {
 		timersub(&ackTime, &sent_tstamp_pcap[i].first, &tmp);
 		ms = (tmp.tv_sec * 1000) + (tmp.tv_usec / 1000);
 
-		ulong ts = 0;
+		long ts = 0;
 		if (sent_tstamp_pcap[i].first.tv_sec > 0) {
 			ts += sent_tstamp_pcap[i].first.tv_sec * 1000000;
 		}
@@ -94,12 +82,12 @@ bool ByteRange::addSegmentEnteredKernelTime(seq64_t seq, timeval &tv) {
 		//printf("sent_data_pkt_pcap_index: %hu, acked_sent: %u\n", sent_data_pkt_pcap_index, acked_sent);
 		return false;
 	}
-	long sent = get_usecs(sent_tstamp_pcap[sent_data_pkt_pcap_index].first);
-	long soj = get_usecs(tv);
+	long sent = get_usecs(&(sent_tstamp_pcap[(size_t) sent_data_pkt_pcap_index].first));
+	long soj = get_usecs(&tv);
 	if (soj > sent) {
 		char buf1[30];
 		char buf2[30];
-		sprint_time_us_prec(buf1, sent_tstamp_pcap[sent_data_pkt_pcap_index].first);
+		sprint_time_us_prec(buf1, sent_tstamp_pcap[(size_t) sent_data_pkt_pcap_index].first);
 		sprint_time_us_prec(buf2, tv);
 		size_t print_packet_ranges_index = 0;
 		//fprintf(stderr, "ByteRange seq_with_print_range() type: %d\n", sent_tstamp_pcap[sent_data_pkt_pcap_index].second);
@@ -117,8 +105,10 @@ bool ByteRange::addSegmentEnteredKernelTime(seq64_t seq, timeval &tv) {
 	return true;
 }
 
-/* Get the difference between send and ack time for this range */
-int ByteRange::getSendAckTimeDiff(RangeManager *rm) {
+/* Get the difference between send and ack time for this range
+   Return: Time difference in microseconds
+ */
+long ByteRange::getSendAckTimeDiff(RangeManager *rm) {
 	timeval tv_diff;
 	long usec = 0;
 
@@ -157,7 +147,7 @@ int ByteRange::getSendAckTimeDiff(RangeManager *rm) {
 	/* since ackTime will always be bigger than sent_tstamp_pcap,
 	   (directly comparable timers) timerSub can be used here */
 	timersub(&ackTime, &sent_tstamp_pcap[0].first, &tv_diff);
-	usec = get_usecs(tv_diff);
+	usec = get_usecs(&tv_diff);
 
 	if (usec < 0) { /* Should not be possible */
 		colored_fprintf(stderr, RED, "Found byte with negative latency (%d usec)\n", usec);
@@ -180,13 +170,13 @@ int ByteRange::getSendAckTimeDiff(RangeManager *rm) {
 			cerr << "Number of bundles: " << rdb_count << endl;
 		}
 	}
-	return usec;
+	return (int) usec;
 }
 
 vector< pair<int, int> > ByteRange::getSojournTimes() {
 	timeval tv_diff;
 	vector< pair<int, int> > sojourn_times;
-	int usec = 0;
+	long usec = 0;
 
 	if (sent_tstamp_pcap.empty() || (sent_tstamp_pcap[0].first.tv_sec == 0 && sent_tstamp_pcap[0].first.tv_usec == 0)) {
 #ifdef DEBUG
@@ -216,7 +206,7 @@ vector< pair<int, int> > ByteRange::getSojournTimes() {
 	seq64_t tmpBeginSeq = startSeq;
 	for (ulong i = 0; i < sojourn_tstamps.size(); i++) {
 		timersub(&sent_tstamp_pcap[send_tstamp_index].first, &sojourn_tstamps[i].second, &tv_diff);
-		usec = get_usecs(tv_diff);
+		usec = get_usecs(&tv_diff);
 		if (usec < 0) { /* Should not be possible */
 			colored_fprintf(stderr, RED, "Found ByteRange with negative sojourn latency (%d usec).\n", usec);
 			cout << this->strInfo();

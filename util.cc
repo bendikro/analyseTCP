@@ -19,7 +19,7 @@ string get_TCP_flags_str(u_char flags) {
 /*
   Checks if a char buf is a string
 */
-bool isNumeric(const char* pszInput, int nNumberBase) {
+bool isNumeric(const char* pszInput, size_t nNumberBase) {
 	string base = "0123456789ABCDEF";
 	string input = pszInput;
 	return (input.find_first_not_of(base.substr(0, nNumberBase)) == string::npos);
@@ -43,7 +43,7 @@ string makeConnKey(const in_addr &srcIp, const in_addr &dstIp, const uint16_t *s
 }
 
 
-void parse_print_packets(char* optarg)
+void parse_print_packets()
 {
 	std::istringstream ss(optarg);
 	std::string token;
@@ -85,7 +85,7 @@ void parse_print_packets(char* optarg)
 #ifdef __linux__
 void print_stack() {
 	void *array[10];
-	size_t size;
+	int size;
 
 	// get void*'s for all entries on the stack
 	size = backtrace(array, 10);
