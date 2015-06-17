@@ -22,7 +22,7 @@ public:
 
 		// TEST 1
 		printf("\n\nTEST1:\n");
-		printf("SEQ 1: %lu\n", d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute, NULL));
+		printf("SEQ 1: %llu\n", d->getRelativeSequenceNumber(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute, NULL));
 
 		// TEST 2
 		first_seq = 4294967000;
@@ -32,7 +32,7 @@ public:
 		printf("\n\nTEST2:\n");
 		//printf("seq: %u\n", seq);
 		printf("first_seq: %u\n", first_seq);
-		printf("SEQ 2: %lu\n", d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute, NULL));
+		printf("SEQ 2: %llu\n", d->getRelativeSequenceNumber(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute, NULL));
 
 		//lastLargestSeqAbsolute
 
@@ -44,7 +44,7 @@ public:
 		printf("\n\nTEST3:\n");
 		printf("seq: %u\n", seq);
 		printf("first_seq: %u\n", first_seq);
-		printf("SEQ 3: %lu\n", d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute, NULL));
+		printf("SEQ 3: %llu\n", d->getRelativeSequenceNumber(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute, NULL));
 
 		// TEST 4
 		first_seq = 4294967000;
@@ -55,7 +55,7 @@ public:
 		printf("seq: %u\n", seq);
 		printf("first_seq: %u\n", first_seq);
 		printf("largestSeqAbsolute: %u\n", largestSeqAbsolute);
-		printf("SEQ 4: %lu\n", d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute, NULL));
+		printf("SEQ 4: %llu\n", d->getRelativeSequenceNumber(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute, NULL));
 
 		int i;
 		for (i = 0; i < 10; i++) {
@@ -68,7 +68,7 @@ public:
 			printf("seq      : %u\n", seq);
 			printf("largestSeqAbsolute: %u\n", largestSeqAbsolute);
 			printf("lastLargestEndSeq: %lu\n", lastLargestEndSeq);
-			printf("SEQ %d: %lu\n", i + 5, d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute, NULL));
+			printf("SEQ %d: %llu\n", i + 5, d->getRelativeSequenceNumber(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute, NULL));
 		}
 
 		// Seq just wrapped, but received out of order (or older packet with unwrapped seq number)
@@ -81,7 +81,7 @@ public:
 		printf("seq      : %u\n", seq);
 		printf("largestSeqAbsolute: %u\n", largestSeqAbsolute);
 		printf("lastLargestEndSeq: %lu\n", lastLargestEndSeq);
-		printf("SEQ %d: %lu\n", i + 5, d->get_relative_sequence_number(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute, NULL));
+		printf("SEQ %d: %llu\n", i + 5, d->getRelativeSequenceNumber(seq, first_seq, lastLargestEndSeq, largestSeqAbsolute, NULL));
 
 		exit(1);
 }

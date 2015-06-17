@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -e
+
 echo "Creating build dir.."
-mkdir build && cd build
+mkdir -p build && cd build
 
 set -x
 
@@ -9,12 +10,21 @@ echo "Building.."
 
 cmake ..
 
-make distclean && cmake .. -DCMAKE_CXX_FLAGS="-Werror" && make
-make distclean && cmake .. -DCMAKE_BUILD_TYPE=Debug  -DCMAKE_CXX_FLAGS="-Werror" && make
-make distclean && cmake .. -DCMAKE_BUILD_TYPE=Release  -DCMAKE_CXX_FLAGS="-Werror" && make
+function run_tests {
+	make distclean && cmake .. ${FLAGS}  && make
+	make distclean && cmake .. ${FLAGS} -DCMAKE_BUILD_TYPE=Debug && make
+	make distclean && cmake .. ${FLAGS} -DCMAKE_BUILD_TYPE=Release && make
+}
+
+export FLAGS=-DCMAKE_CXX_FLAGS=-Werror
+
+run_tests
 
 export CXX=clang++
+export CC=clang
 
-make distclean && cmake .. -DCMAKE_CXX_FLAGS="-Werror" && make
-make distclean && cmake .. -DCMAKE_BUILD_TYPE=Debug  -DCMAKE_CXX_FLAGS="-Werror" && make
-make distclean && cmake .. -DCMAKE_BUILD_TYPE=Release  -DCMAKE_CXX_FLAGS="-Werror" && make
+run_tests
+
+export FLAGS="-DCMAKE_CXX_FLAGS=-Werror -DWITH_DASH=1"
+
+run_tests

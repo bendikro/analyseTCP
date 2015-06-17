@@ -23,7 +23,7 @@ extern int disable_colors;
 extern "C" {
 #endif
 
-char *colored(int fg_color, char *buf, const char *str);
+char *colored(int fg_color, uint32_t max_size, char *buf, const char *str);
 void colored_printf(int fg_color, const char *format, ...);
 void colored_fprintf(FILE *stream, int fg_color, const char *format, ...);
 char* colored_sprintf(uint32_t max_size, char *buf, int fg_color, const char *format, ...);
@@ -31,6 +31,7 @@ char* colored_sprintf(uint32_t max_size, char *buf, int fg_color, const char *fo
 #ifdef __cplusplus
 }
 #endif
+
 
 #define RESET 0
 #define BRIGHT 1

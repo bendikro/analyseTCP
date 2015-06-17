@@ -23,11 +23,26 @@ struct timeval sprint_readable_time_now_diff(char *buf, struct timeval old_time)
 long get_msecs(struct timeval *tv);
 long get_usecs(struct timeval *tv);
 
+void timevalfix(struct timeval *tv);
+void timevaladd(struct timeval *to, struct timeval *val);
+void timevalsub(struct timeval *to, struct timeval *val);
+
 #ifdef __cplusplus
 }
 #endif
 
+
 #define tval_pair(tval) tval.tv_sec, tval.tv_usec
+
+#define timespecsub(tvp, uvp, vvp)							\
+	do {													\
+		(vvp)->tv_sec = (tvp)->tv_sec - (uvp)->tv_sec;		\
+		(vvp)->tv_nsec = (tvp)->tv_nsec - (uvp)->tv_nsec;	\
+		if ((vvp)->tv_nsec < 0) {							\
+			(vvp)->tv_sec--;								\
+			(vvp)->tv_nsec += 1000000000;					\
+		}													\
+} while (0)
 
 /* Modified timersub macro that has defined behaviour
    also for negative differences */
@@ -52,8 +67,5 @@ long get_usecs(struct timeval *tv);
 		}															\
 	} while (0)
 
-void timevalfix(struct timeval *tv);
-void timevaladd(struct timeval *to, struct timeval *val);
-void timevalsub(struct timeval *to, struct timeval *val);
 
 #endif /* TIME_UTIL_H */

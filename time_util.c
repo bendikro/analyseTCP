@@ -66,7 +66,6 @@ long get_usecs(struct timeval *tv) {
 	return tv->tv_sec * 1000000 + tv->tv_usec;
 }
 
-
 void timevalfix(struct timeval *tv) {
 	if (tv->tv_usec < 0) {
 		tv->tv_sec--;

@@ -26,13 +26,8 @@
 *************************************************************************************/
 
 #include "fourTuple.h"
-// #include "common.h"
-// #include <getopt.h>
-// #include <sys/stat.h>
-// #include <arpa/inet.h>
 #include <sstream>
 #include <iostream>
-// #include <stdio.h>
 #include <string.h>
 
 #ifdef OS_FREEBSD

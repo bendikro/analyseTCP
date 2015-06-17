@@ -323,6 +323,7 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 	u_int ipSize;
 	u_int ipHdrLen;
 	u_int tcpHdrLen;
+	static bool payload_mismatch_warn = false;
 
 	/* Finds the different headers+payload */
 	//ethernet = (sniff_ethernet*) data;
@@ -355,10 +356,16 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 
 	uint32_t payloadSize = ipSize - (ipHdrLen + tcpHdrLen); // This gives incorrect result on some packets where the ipSize is wrong (0 in a test trace)
 	if (sd.data.payloadSize != payloadSize) {
-		colored_fprintf(stderr, RED, "Found invalid packet length value in IP header:\n");
-		fprintf(stderr, "%s: (seq: %s): Length reported as %d, but correct value is %d.\n", tmpConn->getConnKey().c_str(),
-				tmpConn->rm->absolute_seq_pair_str(sd.data.seq, sd.data.endSeq).c_str(),
-				ipSize, sd.totalSize - SIZE_ETHERNET);
+		if (payload_mismatch_warn == false || GlobOpts::debugLevel) {
+			colored_fprintf(stderr, RED, "Found invalid packet length value in IP header:\n");
+			fprintf(stderr, "%s: (seq: %s): Length reported as %d, but correct value is %d.\n", tmpConn->getConnKey().c_str(),
+					tmpConn->rm->absolute_seq_pair_str(sd.data.seq, sd.data.endSeq).c_str(),
+					ipSize, sd.totalSize - SIZE_ETHERNET);
+			if (!GlobOpts::debugLevel) {
+				fprintf(stderr, "Enable debug to show further header mismatch warnings.\n");
+				payload_mismatch_warn = true;
+			}
+		}
 	}
 
 	if (sd.data.seq == std::numeric_limits<ulong>::max()) {

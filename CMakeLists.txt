@@ -111,16 +111,15 @@ SET (BASE_SRC
   ByteRange.cc ByteRange.h
   common.cc common.h
   fourTuple.cc fourTuple.h
-  util.cc util.h)
+  util.cc util.h
+  color_print.c color_print.h
+  time_util.c time_util.h
+  )
 
 # Prepare sources for app.
-SET (TCP_SRC ${BASE_SRC}
-  analyseTCP.cc
-  color_print.cc color_print.h
-  time_util.cc time_util.h)
+SET (TCP_SRC ${BASE_SRC} analyseTCP.cc)
 
-SET (DASH_SRC ${BASE_SRC}
-  analyseDASH.cc analyseDASH.h)
+SET (DASH_SRC ${BASE_SRC} analyseDASH.cc)
 
 IF (NOT ONLY_DASH)
   ADD_EXECUTABLE (analyseTCP ${TCP_SRC})
@@ -135,7 +134,7 @@ ENDIF(WITH_DASH)
 # Please write more tests. Very important!! :-)
 IF (TESTS)
   SET (INCLUDE_DIRS tests/ tests/cxxtest-4.4/)
-  SET (TESTS_SRC ${BASE_SRC} time_util.cc time_util.h tests/testrunner.cpp ${TEST_FILES})
+  SET (TESTS_SRC ${BASE_SRC} time_util.c time_util.h tests/testrunner.cpp ${TEST_FILES})
   ADD_EXECUTABLE (test EXCLUDE_FROM_ALL ${TESTS_SRC})
   add_custom_target(buildTestRunner
 	COMMAND ./cxxtest-4.4/bin/cxxtestgen --error-printer -o testrunner.cpp TestAnalyseTCP.h
@@ -145,7 +144,7 @@ IF (TESTS)
   TARGET_LINK_LIBRARIES (test pcap)
 ENDIF(TESTS)
 
-SET (INCLUDE_DIRS include)
+# SET (INCLUDE_DIRS include)
 
 INCLUDE_DIRECTORIES (${INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR})
 
