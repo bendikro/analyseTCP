@@ -178,7 +178,7 @@ void RangeManager::insertReceivedRange(sendData *sd) {
 	tmpSeg.window = sd->data.window;
 	tmpSeg.flags = sd->data.flags;
 
-	if (GlobOpts::debugLevel == 3 || GlobOpts::debugLevel == 5) {
+	if (DEBUGL_RECEIVER(5)) {
 		cerr << "Inserting receive data: startSeq=" << get_print_seq(tmpSeg.seq)
 			 << ", endSeq=" << get_print_seq(tmpSeg.endSeq) << endl;
 		if (tmpSeg.seq == 0 || tmpSeg.endSeq == 0) {
@@ -200,7 +200,6 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 	brIt = brIt_end;
 
 #ifdef DEBUG
-	//int debug_print = !sent;//GlobOpts::debugLevel == 6;
 	int debug_print = 0;
 	//if (TV_TO_MS(data_seg->tstamp_pcap) == 1396710194676) {
 	//	printf("\n\nHEEEEEEI sent:%d level:%d\n\n", sent, level);
@@ -382,9 +381,9 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 				if (lowIt->second->startSeq <= start_seq && lowIt->second->endSeq >= start_seq) {
 #ifdef DEBUG
 					if (lowIt->second->startSeq == start_seq) {
-						printf("New Data is at the beginning of existing range!!\n");
-						printf("Existing Range: %s\n", STR_ABSOLUTE_SEQNUM_PAIR(lowIt->second->startSeq, lowIt->second->endSeq));
-						printf("New data Range: %s\n", STR_ABSOLUTE_SEQNUM_PAIR(start_seq, end_seq));
+						fprintf(stderr, "New Data is at the beginning of existing range!!\n");
+						fprintf(stderr, "Existing Range: %s\n", STR_ABSOLUTE_SEQNUM_PAIR(lowIt->second->startSeq, lowIt->second->endSeq));
+						fprintf(stderr, "New data Range: %s\n", STR_ABSOLUTE_SEQNUM_PAIR(start_seq, end_seq));
 					}
 					//assert(lowIt->second->startSeq != start_seq && "New Data is at beginning of existing range!!\n");
 #endif
@@ -985,32 +984,29 @@ bool RangeManager::processAck(DataSeg *seg) {
 
 	/* All data from this ack has been acked before: return */
 	if (ack < it->second->getStartSeq()) {
-		if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
+		if (DEBUGL_SENDER(3)) {
 			cerr << "--------All data has been ACKed before - skipping--------" << endl;
-		printf("ACKed before!\n");
-		printf("ProcessACK: %8llu  (%8llu), TSVal: %u, last acked start seq: %llu\n", get_print_seq(ack), ack, seg->tstamp_tcp,
-		       get_print_seq(it->second->getStartSeq()));
-
+			fprintf(stderr, "ProcessACK: %8llu  (%8llu), TSVal: %u, last acked start seq: %llu\n",
+					get_print_seq(ack), ack, seg->tstamp_tcp, get_print_seq(it->second->getStartSeq()));
+		}
 		return true;
 	}
 
 	for (; it != it_end; it++) {
 		tmpRange = it->second;
 
-		if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
+		if (DEBUGL_SENDER(3)) {
 			cerr << "tmpRange - startSeq: " << get_print_seq(tmpRange->getStartSeq())
 			     << " - endSeq: " << get_print_seq(tmpRange->getEndSeq()) << endl;
-
+		}
 		/* This ack covers this range, but not more: ack and return
 		 1 -> Acked data range
 		 2 -> ack on range with no data
 		 */
 		if (ack == tmpRange->getEndSeq() || (tmpRange->getNumBytes() == 0 && (ack - 1) == tmpRange->getEndSeq())) {
-			if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
-				cerr << "--------Ack equivalent with last range --------" << endl;
 #ifdef DEBUG
-			if (debug_print)
-				printf("  Covers just this Range(%s)\n", STR_ABSOLUTE_SEQNUM_PAIR(tmpRange->getStartSeq(), tmpRange->getEndSeq()));
+			if (DEBUGL_SENDER(3))
+				fprintf(stderr, "  Covers just this Range(%s)\n", STR_ABSOLUTE_SEQNUM_PAIR(tmpRange->getStartSeq(), tmpRange->getEndSeq()));
 #endif
 			if (!tmpRange->isAcked()) {
 				tmpRange->tcp_window = seg->window;
@@ -1050,15 +1046,16 @@ bool RangeManager::processAck(DataSeg *seg) {
 
 		/* ACK covers more than this range: ACK this range and continue */
 		if (ack > tmpRange->getEndSeq()) {
-			if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
-				cerr << "--------Ack covers more than this range: Continue to next --------" << endl;
+
 #ifdef DEBUG
-			if (debug_print)
+			if (DEBUGL_SENDER(3) && debug_print)
 				printf("  Covers more than Range(%s)\n", STR_ABSOLUTE_SEQNUM_PAIR(tmpRange->getStartSeq(), tmpRange->getEndSeq()));
 #endif
 			if (timercmp(&seg->tstamp_pcap, &(tmpRange->sent_tstamp_pcap[0].first), <)) {
-				fprintf(stderr, "ACK TIME IS EARLIER THAN SEND TIME!\n");
-				warn_with_file_and_linenum(__FILE__, __LINE__);
+				if (DEBUGL_SENDER(1)) {
+					fprintf(stderr, "ACK TIME IS EARLIER THAN SEND TIME!\n");
+					warn_with_file_and_linenum(__FILE__, __LINE__);
+				}
 				return false;
 			}
 
@@ -1078,7 +1075,7 @@ bool RangeManager::processAck(DataSeg *seg) {
 		/* ACK covers only part of this range: split range and return */
 		if (ack > tmpRange->getStartSeq() && ack < tmpRange->getEndSeq()) {
 #ifdef DEBUG
-			if (debug_print) {
+			if (DEBUGL_SENDER(1) && debug_print) {
 				printf("  Covers parts of  Range(%s)\n", STR_ABSOLUTE_SEQNUM_PAIR(tmpRange->getStartSeq(), tmpRange->getEndSeq()));
 			}
 #endif
@@ -1133,7 +1130,7 @@ bool RangeManager::processAck(DataSeg *seg) {
 				}
 
 				if (ack > prev->second->getEndSeq()) {
-					if (ack == prev->second->getStartSeq())
+					//if (ack == prev->second->getStartSeq())
 						//printf("ack is bigger: %llu, prev->end: %llu\n", ack, prev->second->getEndSeq());
 					return true;
 				}
@@ -1165,7 +1162,7 @@ bool RangeManager::processAck(DataSeg *seg) {
 	}
 
 	return ret;
-}
+	}
 
 
 void RangeManager::genStats(PacketsStats *bs) {
@@ -1366,7 +1363,7 @@ void RangeManager::validateContent() {
 		prev = it;
 	}
 
-	if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
+	if (DEBUGL_SENDER(2)) {
 		cerr << "First seq: " << firstSeq << " Last seq: " <<  lastSeq << endl;
 		cerr << "Number of ranges: " << ranges.size() << endl;
 		cerr << "Number of bytes: " << lastSeq - firstSeq << endl;
@@ -1436,7 +1433,7 @@ void RangeManager::printPacketDetails() {
 		}
 
 		printf("R(%*u, %*u):", range_paylad_len, it->second->getNumBytes(), range_paylad_len, it->second->original_payload_size);
-		if (GlobOpts::debugLevel) {
+		if (DEBUGL_SENDER(1)) {
 			printf(" %-*u - %-*u: (%-*llu - %-*llu):",
 				   seq_char_len, absolute_seq(it->second->startSeq), seq_char_len, absolute_seq(it->second->endSeq),
 				   rel_seq_char_len, it->second->startSeq, rel_seq_char_len, it->second->endSeq);
@@ -1755,7 +1752,7 @@ void RangeManager::registerRecvDiffs() {
 		it->second->calculateRecvDiff(last_app_layer_tstamp);
 	}
 
-	if (GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5) {
+	if (DEBUGL_SENDER(3)) {
 		cerr << "SendTime: " << it->second->getSendTime()->tv_sec << "."
 			 << it->second->getSendTime()->tv_usec << endl;
 		cerr << "RecvTime: ";
@@ -1785,9 +1782,6 @@ void RangeManager::doDriftCompensation() {
 			if (diff < lowestRecvDiff) {
 				lowestRecvDiff = (long) diff;
 			}
-		}
-		if (GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5) {
-			cerr << "dcDiff: " << diff << endl;
 		}
 	}
 }
@@ -1840,7 +1834,7 @@ int RangeManager::calculateClockDrift() {
 	durationSec = tv.tv_sec + tv.tv_usec / 10000000;
 	tmpDrift = (double) (minDiffEnd - minDiffStart) / durationSec;
 
-	if (GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5) {
+	if (DEBUGL_SENDER(4)) {
 		printf("Using start diff of range: %s\n", STR_ABSOLUTE_SEQNUM_PAIR(startDriftRange->second->getStartSeq(), startDriftRange->second->getEndSeq()));
 		printf("Using end   diff of range: %s\n", STR_ABSOLUTE_SEQNUM_PAIR(endDriftRange->second->getStartSeq(), endDriftRange->second->getEndSeq()));
 
@@ -1917,10 +1911,6 @@ void RangeManager::writeByteLatencyVariationCDF(ofstream *stream) {
 	char print_buf[300];
 	nit = byteLatencyVariationCDFValues.begin();
 	nit_end = byteLatencyVariationCDFValues.end();
-
-	if (GlobOpts::debugLevel == 4 || GlobOpts::debugLevel == 5) {
-		cerr << "lowestRecvDiff: " << lowestRecvDiff << endl;
-	}
 
 	*stream << "#------ Drift : " << drift << "ms/s ------" << endl;
 	*stream << "#Relative delay      Percentage" << endl;

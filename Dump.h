@@ -23,11 +23,9 @@ struct ConnectionMapKey {
 	u_short src_port, dst_port;
 };
 
-extern bool conn_key_debug;
-
 struct ConnectionKeyComparator {
 	bool operator()(const ConnectionMapKey*  left, const ConnectionMapKey* right) const {
-		//if (conn_key_debug) {
+		//if (GlobOpts::debugLevel) {
 		//	printf("Compare left  (%15p) : src ip: %ul, dst ip: %ul, src port: %u, dst port: %u\n", left, left->ip_src.s_addr, left->ip_dst.s_addr, left->src_port, left->dst_port);
 		//	printf("Compare right (%15p) : src ip: %ul, dst ip: %ul, src port: %u, dst port: %u\n", right, right->ip_src.s_addr, right->ip_dst.s_addr, right->src_port, right->dst_port);
 		//}
@@ -89,9 +87,9 @@ private:
 	uint32_t max_payload_size;
 	map<ConnectionMapKey*, Connection*, ConnectionKeyComparator> conns;
 
-	void processSent(const pcap_pkthdr* header, const u_char *data);
-	void processRecvd(const pcap_pkthdr* header, const u_char *data);
-	void processAcks(const pcap_pkthdr* header, const u_char *data);
+	void processSent(const pcap_pkthdr* header, const u_char *data, u_int link_layer_header_size);
+	void processRecvd(const pcap_pkthdr* header, const u_char *data, u_int link_layer_header_size);
+	void processAcks(const pcap_pkthdr* header, const u_char *data, u_int link_layer_header_size);
 	void registerRecvd(const pcap_pkthdr* header, const u_char *data);
 
 public:

@@ -11,9 +11,18 @@ echo "Building.."
 cmake ..
 
 function run_tests {
-	make distclean && cmake .. ${FLAGS}  && make
-	make distclean && cmake .. ${FLAGS} -DCMAKE_BUILD_TYPE=Debug && make
-	make distclean && cmake .. ${FLAGS} -DCMAKE_BUILD_TYPE=Release && make
+	make distclean && cmake .. ${FLAGS} -DTESTS=1  && make
+	make test
+	./test
+	make distclean && cmake .. ${FLAGS} -DTESTS=1 -DCMAKE_BUILD_TYPE=Debug && make
+	make test
+	./test
+	make distclean && cmake .. ${FLAGS} -DTESTS=1 -DCMAKE_BUILD_TYPE=Release && make
+	make test
+	./test
+	make distclean && cmake .. ${FLAGS} -DTESTS=1 -DCMAKE_BUILD_TYPE=Release && make
+	make test
+	./test
 }
 
 export FLAGS=-DCMAKE_CXX_FLAGS=-Werror

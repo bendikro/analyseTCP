@@ -13,7 +13,9 @@ bool GlobOpts::genPerSegmentStats       = false;
 bool GlobOpts::withThroughput           = false;
 string GlobOpts::prefix                 = "";
 string GlobOpts::RFiles_dir             = "";
-int GlobOpts::debugLevel                = 0;
+int GlobOpts::debugLevel                = 1;
+bool GlobOpts::debugSender              = true;
+bool GlobOpts::debugReceiver            = true;
 uint64_t GlobOpts::lossAggrMs           = 1000;
 uint64_t GlobOpts::throughputAggrMs     = 1000;
 bool GlobOpts::relative_seq             = false;
@@ -33,6 +35,9 @@ string GlobOpts::sojourn_time_file      = "";
 bool GlobOpts::oneway_delay_variance    = false;
 bool GlobOpts::look_for_get_request     = false;
 vector <pair<uint64_t, uint64_t> > GlobOpts::print_packets_pairs;
+bool GlobOpts::conn_key_debug           = false;
+	/* Debug warning prints */
+bool GlobOpts::print_payload_mismatch_warn = true;
 
 bool operator==(const timeval& lhs, const timeval& rhs) {
 	return lhs.tv_sec == rhs.tv_sec && lhs.tv_usec == rhs.tv_usec;

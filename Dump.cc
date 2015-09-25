@@ -6,9 +6,7 @@
 #include "util.h"
 #include "Statistics.h"
 
-bool conn_key_debug = false;
-
-static void look_for_get_request(const pcap_pkthdr* header, const u_char *data);
+static void look_for_get_request(const pcap_pkthdr* header, const u_char *data, u_int link_layer_header_size);
 
 /* Methods for class Dump */
 Dump::Dump(string src_ip, string dst_ip, string src_port, string dst_port, string tcp_port, string fn)
@@ -93,11 +91,11 @@ Connection* Dump::getConn(string &srcIpStr, string &dstIpStr, string &srcPortStr
 	uint16_t dstPort = htons(static_cast<uint16_t>(std::stoul(dstPortStr)));
 
 	if (!inet_pton(AF_INET, srcIpStr.c_str(), &srcIpAddr)) {
-		colored_printf(RED, "Failed to convert source IP '%s'\n", srcIpStr.c_str());
+		colored_fprintf(stderr, RED, "Failed to convert source IP '%s'\n", srcIpStr.c_str());
 	}
 
 	if (!inet_pton(AF_INET, dstIpStr.c_str(), &dstIpAddr)) {
-		colored_printf(RED, "Failed to convert destination IP '%s'\n", srcIpStr.c_str());
+		colored_fprintf(stderr, RED, "Failed to convert destination IP '%s'\n", srcIpStr.c_str());
 	}
 	return getConn(srcIpAddr, dstIpAddr, &srcPort, &dstPort, NULL);
 }
@@ -115,6 +113,24 @@ void Dump::analyseSender()
 	if (fd == NULL) {
 		cerr << "pcap: Could not open file: " << filename << endl;
 		exit_with_file_and_linenum(1, __FILE__, __LINE__);
+	}
+
+	int type = pcap_datalink(fd);
+	u_int link_layer_header_size;
+
+	switch (type) {
+	case DLT_EN10MB: {
+		link_layer_header_size = SIZE_ETHERNET;
+		break;
+	}
+	case DLT_LINUX_SLL: {
+		link_layer_header_size = SIZE_HEADER_LINUX_COOKED_MODE;
+		break;
+	}
+	default: {
+		fprintf(stderr, "Unsupported link layer type: %d ('%s')\n", type, pcap_datalink_val_to_name(type));
+		exit(1);
+	}
 	}
 
 	stringstream filterExp;
@@ -168,8 +184,9 @@ void Dump::analyseSender()
         }
     }
 
-	if (GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5)
+	if (DEBUGL_SENDER(1)) {
 		cerr << "pcap filter expression: " << (char*)((filterExp.str()).c_str()) << endl;
+	}
 
 	/* Filter to get outgoing packets */
 	if (pcap_compile(fd, &compFilter, (char*)((filterExp.str()).c_str()), 0, 0) == -1) {
@@ -183,8 +200,10 @@ void Dump::analyseSender()
 	}
 	pcap_freecode(&compFilter);
 
-	colored_printf(YELLOW, "Processing sent packets...\n");
-	printf("Using filter: '%s'\n", filterExp.str().c_str());
+	if (DEBUGL_SENDER(1)) {
+		colored_printf(YELLOW, "Processing sent packets...\n");
+		printf("Using filter: '%s'\n", filterExp.str().c_str());
+	}
 
 	/* Sniff each sent packet in pcap tracefile: */
 	do {
@@ -194,26 +213,23 @@ void Dump::analyseSender()
 			//sprintf(errMsg, "\nNo more data on file. Packets: %d\n", packetCount);
 			//pcap_perror(fd, errMsg);
 		} else {
-			processSent(&header, data); /* Sniff packet */
+			processSent(&header, data, link_layer_header_size); /* Sniff packet */
 			packetCount++;
 		}
 	} while (data != NULL);
 
-	printf("Finished processing sent packets...\n");
+	if (DEBUGL_SENDER(1)) {
+		printf("Finished processing sent packets...\n");
+	}
 
 	pcap_close(fd);
 
 	if (GlobOpts::validate_ranges) {
 		/* DEBUG: Validate range */
-		if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
-			cerr << "---------------Begin first validation--------------" << endl;
-
 		auto it_end = conns.end();
 		for (auto it = conns.begin(); it != it_end; it++) {
 			it->second->validateRanges();
 		}
-		if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
-			cerr << "---------------End of first validation--------------" << endl;
 	}
 
 	pcap_t *fd2 = pcap_open_offline(filename.c_str(), errbuf);
@@ -239,8 +255,9 @@ void Dump::analyseSender()
 
 	filterExp << " && ((tcp[tcpflags] & tcp-ack) == tcp-ack)";
 
-	if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
+	if (DEBUGL_SENDER(1)) {
 		cerr << "pcap filter expression: " << (char*)((filterExp.str()).c_str()) << endl;
+	}
 
 	if (pcap_compile(fd2, &compFilter, (char*)((filterExp.str()).c_str()), 0, 0) == -1) {
 		fprintf(stderr, "Couldn't parse filter '%s'. Error: %s\n", filterExp.str().c_str(), pcap_geterr(fd));
@@ -253,7 +270,9 @@ void Dump::analyseSender()
 	}
 	pcap_freecode(&compFilter);
 
-	colored_printf(YELLOW, "Processing acknowledgements...\n");
+	if (DEBUGL_SENDER(1)) {
+		colored_printf(YELLOW, "Processing acknowledgements...\n");
+	}
 
 	packetCount = 0;
 	/* Sniff each sent packet in pcap tracefile: */
@@ -264,26 +283,22 @@ void Dump::analyseSender()
 			sprintf(errMsg, "\nNo more data on file. Packets: %d\n", packetCount);
 			//pcap_perror(fd2, errMsg);
 		} else {
-			processAcks(&header, data); /* Sniff packet */
+			processAcks(&header, data, link_layer_header_size); /* Sniff packet */
 			packetCount++;
 		}
 	} while (data != NULL);
 
 	pcap_close(fd2);
 
-	printf("Finished processing acknowledgements...\n");
+	if (DEBUGL_SENDER(1)) {
+		printf("Finished processing acknowledgements...\n");
+	}
 
 	if (GlobOpts::validate_ranges) {
-		/* DEBUG: Validate ranges */
-		if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
-			cerr << "---------------Begin second validation--------------" << endl;
 		auto it_end = conns.end();
 		for (auto it = conns.begin(); it != it_end; it++) {
 			it->second->validateRanges();
 		}
-
-		if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5)
-			cerr << "---------------End of second validation--------------" << endl;
 	}
 }
 
@@ -298,17 +313,17 @@ void Dump::findTCPTimeStamp(DataSeg* data, uint8_t* opts, uint option_length) {
 
 	while (*opts != 0 && offset < option_length) {
 		tcp_option_t* _opt = (tcp_option_t*) (opts + offset);
-		if (_opt->kind == 1 /* NOP */) {
+
+		if (_opt->kind == 1) {  /* NOP */
 			offset += 1;
 			continue;
 		}
-		if (_opt->kind == 8 /* Timestamp */) {
+		if (_opt->kind == 8) {  /* Timestamp */
 			data->tstamp_tcp = ntohl(*(((uint32_t*) (opts + offset + 2))));
 			data->tstamp_tcp_echo = ntohl(*(((uint32_t*) (opts + offset + 6))));
 			break;
 		}
-		if (_opt->size == 0) {
-			assert(0 && "opt->size is null!\n");
+		if (_opt->kind == 0) { /* End of options list */
 			break;
 		}
 		offset += _opt->size;
@@ -316,21 +331,20 @@ void Dump::findTCPTimeStamp(DataSeg* data, uint8_t* opts, uint option_length) {
 }
 
 /* Process outgoing packets */
-void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
+void Dump::processSent(const pcap_pkthdr* header, const u_char *data, u_int link_layer_header_size) {
 	//const sniff_ethernet *ethernet; /* The ethernet header */
 	const sniff_ip *ip; /* The IP header */
 	const sniff_tcp *tcp; /* The TCP header */
 	u_int ipSize;
 	u_int ipHdrLen;
 	u_int tcpHdrLen;
-	static bool payload_mismatch_warn = false;
 
 	/* Finds the different headers+payload */
 	//ethernet = (sniff_ethernet*) data;
-	ip = (sniff_ip*) (data + SIZE_ETHERNET);
+	ip = (sniff_ip*) (data + link_layer_header_size);
 	ipSize = ntohs(ip->ip_len);
 	ipHdrLen = IP_HL(ip) * 4;
-	tcp = (sniff_tcp*) (data + SIZE_ETHERNET + ipHdrLen);
+	tcp = (sniff_tcp*) (data + link_layer_header_size + ipHdrLen);
 	tcpHdrLen = TH_OFF(tcp) * 4;
 
 	Connection* tmpConn = getConn(ip->ip_src, ip->ip_dst, &tcp->th_sport, &tcp->th_dport, &tcp->th_seq);
@@ -342,7 +356,7 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 	sd.ipHdrLen            = ipHdrLen;
 	sd.tcpHdrLen           = tcpHdrLen;
 	sd.tcpOptionLen        = tcpHdrLen - 20;
-	sd.data.payloadSize    = static_cast<uint16_t>(sd.totalSize - (ipHdrLen + tcpHdrLen + SIZE_ETHERNET));
+	sd.data.payloadSize    = static_cast<uint16_t>(sd.totalSize - (ipHdrLen + tcpHdrLen + link_layer_header_size));
 	sd.data.tstamp_pcap    = header->ts;
 	sd.data.seq_absolute   = ntohl(tcp->th_seq);
 	sd.data.seq            = getRelativeSequenceNumber(sd.data.seq_absolute, tmpConn->rm->firstSeq, tmpConn->lastLargestEndSeq, tmpConn->lastLargestSeqAbsolute, tmpConn);
@@ -356,17 +370,19 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 
 	uint32_t payloadSize = ipSize - (ipHdrLen + tcpHdrLen); // This gives incorrect result on some packets where the ipSize is wrong (0 in a test trace)
 	if (sd.data.payloadSize != payloadSize) {
-		if (payload_mismatch_warn == false || GlobOpts::debugLevel) {
-			colored_fprintf(stderr, RED, "Found invalid packet length value in IP header:\n");
+		if (DEBUGL_SENDER(1) && GlobOpts::print_payload_mismatch_warn) {
+			colored_fprintf(stderr, RED, "Found invalid packet length value in IP header of sender trace:\n");
 			fprintf(stderr, "%s: (seq: %s): Length reported as %d, but correct value is %d.\n", tmpConn->getConnKey().c_str(),
 					tmpConn->rm->absolute_seq_pair_str(sd.data.seq, sd.data.endSeq).c_str(),
-					ipSize, sd.totalSize - SIZE_ETHERNET);
-			if (!GlobOpts::debugLevel) {
-				fprintf(stderr, "Enable debug to show further header mismatch warnings.\n");
-				payload_mismatch_warn = true;
+					ipSize, sd.totalSize - link_layer_header_size);
+			if (GlobOpts::debugLevel == 1) {
+				fprintf(stderr, "Enable debug=2 to show further header mismatch warnings.\n");
+				GlobOpts::print_payload_mismatch_warn = false;
 			}
 		}
 	}
+
+	assert(sd.tcpOptionLen <= 40 && "TCP option length is too large!");
 
 	if (sd.data.seq == std::numeric_limits<ulong>::max()) {
 		if (tmpConn->closed) {
@@ -374,12 +390,12 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 		}
 		else {
 			if (sd.data.flags & TH_SYN) {
-				fprintf(stderr, "Found invalid sequence number (%u) in beginning of sender dump. Probably old SYN packets (Conn: %s)\n",
+				fprintf(stderr, "Found invalid sequence number (%u) in beginning of sender trace. Probably old SYN packets (Conn: %s)\n",
 						sd.data.seq_absolute, tmpConn->getConnKey().c_str());
 				return;
 			}
-			fprintf(stderr, "Found invalid sequence number (%u) in beginning of sender dump. "
-					"Probably the sender dump has retransmissions of packets before the first packet in dump (Conn: %s)\n",
+			fprintf(stderr, "Found invalid sequence number (%u) in beginning of sender trace. "
+					"Probably the sender trace has retransmissions of packets before the first packet in trace (Conn: %s)\n",
 					sd.data.seq_absolute, tmpConn->getConnKey().c_str());
 		}
 		return;
@@ -393,10 +409,10 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data) {
 	findTCPTimeStamp(&sd.data, opt, sd.tcpOptionLen);
 
 	/* define/compute tcp payload (segment) offset */
-	//sd.data.data = (u_char *) (data + SIZE_ETHERNET + ipHdrLen + tcpHdrLen);
+	//sd.data.data = (u_char *) (data + link_layer_header_size + ipHdrLen + tcpHdrLen);
 
 	if (GlobOpts::look_for_get_request)
-		look_for_get_request(header, data);
+		look_for_get_request(header, data, link_layer_header_size);
 
 	sentPacketCount++;
 	sentBytesCount += sd.data.payloadSize;
@@ -496,16 +512,16 @@ seq64_t Dump::getRelativeSequenceNumber(seq32_t seq, seq32_t firstSeq, seq64_t l
 }
 
 /* Process incoming ACKs */
-void Dump::processAcks(const pcap_pkthdr* header, const u_char *data) {
+void Dump::processAcks(const pcap_pkthdr* header, const u_char *data, u_int link_layer_header_size) {
 	static const sniff_ip *ip; /* The IP header */
 	static const sniff_tcp *tcp; /* The TCP header */
 	static u_int ipHdrLen;
 	static seq32_t ack;
 	//static u_long eff_win;        /* window after scaling */
 	static bool ret;
-	ip = (sniff_ip*) (data + SIZE_ETHERNET);
+	ip = (sniff_ip*) (data + link_layer_header_size);
 	ipHdrLen = IP_HL(ip) * 4;
-	tcp = (sniff_tcp*) (data + SIZE_ETHERNET + ipHdrLen);
+	tcp = (sniff_tcp*) (data + link_layer_header_size + ipHdrLen);
 
 	static u_int tcpHdrLen;
 	static uint tcpOptionLen;
@@ -534,7 +550,7 @@ void Dump::processAcks(const pcap_pkthdr* header, const u_char *data) {
 		if (tmpConn->closed) {
 			// Probably closed due to port reuse
 		}
-		else {
+		else if (DEBUGL_SENDER(1)) {
 			fprintf(stderr, "Invalid sequence number for ACK(%u)! (SYN=%d) on connection: %s\n",
 					ack, !!(seg.flags & TH_SYN), tmpConn->getConnKey().c_str());
 		}
@@ -547,7 +563,9 @@ void Dump::processAcks(const pcap_pkthdr* header, const u_char *data) {
 	ret = tmpConn->registerAck(&seg);
 	if (!ret) {
 		if (GlobOpts::validate_ranges) {
-			fprintf(stderr, "DUMP - failed to register ACK(%llu) on connection: %s\n", seg.ack, tmpConn->getConnKey().c_str());
+			if (DEBUGL_SENDER(1)) {
+				fprintf(stderr, "DUMP - failed to register ACK(%llu) on connection: %s\n", seg.ack, tmpConn->getConnKey().c_str());
+			}
 		}
 	}
 	else {
@@ -566,20 +584,26 @@ void Dump::processRecvd(string recvFn) {
 	pcap_pkthdr h;
 	const u_char *data;
 
-	colored_printf(YELLOW, "Processing receiver dump...\n");
+	if (DEBUGL_SENDER(1)) {
+		colored_printf(YELLOW, "Processing receiver trace...\n");
+	}
 
 	if (!GlobOpts::sendNatIP.empty()) {
-		cerr << "sender side NATing handled" << endl;
 		tmpSrcIp = GlobOpts::sendNatIP;
-		cerr << "srcIp: " << filterSrcIp << endl;
-		cerr << "tmpSrcIp: " << tmpSrcIp << endl;
+		if (DEBUGL_SENDER(1)) {
+			cerr << "sender side NATing handled" << endl;
+			cerr << "srcIp: " << filterSrcIp << endl;
+			cerr << "tmpSrcIp: " << tmpSrcIp << endl;
+		}
 	}
 
 	if (!GlobOpts::recvNatIP.empty()) {
-		cerr << "receiver side NATing handled" << endl;
 		tmpDstIp = GlobOpts::recvNatIP;
-		cerr << "filterDstIp: " << filterDstIp << endl;
-		cerr << "tmpDstIp: " << tmpDstIp << endl;
+		if (DEBUGL_SENDER(1)) {
+			cerr << "receiver side NATing handled" << endl;
+			cerr << "filterDstIp: " << filterDstIp << endl;
+			cerr << "tmpDstIp: " << tmpDstIp << endl;
+		}
 	}
 
 	pcap_t *fd = pcap_open_offline(recvFn.c_str(), errbuf);
@@ -587,6 +611,25 @@ void Dump::processRecvd(string recvFn) {
 		cerr << "pcap: Could not open file: " << recvFn << endl;
 		exit_with_file_and_linenum(1, __FILE__, __LINE__);
 	}
+
+	int type = pcap_datalink(fd);
+	u_int link_layer_header_size;
+
+	switch (type) {
+	case DLT_EN10MB: {
+		link_layer_header_size = SIZE_ETHERNET;
+		break;
+	}
+	case DLT_LINUX_SLL: {
+		link_layer_header_size = SIZE_HEADER_LINUX_COOKED_MODE;
+		break;
+	}
+	default: {
+		fprintf(stderr, "Unsupported link layer type: %d ('%s')\n", type, pcap_datalink_val_to_name(type));
+		exit(1);
+	}
+	}
+
 
 	/* Set up pcap filter to include only incoming tcp
 	   packets with correct IP and port numbers.
@@ -623,29 +666,33 @@ void Dump::processRecvd(string recvFn) {
 	}
 	pcap_freecode(&compFilter);
 
-	printf("Using filter: '%s'\n", filterExp.str().c_str());
+	if (DEBUGL_SENDER(1)) {
+		printf("Using filter: '%s'\n", filterExp.str().c_str());
+	}
 
 	/* Sniff each sent packet in pcap tracefile: */
 	do {
 		data = (const u_char *) pcap_next(fd, &h);
 		if (data == NULL) {
 			if (packetCount == 0) {
-				printf("No packets found!\n");
+				fprintf(stderr, "No packets found in trace!\n");
 			}
 			//pcap_perror(fd, errMsg);
 		} else {
-			processRecvd(&h, data); /* Sniff packet */
+			processRecvd(&h, data, link_layer_header_size); /* Sniff packet */
 			packetCount++;
 		}
 	} while(data != NULL);
 
 	pcap_close(fd);
 
-	printf("Finished processing receiver dump...\n");
+	if (DEBUGL_SENDER(1)) {
+		printf("Finished processing receiver trace...\n");
+	}
 }
 
 /* Process packets */
-void Dump::processRecvd(const pcap_pkthdr* header, const u_char *data) {
+void Dump::processRecvd(const pcap_pkthdr* header, const u_char *data, u_int link_layer_header_size) {
 	//const sniff_ethernet *ethernet; /* The ethernet header */
 	const sniff_ip *ip; /* The IP header */
 	const sniff_tcp *tcp; /* The TCP header */
@@ -653,10 +700,10 @@ void Dump::processRecvd(const pcap_pkthdr* header, const u_char *data) {
 
     /* Finds the different headers+payload */
 //  ethernet = (sniff_ethernet*)(data);
-	ip = (sniff_ip*) (data + SIZE_ETHERNET);
+	ip = (sniff_ip*) (data + link_layer_header_size);
 	u_int ipSize = ntohs(ip->ip_len);
 	u_int ipHdrLen = IP_HL(ip)*4;
-	tcp = (sniff_tcp*) (data + SIZE_ETHERNET + ipHdrLen);
+	tcp = (sniff_tcp*) (data + link_layer_header_size + ipHdrLen);
 	u_int tcpHdrLen = TH_OFF(tcp)*4;
 
 	tmpConn = getConn(ip->ip_src, ip->ip_dst, &tcp->th_sport, &tcp->th_dport, NULL);
@@ -666,7 +713,7 @@ void Dump::processRecvd(const pcap_pkthdr* header, const u_char *data) {
 	if (tmpConn == NULL) {
 		static bool warning_printed = false;
 		if (warning_printed == false) {
-			cerr << "Connection found in recveiver dump that does not exist in sender: " << makeConnKey(ip->ip_src, ip->ip_dst, &tcp->th_sport, &tcp->th_dport);
+			cerr << "Connection found in recveiver trace that does not exist in sender: " << makeConnKey(ip->ip_src, ip->ip_dst, &tcp->th_sport, &tcp->th_dport);
 			cerr << ". Maybe NAT is in effect?  Exiting." << endl;
 			warn_with_file_and_linenum(__FILE__, __LINE__);
 			warning_printed = true;
@@ -677,7 +724,9 @@ void Dump::processRecvd(const pcap_pkthdr* header, const u_char *data) {
 	if (tmpConn->lastLargestRecvEndSeq == 0 &&
 		ntohl(tcp->th_seq) != tmpConn->rm->firstSeq) {
 	    if (tcp->th_flags & TH_SYN) {
-			printf("Invalid sequence number in SYN packet. This is probably an old connection - discarding...\n");
+			if (DEBUGL_RECEIVER(1)) {
+				fprintf(stderr, "Invalid sequence number in SYN packet. This is probably an old connection - discarding...\n");
+			}
 			return;
 		}
 	}
@@ -689,7 +738,7 @@ void Dump::processRecvd(const pcap_pkthdr* header, const u_char *data) {
 	sd.ipHdrLen          = ipHdrLen;
 	sd.tcpHdrLen         = tcpHdrLen;
 	sd.tcpOptionLen      = tcpHdrLen - 20;
-	sd.data.payloadSize  = static_cast<uint16_t>(sd.totalSize - (ipHdrLen + tcpHdrLen + SIZE_ETHERNET));
+	sd.data.payloadSize  = static_cast<uint16_t>(sd.totalSize - (ipHdrLen + tcpHdrLen + link_layer_header_size));
 	sd.data.seq_absolute = ntohl(tcp->th_seq);
 	sd.data.seq          = getRelativeSequenceNumber(sd.data.seq_absolute, tmpConn->rm->firstSeq, tmpConn->lastLargestRecvEndSeq, tmpConn->lastLargestRecvSeqAbsolute, tmpConn);
 	sd.data.endSeq       = sd.data.seq + sd.data.payloadSize;
@@ -705,27 +754,38 @@ void Dump::processRecvd(const pcap_pkthdr* header, const u_char *data) {
 
 	uint32_t payloadSize = ipSize - (ipHdrLen + tcpHdrLen); // This gives incorrect result on some packets where the ipSize is wrong (0 in a test trace)
 	if (sd.data.payloadSize != payloadSize) {
-		colored_fprintf(stderr, RED, "Found invalid packet length value in IP header in receiver trace:\n");
-		fprintf(stderr, "%s: (seq: %s): Length reported as %d, but correct value is %d.\n", tmpConn->getConnKey().c_str(),
-				tmpConn->rm->absolute_seq_pair_str(sd.data.seq, sd.data.endSeq).c_str(),
-				ipSize, sd.totalSize - SIZE_ETHERNET);
+		if (DEBUGL_RECEIVER(1) && GlobOpts::print_payload_mismatch_warn) {
+			colored_fprintf(stderr, RED, "Found invalid packet length value in IP header in receiver trace:\n");
+			fprintf(stderr, "%s: (seq: %s): Length reported as %d, but correct value is %d.\n", tmpConn->getConnKey().c_str(),
+					tmpConn->rm->absolute_seq_pair_str(sd.data.seq, sd.data.endSeq).c_str(),
+					ipSize, sd.totalSize - link_layer_header_size);
+			if (GlobOpts::debugLevel == 1) {
+				fprintf(stderr, "Enable debug=2 to show further header mismatch warnings.\n");
+				GlobOpts::print_payload_mismatch_warn = false;
+			}
+		}
 	}
-
 
 	if (sd.data.seq == std::numeric_limits<ulong>::max()) {
 		if (sd.data.flags & TH_SYN) {
-			fprintf(stderr, "Found invalid sequence numbers in beginning of receive dump. Probably an old SYN packet (Conn: %s)\n",
-					tmpConn->getConnKey().c_str());
+			if (DEBUGL_RECEIVER(1)) {
+				fprintf(stderr, "Found invalid sequence numbers in beginning of receive trace. Probably an old SYN packet (Conn: %s)\n",
+						tmpConn->getConnKey().c_str());
+			}
 			return;
 		}
 
 		if (tmpConn->lastLargestRecvEndSeq == 0) {
-			fprintf(stderr, "Found invalid sequence numbers in beginning of receive dump. "
-				   "Probably the sender tcpdump didn't start in time to save this packets (Conn: %s)\n",
-				   tmpConn->getConnKey().c_str());
+			if (DEBUGL_RECEIVER(1)) {
+				fprintf(stderr, "Found invalid sequence numbers in beginning of receive trace. "
+						"Probably the sender tcpdump didn't start in time to save this packets (Conn: %s)\n",
+						tmpConn->getConnKey().c_str());
+			}
 		}
 		else {
-			fprintf(stderr, "Found invalid sequence number in received data!: %u -> %llu\n", sd.data.seq_absolute, sd.data.seq);
+			if (DEBUGL_RECEIVER(1)) {
+				fprintf(stderr, "Found invalid sequence number in received data!: %u -> %llu\n", sd.data.seq_absolute, sd.data.seq);
+			}
 		}
 		return;
 	}
@@ -734,12 +794,12 @@ void Dump::processRecvd(const pcap_pkthdr* header, const u_char *data) {
 	findTCPTimeStamp(&sd.data, opt, sd.tcpOptionLen);
 
 	/* define/compute tcp payload (segment) offset */
-	//sd.data.data = (u_char *) (data + SIZE_ETHERNET + ipHdrLen + tcpHdrLen);
+	//sd.data.data = (u_char *) (data + link_layer_header_size + ipHdrLen + tcpHdrLen);
 	recvPacketCount++;
 	recvBytesCount += sd.data.payloadSize;
 
 	if (GlobOpts::look_for_get_request)
-		look_for_get_request(header, data);
+		look_for_get_request(header, data, link_layer_header_size);
 
 	tmpConn->registerRecvd(&sd);
 }
@@ -762,7 +822,9 @@ void Dump::calculateSojournTime() {
 	string receiver_port;
 	Connection *tmpConn;
 
-	colored_printf(YELLOW, "Processing input data for sojourn calculation...\n");
+	if (DEBUGL_SENDER(1)) {
+		colored_printf(YELLOW, "Processing input data for sojourn calculation...\n");
+	}
 
 	while (std::getline(file, line)) {
 		std::stringstream   linestream(line);
@@ -781,8 +843,8 @@ void Dump::calculateSojournTime() {
 		}
 		catch (const std::invalid_argument ia) {
 			cout << "An exception occurred. Exception Nr. " << ia.what() << '\n';
-			printf("Invalid input values: Sender IP: '%s', Sender PORT: '%s', Receiver IP: '%s', Receiver PORT: '%s'\n",
-				   sender_ip.c_str(), receiver_ip.c_str(), sender_port.c_str(), receiver_port.c_str());
+			fprintf(stderr, "Invalid input values: Sender IP: '%s', Sender PORT: '%s', Receiver IP: '%s', Receiver PORT: '%s'\n",
+					sender_ip.c_str(), receiver_ip.c_str(), sender_port.c_str(), receiver_port.c_str());
 			continue;
 		}
 
@@ -826,9 +888,11 @@ void Dump::calculateSojournTime() {
 			printf("Offending input line '%s'\n", line.c_str());
 			throw;
 		}
-
 	}
-	printf("Finished processing input data for sojourn calculation...\n");
+
+	if (DEBUGL_SENDER(1)) {
+		printf("Finished processing input data for sojourn calculation...\n");
+	}
 }
 
 
@@ -850,17 +914,17 @@ void Dump::calculateLatencyVariation() {
 	}
 }
 
-static void look_for_get_request( const pcap_pkthdr* header, const u_char *data )
+static void look_for_get_request(const pcap_pkthdr* header, const u_char *data, u_int link_layer_header_size)
 {
 	const sniff_ip *ip; /* The IP header */
 	const sniff_tcp *tcp; /* The TCP header */
-	ip = (sniff_ip*) (data + SIZE_ETHERNET);
+	ip = (sniff_ip*) (data + link_layer_header_size);
 	// u_int ipSize = ntohs(ip->ip_len);
 	u_int ipHdrLen = IP_HL(ip)*4;
-	tcp = (sniff_tcp*) (data + SIZE_ETHERNET + ipHdrLen);
+	tcp = (sniff_tcp*) (data + link_layer_header_size + ipHdrLen);
 	u_int tcpHdrLen = TH_OFF(tcp)*4;
 
-    u_char* ptr = (u_char *) (data + SIZE_ETHERNET + ipHdrLen + tcpHdrLen);
+    u_char* ptr = (u_char *) (data + link_layer_header_size + ipHdrLen + tcpHdrLen);
     if( (ptr - data) < header->caplen )
     {
         u_int payload_len = static_cast<u_int>(header->caplen - ( ptr - data ));
@@ -869,7 +933,7 @@ static void look_for_get_request( const pcap_pkthdr* header, const u_char *data 
             if( not strncmp( (const char*)ptr, "GET", 3 ) )
             {
                 cerr << "Found get request in received data" << endl;
-                cerr << "payload length=" << header->len - (SIZE_ETHERNET + ipHdrLen + tcpHdrLen) << endl;
+                cerr << "payload length=" << header->len - (link_layer_header_size + ipHdrLen + tcpHdrLen) << endl;
                 for( u_int i=0; i<payload_len; i++ )
                 {
                     cerr << (char)( isprint(ptr[i]) ? ptr[i] : '?' );

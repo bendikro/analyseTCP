@@ -153,7 +153,8 @@ void usage(char* argv, string usage_str, int exit_status=1, int help_level=1)
 	printf(" -v<level>           : Control verbose level. v0 hides most output, v3 gives maximum verbosity.\n");
 	printf(" -k                  : Use colors in terminal output.\n");
 	printf(" -V                  : Disable validation of the data in the ranges.\n");
-	printf(" -d<level>           : Indicate debug level (1-5).\n");
+	printf(" -d<level><type>     : Indicate debug level (1-5) (Default=1) and an optional parameter (s/r) indicating if only debug\n"
+		   "                       messages from either sender side or receiver side parsing should be printed.\n");
 	if (help_level > 1) {
 		printf("                         1 = Only output on reading sender side dump first pass.\n");
 		printf("                         2 = Only output on reading sender side second pass.\n");
@@ -201,6 +202,63 @@ string dst_port = "";
 string tcp_port = "";
 string sendfn = ""; /* Sender dump file name */
 string recvfn = ""; /* Receiver dump filename */
+
+long next_digit(char *str, char **endptr, long *result) {
+	errno = 0;    /* To distinguish success/failure after call */
+	*result = strtol(str, endptr, 10);
+
+	long LONG_MIN = std::numeric_limits<long>::min();
+	long LONG_MAX = std::numeric_limits<long>::max();
+
+	/* Check for various possible errors */
+	if ((errno == ERANGE && (*result == LONG_MAX || *result == LONG_MIN))
+	    || (errno != 0 && *result == 0)) {
+		return -1;
+	}
+
+	// No digits found
+	if (*endptr == str) {
+		return 0;
+	}
+	return 1;
+}
+
+long next_int(char **str) {
+	char *endptr;
+	long result;
+
+	long ret = next_digit(*str, &endptr, &result);
+
+	if (ret == -1) {
+		colored_fprintf(stderr, RED, "Failed to parse '%s'\n", *str);
+		perror("strtol");
+		return -1;
+	}
+	else if (ret == 0) {
+		colored_fprintf(stderr, RED, "No digits found in '%s'\n", *str);
+		return -1;
+	}
+
+	*str = endptr;
+	return result;
+}
+
+
+void parse_debug_level(char *optargs) {
+
+	long result = next_int(&optargs);
+	if (result == -1) {
+		fprintf(stderr, "Invalid argument to option debug: '%s'\n", optargs);
+		exit(1);
+	}
+	GlobOpts::debugLevel = (int) result;
+	if (*optargs == 's') {
+		GlobOpts::debugReceiver = false;
+	} else if (*optargs == 'r') {
+		GlobOpts::debugSender = false;
+	}
+}
+
 
 void parse_cmd_args(int argc, char *argv[], string OPTSTRING, string usage_str) {
 	int option_index = 0;
@@ -339,7 +397,7 @@ void parse_cmd_args(int argc, char *argv[], string OPTSTRING, string usage_str) 
 			GlobOpts::look_for_get_request = true;
 			break;
 		case 'd':
-			GlobOpts::debugLevel = atoi(optarg);
+			parse_debug_level(optarg);
 			break;
 		case 'V':
 			GlobOpts::validate_ranges = false;

@@ -85,7 +85,6 @@ public:
 	static bool aggOnly;
 	static bool aggInfo;
 	static bool transport;
-	static int  debugLevel;
 	static bool withRecv;
 	static bool withLoss;
 	static uint64_t lossAggrMs;
@@ -114,7 +113,18 @@ public:
 	static string sojourn_time_file;
 	static bool oneway_delay_variance;
 	static bool look_for_get_request;
+	/* Debug warning prints */
+	static int  debugLevel;
+	static bool debugSender;
+	static bool debugReceiver;
+	static bool print_payload_mismatch_warn;
+	/* Debug test variables */
+	static bool conn_key_debug;
 };
+
+#define DEBUGL(level) (GlobOpts::debugLevel >= level)
+#define DEBUGL_SENDER(level) (GlobOpts::debugSender && GlobOpts::debugLevel >= level)
+#define DEBUGL_RECEIVER(level) (GlobOpts::debugReceiver && GlobOpts::debugLevel >= level)
 
 
 struct DataSeg {
@@ -152,6 +162,7 @@ struct sendData {
 
 /* ethernet headers are always exactly 14 bytes [1] */
 #define SIZE_ETHERNET 14
+#define SIZE_HEADER_LINUX_COOKED_MODE 16
 
 /* IP header */
 struct sniff_ip {
@@ -203,6 +214,26 @@ struct sniff_ethernet {
 	u_char  ether_shost[ETHER_ADDR_LEN];    /* source host address */
 	u_short ether_type;                     /* IP? ARP? RARP? etc */
 };
+
+/* Linux cooked-mode capture (SLL: sockaddr_ll) */
+struct sniff_linux_cooked_mode {
+	u_char  packet_type[2];                 /* Type
+	                                         * 0: packet was sent to us by somebody else
+	                                         * 1: packet was broadcast by somebody else
+	                                         * 2: packet was multicast, but not broadcast, by somebody else
+	                                         * 3: packet was sent by somebody else to somebody else
+	                                         * 4: packet was sent by us
+	                                         */
+	u_char  link_layer_type[2];              /* Linux ARPHRD_ value for the link layer device type; */
+	u_char  link_layer_adress_len[2];        /* length of the link layer address of the sender of the packet (which could be 0) */
+	uint64_t link_layer_header_size;         /* number of bytes of the link layer header */
+	u_short ether_type;                      /* IP? ARP? RARP? etc */
+} __attribute__((packed));
+
+
+
+
+
 
 bool endsWith(const string& s, const string& suffix);
 string file_and_linenum();

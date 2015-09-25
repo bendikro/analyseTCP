@@ -85,7 +85,7 @@ bool Connection::registerSent(sendData* sd) {
 #endif
 
 	if (sd->data.endSeq > lastLargestEndSeq) { /* New data */
-		if (GlobOpts::debugLevel == 6) {
+		if (DEBUGL_SENDER(6)) {
 			printf("New Data - sd->endSeq: %llu > lastLargestEndSeq: %llu, sd->seq: %llu, lastLargestStartSeq: %llu, len: %u\n",
 				   rm->get_print_seq(END_SEQ(sd->data.endSeq)),
 				   rm->get_print_seq(END_SEQ(lastLargestEndSeq)),
@@ -136,7 +136,7 @@ bool Connection::registerSent(sendData* sd) {
 		lastLargestEndSeq = sd->data.endSeq;
 		lastLargestSeqAbsolute = sd->data.seq_absolute + sd->data.payloadSize;
 	} else if (lastLargestStartSeq > 0 && sd->data.endSeq <= lastLargestStartSeq) { /* All seen before */
-		if (GlobOpts::debugLevel == 6) {
+		if (DEBUGL_SENDER(6)) {
 			printf("\nRetrans - lastLargestStartSeq: %llu > 0 && sd->data.seq: %llu <= lastLargestStartSeq: %llu\n",
 				   rm->get_print_seq(lastLargestStartSeq), rm->get_print_seq(sd->data.seq),
 				   rm->get_print_seq(lastLargestStartSeq));
@@ -149,7 +149,7 @@ bool Connection::registerSent(sendData* sd) {
 		nrRetrans++;
 		totRetransBytesSent += sd->data.payloadSize;
 		sd->data.retrans = true;
-		if (GlobOpts::debugLevel == 6) {
+		if (DEBUGL_SENDER(6)) {
 			printf("Retrans - lastLargestStartSeq: %llu > 0 && sd->data.seq: %llu <= lastLargestStartSeq: %llu\n",
 				   rm->get_print_seq(lastLargestStartSeq), rm->get_print_seq(sd->data.seq), rm->get_print_seq(lastLargestStartSeq));
 			printf("New Data - sd->data.endSeq: %llu > lastLargestEndSeq: %llu\n",
@@ -167,7 +167,7 @@ bool Connection::registerSent(sendData* sd) {
 
 /* Process range for outgoing packet */
 void Connection::registerRange(sendData* sd) {
-	if (GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5) {
+	if (DEBUGL_SENDER(4)) {
 		if (firstSendTime.tv_sec == 0 && firstSendTime.tv_usec == 0) {
 			firstSendTime = sd->data.tstamp_pcap;
 		}
@@ -182,7 +182,7 @@ void Connection::registerRange(sendData* sd) {
 
 	rm->insertSentRange(sd);
 
-	if (GlobOpts::debugLevel == 1 || GlobOpts::debugLevel == 5) {
+	if (DEBUGL_SENDER(4)) {
 		cerr << "Last range: seq: " << rm->get_print_seq(rm->getLastRange()->getStartSeq())
 		     << " - " << rm->get_print_seq(END_SEQ(rm->getLastRange()->getEndSeq())) << " - size: "
 		     << rm->getLastRange()->getEndSeq() - rm->getLastRange()->getStartSeq() << endl;
@@ -192,7 +192,7 @@ void Connection::registerRange(sendData* sd) {
 /* Register times for first ACK of each byte */
 bool Connection::registerAck(DataSeg *seg) {
 	static bool ret;
-	if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
+	if (DEBUGL_SENDER(4)) {
 		timeval offset;
 		timersub(&seg->tstamp_pcap, &firstSendTime, &offset);
 		cerr << endl << "Registering new ACK. Conn: " << getConnKey() << " Ack: " << rm->get_print_seq(seg->ack) << endl;
@@ -205,7 +205,7 @@ bool Connection::registerAck(DataSeg *seg) {
 		lastLargestAckSeqAbsolute = seg->seq_absolute + seg->payloadSize;
 	}
 
-	if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
+	if (DEBUGL_SENDER(4)) {
 		if (rm->getHighestAcked() != NULL) {
 			cerr << "highestAcked: startSeq: " << rm->get_print_seq(rm->getHighestAcked()->getStartSeq()) << " - endSeq: "
 			     << rm->get_print_seq(rm->getHighestAcked()->getEndSeq()) << " - size: "
@@ -333,23 +333,22 @@ void Connection::addConnStats(ConnStats* cs) {
 	cs->bytes_lost += rm->getLostBytes();
 	cs->totPacketSize += totPacketSize;
 
-#ifdef DEBUG
 	if ((rm->analysed_bytes_sent - getNumUniqueBytes()) != rm->analysed_redundant_bytes) {
 		if (rm->analysed_bytes_sent >= getNumUniqueBytes()) {
-			colored_printf(RED, "Mismatch between redundant bytes and (bytes_sent - UniqueBytes) which should be equal\n");
-			printf("CONNKEY: %s\n", getConnKey().c_str());
-			printf("rm->analysed_bytes_sent - getNumUniqueBytes (%llu) != rm->analysed_redundant_bytes (%llu)\n",
-				   rm->analysed_bytes_sent - getNumUniqueBytes(), rm->analysed_redundant_bytes);
-			printf("rm->analysed_bytes_sent: %llu\n", rm->analysed_bytes_sent);
-			printf("getNumUniqueBytes(): %llu\n", getNumUniqueBytes());
-			printf("rm->analysed_redundant_bytes: %llu\n", rm->analysed_redundant_bytes);
-			printf("cs->totBytesSent: %llu\n", cs->totBytesSent);
-			printf("cs->totUniqueBytes: %llu\n", cs->totUniqueBytes);
-			printf("cs->totBytesSent - cs->totUniqueBytes: %llu\n", cs->totBytesSent - cs->totUniqueBytes);
+			if (DEBUGL_SENDER(1)) {
+				colored_fprintf(stderr, RED, "Mismatch between redundant bytes and (bytes_sent - UniqueBytes) which should be equal\n");
+				fprintf(stderr, "CONNKEY: %s\n", getConnKey().c_str());
+				fprintf(stderr, "rm->analysed_bytes_sent - getNumUniqueBytes (%llu) != rm->analysed_redundant_bytes (%llu)\n",
+					   rm->analysed_bytes_sent - getNumUniqueBytes(), rm->analysed_redundant_bytes);
+				fprintf(stderr, "rm->analysed_bytes_sent: %llu\n", rm->analysed_bytes_sent);
+				fprintf(stderr, "getNumUniqueBytes(): %llu\n", getNumUniqueBytes());
+				fprintf(stderr, "rm->analysed_redundant_bytes: %llu\n", rm->analysed_redundant_bytes);
+				fprintf(stderr, "cs->totBytesSent: %llu\n", cs->totBytesSent);
+				fprintf(stderr, "cs->totUniqueBytes: %llu\n", cs->totUniqueBytes);
+				fprintf(stderr, "cs->totBytesSent - cs->totUniqueBytes: %llu\n", cs->totBytesSent - cs->totUniqueBytes);
+			}
 		}
 	}
-//	assert("Redundant bytes mismatch" && (rm->analysed_bytes_sent - getNumUniqueBytes()) == rm->analysed_redundant_bytes);
-#endif
 	cs->rdb_packet_misses += rm->rdb_packet_misses;
 	cs->rdb_packet_hits += rm->rdb_packet_hits;
 	cs->rdb_byte_misses += rm->rdb_byte_miss;
@@ -371,15 +370,11 @@ PacketsStats* Connection::getBytesLatencyStats() {
 
 /* Check validity of connection range and time data */
 void Connection::validateRanges() {
-	if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
+	if (DEBUGL(2)) {
 		cerr << "###### Validation of range data ######" << endl;
 		cerr << "Connection: " << getConnKey() << endl;
 	}
 	rm->validateContent();
-	if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
-		cerr << "Validation successful." << endl;
-		cerr << "###### End of validation ######" << endl;
-	}
 }
 
 void Connection::registerRecvd(sendData *sd) {
