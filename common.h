@@ -65,6 +65,8 @@
 
 using namespace std;
 
+#include "color_print.h"
+
 #define safe_div(x, y) ((y) != 0 ? ((double) (x)) / (y) : 0.0)
 
 /* Convert a timeval to milliseconds */
@@ -118,6 +120,7 @@ public:
 	static bool debugSender;
 	static bool debugReceiver;
 	static bool print_payload_mismatch_warn;
+	static bool print_timestamp_mismatch_warn;
 	/* Debug test variables */
 	static bool conn_key_debug;
 };
@@ -231,12 +234,25 @@ struct sniff_linux_cooked_mode {
 } __attribute__((packed));
 
 
-
-
-
-
 bool endsWith(const string& s, const string& suffix);
 string file_and_linenum();
 void exit_with_file_and_linenum(int exit_code, string file, int linenum);
 void warn_with_file_and_linenum(string file, int linenum);
+
+/* Debug/Verbose printing */
+
+enum debug_type {DSENDER, DRECEIVER};
+
+#define DEBUG_PREFIX_FMT "[DEBUG %d] "
+#define PREFIX_LEN 20
+
+void dclprintf(enum debug_type type, int debug_level, int fg_color, const char *format, ...);
+void dclfprintf(FILE *stream, enum debug_type type, int debug_level, int fg_color, const char *format, ...);
+void dprintf(enum debug_type type, int debug_level, const char *format, ...);
+void dfprintf(FILE *stream, enum debug_type type, int debug_level, const char *format, ...);
+
+void vbclprintf(int verbose_level, int fg_color, const char *format, ...);
+void vbprintf(int verbose_level, const char *format, ...);
+/* END printing */
+
 #endif /* COMMON_H */

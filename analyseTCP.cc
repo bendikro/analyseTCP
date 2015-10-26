@@ -147,7 +147,13 @@ void usage(char* argv, string usage_str, int exit_status=1, int help_level=1)
 	if (help_level > 1) {
 		printf("                       Example for 90th, 99th and 99.9th: -i90,99,99.9\n");
 	}
-	printf(" -y<seq-num-range>   : Print details for each packet. Provide an option sequence number or range of seq to print.\n");
+	printf(" -y<seq-num-range>   : Print details for each packet. Provide an optional (relative) sequence number or range of seqs to print.\n"
+		   "                       '-y5000':      The packet starting with seq == 5000\n"
+		   "                       '-y-5000':     All packets with seq <= 5000\n"
+		   "                       '-y2000-5000': All packets with seq >= 2000 && seq <= 5000\n"
+		   "                       '-y2000-':     All packets with seq >= 2000\n"
+		   "                       '-y2000-5000,10000-11000': All packets with (seq >= 2000 && seq <= 5000) || (seq >= 10000 && seq <= 11000)\n"
+		);
 	printf(" -G                  : Look for GET request in the packet payload. (experimental)\n");
 	printf(" -j                  : Use relative sequence numbers in terminal output from option -y.\n");
 	printf(" -v<level>           : Control verbose level. v0 hides most output, v3 gives maximum verbosity.\n");

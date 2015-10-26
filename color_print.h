@@ -23,6 +23,7 @@ extern int disable_colors;
 extern "C" {
 #endif
 
+void _colored_fprintf(FILE *stream, uint32_t max_size, int fg_color, const char *format, va_list args);
 char *colored(int fg_color, uint32_t max_size, char *buf, const char *str);
 void colored_printf(int fg_color, const char *format, ...);
 void colored_fprintf(FILE *stream, int fg_color, const char *format, ...);

@@ -651,6 +651,7 @@ public:
 			vector<LatencyItem>::iterator it, it_end;
 			it = diff_times[i]->begin();
 			it_end = diff_times[i]->end();
+			//*stream <<  NEWLINE;
 			for (; it != it_end; it++) {
 				*stream << *it << NEWLINE;
 			}

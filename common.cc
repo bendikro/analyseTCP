@@ -1,4 +1,6 @@
 #include "common.h"
+#include <stdarg.h>
+#include <string.h>
 
 /* Initialize global options */
 bool GlobOpts::aggregate                = false;
@@ -38,10 +40,12 @@ vector <pair<uint64_t, uint64_t> > GlobOpts::print_packets_pairs;
 bool GlobOpts::conn_key_debug           = false;
 	/* Debug warning prints */
 bool GlobOpts::print_payload_mismatch_warn = true;
+bool GlobOpts::print_timestamp_mismatch_warn = true;
 
 bool operator==(const timeval& lhs, const timeval& rhs) {
 	return lhs.tv_sec == rhs.tv_sec && lhs.tv_usec == rhs.tv_usec;
 }
+
 
 void warn_with_file_and_linenum(string file, int linenum) {
 	cerr << "Error at ";
@@ -55,4 +59,80 @@ void exit_with_file_and_linenum(int exit_code, string file, int linenum) {
 
 bool endsWith(const string& s, const string& suffix) {
 	return s.rfind(suffix) == (s.size()-suffix.size());
+}
+
+/*
+  Debug colored printf
+*/
+void _dclprintf(FILE *stream, enum debug_type type, int debug_level, int fg_color, const char *format, va_list args) {
+	if (type == DSENDER && !DEBUGL_SENDER(debug_level))
+		return;
+	else if (type == DRECEIVER && !DEBUGL_RECEIVER(debug_level))
+		return;
+
+	size_t fmt_len = strlen(format) + PREFIX_LEN;
+	char *d_format = (char*) malloc(fmt_len);
+	snprintf(d_format, fmt_len, DEBUG_PREFIX_FMT, debug_level);
+	strcat(d_format, format);
+	_colored_fprintf(stream, 1000, fg_color, d_format, args);
+}
+
+void dclprintf(enum debug_type type, int debug_level, int fg_color, const char *format, ...) {
+	va_list args;
+	va_start(args, format);
+	_dclprintf(stdout, type, debug_level, fg_color, format, args);
+	va_end(args);
+}
+
+void dclfprintf(FILE *stream, enum debug_type type, int debug_level, int fg_color, const char *format, ...) {
+	va_list args;
+	va_start(args, format);
+	_dclprintf(stream, type, debug_level, fg_color, format, args);
+	va_end(args);
+}
+
+/*
+  Debug printf
+*/
+void dprintf(enum debug_type type, int debug_level, const char *format, ...) {
+	va_list args;
+	va_start(args, format);
+	_dclprintf(stdout, type, debug_level, NO_COLOR, format, args);
+	va_end(args);
+}
+
+/*
+  Debug fprintf
+*/
+void dfprintf(FILE *stream, enum debug_type type, int debug_level, const char *format, ...) {
+	va_list args;
+	va_start(args, format);
+	_dclprintf(stream, type, debug_level, NO_COLOR, format, args);
+	va_end(args);
+}
+
+/*
+  Verbose printf
+*/
+void vbprintf(int verbose_level, const char *format, ...) {
+	if (GlobOpts::verbose > verbose_level) {
+		return;
+	}
+	va_list args;
+	va_start(args, format);
+	_colored_fprintf(stdout, 1000, NO_COLOR, format, args);
+	va_end(args);
+}
+
+/*
+  Verbose colored printf
+*/
+void vbclprintf(int verbose_level, int fg_color, const char *format, ...) {
+	if (GlobOpts::verbose > verbose_level) {
+		return;
+	}
+	va_list args;
+	va_start(args, format);
+	_colored_fprintf(stdout, 1000, fg_color, format, args);
+	va_end(args);
 }
