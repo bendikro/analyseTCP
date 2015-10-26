@@ -55,7 +55,7 @@ char* _colored_sprintf(char *buf, uint32_t max_size, int fg_color, const char *f
 	return buf;
 }
 
-void _colored_printf(FILE *stream, uint32_t max_size, int fg_color, const char *format, va_list args) {
+void _colored_fprintf(FILE *stream, uint32_t max_size, int fg_color, const char *format, va_list args) {
 	char *buf = (char*) malloc(max_size);
 	if (buf == NULL) {
 		fprintf(stderr, "Failed to allocate memory (_colored_printf)!\n");
@@ -69,13 +69,13 @@ void _colored_printf(FILE *stream, uint32_t max_size, int fg_color, const char *
 void colored_fprintf(FILE *stream, int fg_color, const char *format, ...) {
 	va_list args;
 	va_start(args, format);
-	_colored_printf(stream, 1000, fg_color, format, args);
+	_colored_fprintf(stream, 1000, fg_color, format, args);
 	va_end(args);
 }
 void colored_printf(int fg_color, const char *format, ...) {
 	va_list args;
 	va_start(args, format);
-	_colored_printf(stdout, 1000, fg_color, format, args);
+	_colored_fprintf(stdout, 1000, fg_color, format, args);
 	va_end(args);
 }
 

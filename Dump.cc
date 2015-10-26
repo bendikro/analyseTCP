@@ -184,9 +184,7 @@ void Dump::analyseSender()
         }
     }
 
-	if (DEBUGL_SENDER(1)) {
-		cerr << "pcap filter expression: " << (char*)((filterExp.str()).c_str()) << endl;
-	}
+	vbprintf(1, "using pcap filter expression: '%s'\n", (char*) filterExp.str().c_str());
 
 	/* Filter to get outgoing packets */
 	if (pcap_compile(fd, &compFilter, (char*)((filterExp.str()).c_str()), 0, 0) == -1) {
@@ -218,9 +216,7 @@ void Dump::analyseSender()
 		}
 	} while (data != NULL);
 
-	if (DEBUGL_SENDER(1)) {
-		printf("Finished processing sent packets...\n");
-	}
+	vbclprintf(1, YELLOW, "Finished processing sent packets...\n");
 
 	pcap_close(fd);
 
@@ -231,6 +227,8 @@ void Dump::analyseSender()
 			it->second->validateRanges();
 		}
 	}
+
+	vbclprintf(1, YELLOW, "Processing acknowledgements...\n");
 
 	pcap_t *fd2 = pcap_open_offline(filename.c_str(), errbuf);
 	if (fd2 == NULL) {
@@ -255,9 +253,7 @@ void Dump::analyseSender()
 
 	filterExp << " && ((tcp[tcpflags] & tcp-ack) == tcp-ack)";
 
-	if (DEBUGL_SENDER(1)) {
-		cerr << "pcap filter expression: " << (char*)((filterExp.str()).c_str()) << endl;
-	}
+	vbprintf(1, "Using pcap filter expression: '%s'\n", (char*) filterExp.str().c_str());
 
 	if (pcap_compile(fd2, &compFilter, (char*)((filterExp.str()).c_str()), 0, 0) == -1) {
 		fprintf(stderr, "Couldn't parse filter '%s'. Error: %s\n", filterExp.str().c_str(), pcap_geterr(fd));
@@ -269,10 +265,6 @@ void Dump::analyseSender()
 		exit_with_file_and_linenum(1, __FILE__, __LINE__);
 	}
 	pcap_freecode(&compFilter);
-
-	if (DEBUGL_SENDER(1)) {
-		colored_printf(YELLOW, "Processing acknowledgements...\n");
-	}
 
 	packetCount = 0;
 	/* Sniff each sent packet in pcap tracefile: */
@@ -550,9 +542,9 @@ void Dump::processAcks(const pcap_pkthdr* header, const u_char *data, u_int link
 		if (tmpConn->closed) {
 			// Probably closed due to port reuse
 		}
-		else if (DEBUGL_SENDER(1)) {
-			fprintf(stderr, "Invalid sequence number for ACK(%u)! (SYN=%d) on connection: %s\n",
-					ack, !!(seg.flags & TH_SYN), tmpConn->getConnKey().c_str());
+		else {//if (DEBUGL_SENDER(1)) {
+			dclfprintf(stderr, DSENDER, 1, RED, "Invalid sequence number for ACK(%u)! (SYN=%d) on connection: %s\n",
+					   ack, !!(seg.flags & TH_SYN), tmpConn->getConnKey().c_str());
 		}
 		return;
 	}
@@ -564,7 +556,7 @@ void Dump::processAcks(const pcap_pkthdr* header, const u_char *data, u_int link
 	if (!ret) {
 		if (GlobOpts::validate_ranges) {
 			if (DEBUGL_SENDER(1)) {
-				fprintf(stderr, "DUMP - failed to register ACK(%llu) on connection: %s\n", seg.ack, tmpConn->getConnKey().c_str());
+				dclfprintf(stderr, DSENDER, 1, RED, "Failed to register ACK(%llu) on connection: %s\n", seg.ack, tmpConn->getConnKey().c_str());
 			}
 		}
 	}

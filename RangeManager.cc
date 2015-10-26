@@ -1543,6 +1543,7 @@ void RangeManager::calculateRealLoss(map<seq64_t, ByteRange*>::iterator brIt, ma
 	double loss_and_end_limit = 0.01;
 	int p_retr_count = 0;
 	int ranges_with_data = 0;
+	bool print_timestamp_mismatch_warn_end = GlobOpts::print_timestamp_mismatch_warn;
 
 	for (; brIt != brIt_end; brIt++) {
 		prev = brIt->second;
@@ -1553,10 +1554,16 @@ void RangeManager::calculateRealLoss(map<seq64_t, ByteRange*>::iterator brIt, ma
 			if (ret == false) {
 				if (index < (ranges.size() * (1 - loss_and_end_limit))) {
 					match_fails_before_end++;
-					colored_printf(YELLOW, "Failed to match %s (%s) (index: %llu) on %s\n",
-								   STR_ABSOLUTE_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq),
-								   STR_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq), index, conn->getConnKey().c_str());
-					brIt->second->printTstampsTcp();
+					if (DEBUGL_RECEIVER(1) && GlobOpts::print_timestamp_mismatch_warn) {
+						colored_printf(YELLOW, "Failed to match %s (%s) (index: %llu) on %s\n",
+									   STR_ABSOLUTE_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq),
+									   STR_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq), index, conn->getConnKey().c_str());
+						brIt->second->printTstampsTcp();
+						if (GlobOpts::debugLevel == 1) {
+							colored_printf(YELLOW, "Enable debug=2 to show further header mismatch warnings.\n");
+							GlobOpts::print_timestamp_mismatch_warn = false;
+						}
+					}
 				}
 				else
 					match_fails_at_end++;
@@ -1680,16 +1687,18 @@ void RangeManager::calculateRealLoss(map<seq64_t, ByteRange*>::iterator brIt, ma
 //	printf("analysed_packet_sent_count: %d\n", analysed_packet_sent_count);
 #endif
 
-	if (match_fails_before_end) {
-		colored_printf(RED, "%s : Failed to find timestamp for %d out of %ld packets.\n", conn->getConnKey().c_str(), match_fails_before_end, ranges.size());
-		colored_printf(RED, "These packest were before the %f%% limit (%d) from the end (%llu), and might be caused by packets being dropped from tcpdump\n",
-					   (1 - loss_and_end_limit), (int) (ranges.size() * (1 - loss_and_end_limit)), ranges.size());
-	}
+	if (DEBUGL_RECEIVER(1) && print_timestamp_mismatch_warn_end) {
+		if (match_fails_before_end) {
+			colored_printf(RED, "%s : Failed to find timestamp for %d out of %ld packets. ", conn->getConnKey().c_str(), match_fails_before_end, ranges.size());
+			colored_printf(RED, "These packest were before the %f%% limit (%d) from the end (%llu), and might be caused by packets being dropped from tcpdump\n",
+						   (1 - loss_and_end_limit), (int) (ranges.size() * (1 - loss_and_end_limit)), ranges.size());
+		}
 #ifndef DEBUG
-	if (match_fails_at_end)
-		printf("%s : Failed to find timestamp for %d out of %ld packets. These packets were at the end of the stream" \
-		       ", so presumable they were just not caught by tcpdump.\n", conn->getConnKey().c_str(), match_fails_at_end, ranges.size());
+		if (match_fails_at_end)
+			printf("%s : Failed to find timestamp for %d out of %ld packets. These packets were at the end of the stream" \
+				   ", so presumable they were just not caught by tcpdump.\n", conn->getConnKey().c_str(), match_fails_at_end, ranges.size());
 #endif
+	}
 }
 
 ByteRange* RangeManager::getHighestAcked() {

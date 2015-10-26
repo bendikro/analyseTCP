@@ -29,7 +29,7 @@ public:
 	string filenameID;
 	virtual bool getWriteHeader() { return write_header; }
 	virtual string getHeader() { return header; }
-	virtual void writeHeader(csv::ofstream& stream) { stream << getHeader(); }
+	virtual void writeHeader(csv::ofstream& stream) { stream << getHeader() <<  NEWLINE; }
 
 	virtual string getAggrFilename() {
 		return GlobOpts::prefix + filenameID + aggrPostfix;
