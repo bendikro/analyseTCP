@@ -1,6 +1,9 @@
 analyseTCP
 ============
-A utility for analysing tcpdump traces with regard to latency and loss. It supports analyses with a sender side trace alone as well as with both a sender and receiver side trace.
+
+A utility for analysing tcpdump traces with regard to latency and loss. It
+supports analyses with a sender side trace alone as well as with both a sender
+and receiver side trace.
 
 ###Features with only a sender side trace
 
@@ -13,15 +16,17 @@ A utility for analysing tcpdump traces with regard to latency and loss. It suppo
 
 
  * Loss estimation based on retransmissions
- * Saving latency (ACK time) to file for all packets (both aggregated and per stream)
+ * Saving latency (ACK time) to file for all packets (both aggregated and per
+   stream)
 
 ###Features with sender and receiver side traces
 
  * True loss values based on the data that was received.
  * Calculating the amount of data received by initial transmit, retransmit and RDB.
- * Saving one-way delay variation for the received data. Handles clock skew drifting between sender and receiver hosts.
+ * Saving one-way delay variation for the received data. Handles clock skew
+   drifting between sender and receiver hosts.
 
-##Prerequisites: cmake pcap
+##Prerequisites: cmake pcap (Ubuntu package: libpcap-dev)
 
 ###To build
     :~/analysetcp$ mkdir build
@@ -84,30 +89,37 @@ Loss stats
 --------------
 
 ### Estimated loss rate based on retransmissions
-This is the loss rate estimation based solely on the number of retransmissions. This only relies
-on the sender side dump.
-We here define loss rate as percentage of packets that have to be retransmitted using regular TCP schemes.
+
+This is the loss rate estimation based solely on the number of retransmissions.
+This only relies on the sender side dump. We define loss rate as percentage of
+packets that have to be retransmitted using regular TCP schemes.
 
 ### Receiver side loss stats
-These stats rely on both sender and receiver side dump and calculates the exact loss, that is, the bytes that
-were sent and not received on the receiver side.
 
-The Ranges Loss does not correspond directly to packets, as the packets may be split after being sent. With no segmentation offloading or segmentation in any nodes between the sender and receiver, the range count should correspond pretty well to the number of packets with unique data.
+These stats rely on both sender and receiver side dump and calculates the exact
+loss, that is, the bytes that were sent and not received on the receiver side.
+
+The Ranges Loss does not correspond directly to packets, as the packets may be
+split after being sent. With no segmentation offloading or segmentation in any
+nodes between the sender and receiver, the range count should correspond pretty
+well to the number of packets with unique data.
 
 
 ##Notes
 
 * FIN segments with payload may be counted as two segments.
 
-* Negative packet loss values when analysing sender and receiver dumps
+* Negative packet loss values when analysing sender and receiver dumps:
 
-      The packet loss is calculated by (sent packet - received packets).
-      When segmentation offloading is enabled on the sender, the sender dump may contain fewer
-      packets than the receiver dump. Disabling any segmentation offload features is advised.
+      The packet loss is calculated by (sent packet - received packets). When
+      segmentation offloading is enabled on the sender, the sender dump may
+      contain fewer packets than the receiver dump. Disabling any segmentation
+      offload features is advised.
 
 ##Difference between analyseTCP and tcptrace
 
-Total bytes sent (payload) and Number of retransmitted bytes might differ slightly (2 bytes) from tcptrace, but according to tshark analysetcp is correct:
+Total bytes sent (payload) and Number of retransmitted bytes might differ
+slightly (2 bytes) from tcptrace, but according to tshark analysetcp is correct:
 
 ####Example of how to calculate total sum of tcp payload bytes and retransmitted bytes
     tshark -r trace.dump -qz io,stat,0,"ip.addr==10.0.0.10 && tcp.srcport ==\
@@ -117,8 +129,8 @@ Total bytes sent (payload) and Number of retransmitted bytes might differ slight
 
 ####Tests
 
-Run cmake with
-mkdir build && cd build
-cmake .. -DTESTS=1
-make test
-./test
+Run cmake with:
+ mkdir build && cd build
+ cmake .. -DTESTS=1
+ make test
+ ./test

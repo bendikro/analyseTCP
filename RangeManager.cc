@@ -26,10 +26,6 @@ RangeManager::~RangeManager() {
 #define STR_SEQNUM_PAIR(seq_start, seq_end) seq_pair_str(seq_start, seq_end).c_str()
 #define STR_PRELATIVE_SEQNUM_PAIR(seq_start, seq_end) seq_pair_str(get_print_seq(seq_start), get_print_seq(seq_end)).c_str()
 
-string seq_pair_str(seq64_t start, seq64_t end) {
-	return to_string(start) + "," + to_string(end);
-}
-
 string RangeManager::absolute_seq_pair_str(seq64_t start, seq64_t end) {
 	return seq_pair_str(absolute_seq(start), absolute_seq(end));
 }
@@ -1550,7 +1546,7 @@ void RangeManager::calculateRealLoss(map<seq64_t, ByteRange*>::iterator brIt, ma
 		index++;
 
 		if (GlobOpts::withRecv) {
-			bool ret = brIt->second->matchReceivedType();
+			bool ret = brIt->second->matchReceivedType(this);
 			if (ret == false) {
 				if (index < (ranges.size() * (1 - loss_and_end_limit))) {
 					match_fails_before_end++;
@@ -1558,7 +1554,10 @@ void RangeManager::calculateRealLoss(map<seq64_t, ByteRange*>::iterator brIt, ma
 						colored_printf(YELLOW, "Failed to match %s (%s) (index: %llu) on %s\n",
 									   STR_ABSOLUTE_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq),
 									   STR_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq), index, conn->getConnKey().c_str());
-						brIt->second->printTstampsTcp();
+						ulong print_limit = 10;
+						if (GlobOpts::verbose > 2)
+							print_limit = 0;
+						brIt->second->printTstampsTcp(print_limit);
 						if (GlobOpts::debugLevel == 1) {
 							colored_printf(YELLOW, "Enable debug=2 to show further header mismatch warnings.\n");
 							GlobOpts::print_timestamp_mismatch_warn = false;
@@ -1757,7 +1756,7 @@ void RangeManager::registerRecvDiffs() {
 		}
 
 		/* Calculate diff and check for lowest value */
-		it->second->matchReceivedType();
+		it->second->matchReceivedType(this);
 		it->second->calculateRecvDiff(last_app_layer_tstamp);
 	}
 

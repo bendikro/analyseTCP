@@ -91,6 +91,7 @@ public:
 	}
 
 	inline void increase_received(uint32_t tstamp_tcp, timeval tstamp_pcap, bool in_sequence) {
+
 		if (!data_received_count) {
 			app_layer_latency_tstamp = in_sequence;
 			received_tstamp_tcp = tstamp_tcp;
@@ -110,6 +111,7 @@ public:
 	}
 
 	inline void increase_sent(uint32_t tcp_tsval, uint32_t tcp_tsecr, timeval tstamp_pcap, bool rdb, sent_type sent_t=ST_PKT) {
+
 		if (rdb) {
 			rdb_tstamps_tcp.push_back(tcp_tsval);
 		}
@@ -164,8 +166,8 @@ public:
 		return new_br;
 	}
 
-	bool matchReceivedType(bool print=false);
-	void printTstampsTcp();
+	bool matchReceivedType(RangeManager *rm, bool print=false);
+	void printTstampsTcp(ulong limit);
 
 	seq64_t getStartSeq() { return startSeq; }
 	seq64_t getEndSeq() { return endSeq; }

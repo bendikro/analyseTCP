@@ -61,6 +61,10 @@ bool endsWith(const string& s, const string& suffix) {
 	return s.rfind(suffix) == (s.size()-suffix.size());
 }
 
+string seq_pair_str(seq64_t start, seq64_t end) {
+	return to_string(start) + "," + to_string(end);
+}
+
 /*
   Debug colored printf
 */

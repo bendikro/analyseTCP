@@ -239,6 +239,8 @@ string file_and_linenum();
 void exit_with_file_and_linenum(int exit_code, string file, int linenum);
 void warn_with_file_and_linenum(string file, int linenum);
 
+string seq_pair_str(seq64_t start, seq64_t end);
+
 /* Debug/Verbose printing */
 
 enum debug_type {DSENDER, DRECEIVER};

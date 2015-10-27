@@ -1,17 +1,21 @@
 #include "ByteRange.h"
 #include "color_print.h"
 #include "time_util.h"
+#include "common.h"
 
-bool ByteRange::matchReceivedType(bool print) {
+bool ByteRange::matchReceivedType(RangeManager *rm, bool print) {
 	if (print) {
 		printf("recv timestamp: %u ", received_tstamp_tcp);
 		printf("tstamps: %lu, rdb-stamps: %lu", tstamps_tcp.size(), rdb_tstamps_tcp.size());
 	}
 	// Find which data packet was received first
-	for (uint8_t i = 0; i < tstamps_tcp.size(); i++) {
+	//printf("tstamps_tcp.size(): %lu\n", tstamps_tcp.size());
+	printf("Range(%s): tstamps_tcp.size(): %lu\n", seq_pair_str(rm->get_print_seq(startSeq), rm->get_print_seq(endSeq)).c_str(), tstamps_tcp.size());
+
+	for (ulong i = 0; i < tstamps_tcp.size(); i++) {
 		if (print) {
 			printf("     timestamp: %u\n", tstamps_tcp[i].first);
-		}
+ 		}
 		if (tstamps_tcp[i].first == received_tstamp_tcp) {
 			send_tcp_stamp_recv_index = i; // Store the index of the send packet that matches the first received packet
 			// Retrans
@@ -44,13 +48,19 @@ bool ByteRange::matchReceivedType(bool print) {
 	return false;
 }
 
-void ByteRange::printTstampsTcp() {
-	printf("recv timestamp: %u ", received_tstamp_tcp);
-	printf("tstamps_tcp: %lu, rdb-stamps: %lu\n", tstamps_tcp.size(), rdb_tstamps_tcp.size());
+void ByteRange::printTstampsTcp(ulong limit) {
+	printf("recv timestamp: %u, ", received_tstamp_tcp);
+	printf("tstamps_tcp count: %lu, rdb-stamps count: %lu\n", tstamps_tcp.size(), rdb_tstamps_tcp.size());
 
-	for (ulong i = 0; i < tstamps_tcp.size(); i++) {
+	ulong size = tstamps_tcp.size();
+	if (limit > 0)
+		size = std::min(size, limit);
+	for (ulong i = 0; i < size; i++) {
 		printf("     timestamp: %u\n", tstamps_tcp[i].first);
 	}
+	size = rdb_tstamps_tcp.size();
+	if (limit > 0)
+		size = std::min(size, limit);
 	for (ulong i = 0; i < rdb_tstamps_tcp.size(); i++) {
 		printf(" rdb_timestamp: %u\n", rdb_tstamps_tcp[i]);
 	}
