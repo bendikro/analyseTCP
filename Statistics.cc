@@ -148,6 +148,7 @@ void Statistics::printStatistics() {
 			}
 			printf("\n");
 			printPacketsStats(&cs);
+			printStatsSeparator(false);
 			printPayloadStats(packetsStats);
 		}
 
@@ -174,6 +175,7 @@ void Statistics::printStatistics() {
 
 			cout << "\nAggregated Statistics for " << sortedConns.size() << " connections:" << endl;
 			printPacketsStats(&csAggregated);
+			printStatsSeparator(false);
 			printPayloadStatsAggr(&csAggregated, psAggregated);
 
 			/* Print Aggregate bytewise latency */
@@ -284,8 +286,6 @@ void printPacketsStats(ConnStats *cs) {
 			printf("  Ranges Loss                                   : %10.2f %%\n", safe_div(cs->ranges_lost, cs->ranges_sent) * 100);
 		}
 	}
-
-	printStatsSeparator(false);
 
 	if (cs->rdb_bytes_sent) {
 		printStatsSeparator(false);

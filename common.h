@@ -98,6 +98,8 @@ public:
 	static vector <pair<uint64_t, uint64_t> > print_packets_pairs;
 	static string sendNatIP;
 	static string recvNatIP;
+	static in_addr sendNatAddr;
+	static in_addr recvNatAddr;
 	static bool genAckLatencyFiles;
 	static bool genPerPacketStats;
 	static bool genPerSegmentStats;

@@ -74,6 +74,7 @@ private:
 
 	string filterSrcIp;
 	string filterDstIp;
+	string filterTCPIp;
 	string filterSrcPort; /* specify tcp.src in filter */
 	string filterDstPort; /* specify tcp.dst in filter */
 	string filterTCPPort; /* specify tcp.port in filter */
@@ -97,7 +98,7 @@ public:
 	 *	It may represent an entire trace, or one that is retricted to a set of given src and dest
 	 *	IP addresses and ports.
 	 */
-	Dump(string src_ip, string dst_ip, string src_port, string dst_port, string tcp_port, string fn);
+	Dump(string src_ip, string dst_ip, string tcp_ip, string src_port, string dst_port, string tcp_port, string fn);
 
 	/** Version used by analyseDASH
 	 *	It represents a subset of a trace that contains an arbitrary number of connection

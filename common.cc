@@ -42,18 +42,24 @@ bool GlobOpts::conn_key_debug           = false;
 bool GlobOpts::print_payload_mismatch_warn = true;
 bool GlobOpts::print_timestamp_mismatch_warn = true;
 
+in_addr GlobOpts::sendNatAddr;
+in_addr GlobOpts::recvNatAddr;
+
+
 bool operator==(const timeval& lhs, const timeval& rhs) {
 	return lhs.tv_sec == rhs.tv_sec && lhs.tv_usec == rhs.tv_usec;
 }
 
+void print_with_file_and_linenum(string type, string file, int linenum) {
+	cerr << type << " at file: " << file << " Line: " << linenum  << endl;
+}
 
 void warn_with_file_and_linenum(string file, int linenum) {
-	cerr << "Error at ";
-	cerr << "File: " << file << " Line: " << linenum  << endl;
+	print_with_file_and_linenum("Warning", file, linenum);
 }
 
 void exit_with_file_and_linenum(int exit_code, string file, int linenum) {
-	warn_with_file_and_linenum(file, linenum);
+	print_with_file_and_linenum("Error", file, linenum);
 	exit(exit_code);
 }
 
@@ -119,7 +125,7 @@ void dfprintf(FILE *stream, enum debug_type type, int debug_level, const char *f
   Verbose printf
 */
 void vbprintf(int verbose_level, const char *format, ...) {
-	if (GlobOpts::verbose > verbose_level) {
+	if (GlobOpts::verbose < verbose_level) {
 		return;
 	}
 	va_list args;
@@ -132,7 +138,7 @@ void vbprintf(int verbose_level, const char *format, ...) {
   Verbose colored printf
 */
 void vbclprintf(int verbose_level, int fg_color, const char *format, ...) {
-	if (GlobOpts::verbose > verbose_level) {
+	if (GlobOpts::verbose < verbose_level) {
 		return;
 	}
 	va_list args;

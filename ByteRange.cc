@@ -5,12 +5,10 @@
 
 bool ByteRange::matchReceivedType(RangeManager *rm, bool print) {
 	if (print) {
-		printf("recv timestamp: %u ", received_tstamp_tcp);
+		printf("Range(%s): recv timestamp: %u ", seq_pair_str(rm->get_print_seq(startSeq), rm->get_print_seq(endSeq)).c_str(), received_tstamp_tcp);
 		printf("tstamps: %lu, rdb-stamps: %lu", tstamps_tcp.size(), rdb_tstamps_tcp.size());
 	}
 	// Find which data packet was received first
-	//printf("tstamps_tcp.size(): %lu\n", tstamps_tcp.size());
-	printf("Range(%s): tstamps_tcp.size(): %lu\n", seq_pair_str(rm->get_print_seq(startSeq), rm->get_print_seq(endSeq)).c_str(), tstamps_tcp.size());
 
 	for (ulong i = 0; i < tstamps_tcp.size(); i++) {
 		if (print) {
@@ -166,8 +164,10 @@ long ByteRange::getSendAckTimeDiff(RangeManager *rm) {
 		assert(0);
 	}
 
+	/*
 	if (GlobOpts::debugLevel == 2 || GlobOpts::debugLevel == 5) {
-		cerr << "Latency for range: " << usec << endl;
+		fprintf(stderr, "Latency for Range(%s): %lu\n",
+			   seq_pair_str(rm->get_print_seq(startSeq), rm->get_print_seq(endSeq)).c_str(), usec);
 		if (usec > 1000000 || usec < 10000) {
 			cerr << "Strange latency: " << usec << "usec." << endl;
 			//cerr << "Start seq: " << rm->relative_seq(startSeq) << " End seq: " << rm->relative_seq(endSeq) << endl;
@@ -180,6 +180,7 @@ long ByteRange::getSendAckTimeDiff(RangeManager *rm) {
 			cerr << "Number of bundles: " << rdb_count << endl;
 		}
 	}
+	*/
 	return (int) usec;
 }
 

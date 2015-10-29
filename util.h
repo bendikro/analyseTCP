@@ -15,6 +15,7 @@ void print_stack(void);
 std::string get_TCP_flags_str(u_char flags);
 
 std::string ipToStr(const in_addr &ip);
+in_addr strToIp(const string &ip);
 std::string makeHostKey(const in_addr &ip, const uint16_t *port);
 std::string makeConnKey(const in_addr &srcIp, const in_addr &dstIp, const uint16_t *srcPort, const uint16_t *dstPort);
 

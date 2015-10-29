@@ -33,6 +33,7 @@
 #include <getopt.h>
 #include <sys/stat.h>
 
+#define OPT_ADDR 399
 #define OPT_PORT 400
 #define OPT_ANALYSE_START 401
 #define OPT_ANALYSE_END 402
@@ -75,6 +76,7 @@ static option long_options[] = {
 	{"analyse-end",                 required_argument, 0, OPT_ANALYSE_END},
 	{"analyse-duration",            required_argument, 0, OPT_ANALYSE_DURATION},
 	{"tcp-port",                    required_argument, 0, OPT_PORT},
+	{"tcp-addr",                    required_argument, 0, OPT_ADDR},
 	{"sojourn-time-input",          required_argument, 0, OPT_SOJOURN_TIME_INPUT},
 	{0, 0, 0, 0}
 };
@@ -174,6 +176,7 @@ void usage(char* argv, string usage_str, int exit_status=1, int help_level=1)
 	printf(" --analyse-end=<end>              : Stop analysing <end> seconds before the end of the stream(s)\n");
 	printf(" --analyse-duration=<duration>    : Stop analysing after <duration> seconds after the start\n");
 	printf(" --tcp-port=<port>                : Sender or receiver port, combines -q and -p\n");
+	printf(" --tcp-addr=<address>             : Sender or receiver ip, combines -s and -r\n");
 	printf(" --sojourn-time-input=<filename>  : Text file containing timestamp and sequence number for data segments when entering the kernel.\n");
 
 	if (help_level > 2) {
@@ -206,6 +209,7 @@ string dst_ip = "";
 string src_port = "";
 string dst_port = "";
 string tcp_port = "";
+string tcp_addr = "";
 string sendfn = ""; /* Sender dump file name */
 string recvfn = ""; /* Receiver dump filename */
 
@@ -277,18 +281,28 @@ void parse_cmd_args(int argc, char *argv[], string OPTSTRING, string usage_str) 
 	while ((c = getopt_long(argc, argv, OPTSTRING.c_str(), long_options, &option_index)) != -1) {
 		switch (c) {
 		case 's':
+			if ( not tcp_addr.empty())
+			{
+				colored_printf(RED, "-s cannot be combined with --tcp-addr, ignoring -s\n");
+				break;
+			}
 			src_ip = optarg;
 			break;
 		case 'r':
+			if ( not tcp_addr.empty())
+			{
+				colored_printf(RED, "-r cannot be combined with --tcp-addr, ignoring -r\n");
+				break;
+			}
 			dst_ip = optarg;
 			break;
 		case 'p':
-			dst_port = string(optarg);
 			if ( not tcp_port.empty())
 			{
 				colored_printf(RED, "-p cannot be combined with --tcp-port, ignoring -p\n");
-				dst_port = "";
+				break;
 			}
+			dst_port = string(optarg);
 			break;
 		case 'q':
 			src_port = string(optarg);
@@ -298,18 +312,31 @@ void parse_cmd_args(int argc, char *argv[], string OPTSTRING, string usage_str) 
 				src_port = "";
 			}
 			break;
+		case OPT_ADDR :
+			if (!dst_ip.empty())
+			{
+				colored_printf(RED, "--tcp-addr cannot be combined with -r, ignoring --tcp-addr\n");
+				break;
+			}
+			else if (!src_ip.empty())
+			{
+				colored_printf(RED, "--tcp-addr cannot be combined with -s, ignoring --tcp-addr\n");
+				break;
+			}
+			tcp_addr = string(optarg);
+			break;
 		case OPT_PORT :
-			tcp_port = string(optarg);
 			if (!dst_port.empty())
 			{
 				colored_printf(RED, "--tcp-port cannot be combined with -p, ignoring --tcp-port\n");
-				tcp_port = "";
+				break;
 			}
 			else if (!src_port.empty())
 			{
 				colored_printf(RED, "--tcp-port cannot be combined with -q, ignoring --tcp-port\n");
-				tcp_port = "";
+				break;
 			}
+			tcp_port = string(optarg);
 			break;
 		case OPT_SOJOURN_TIME_INPUT:
 			GlobOpts::sojourn_time_file = string(optarg);
@@ -475,6 +502,14 @@ void parse_cmd_args(int argc, char *argv[], string OPTSTRING, string usage_str) 
 		GlobOpts::aggregate = true;
 	}
 
+	if (!GlobOpts::sendNatIP.empty()) {
+		GlobOpts::sendNatAddr = strToIp(GlobOpts::sendNatIP);
+	}
+
+	if (!GlobOpts::recvNatIP.empty()) {
+		GlobOpts::recvNatAddr = strToIp(GlobOpts::recvNatIP);
+	}
+
 	if (sendfn == "") {
 		usage(argv[0], usage_str);
 	}
@@ -504,7 +539,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	/* Create Dump - object */
-	Dump *senderDump = new Dump(src_ip, dst_ip, src_port, dst_port, tcp_port, sendfn);
+	Dump *senderDump = new Dump(src_ip, dst_ip, tcp_addr, src_port, dst_port, tcp_port, sendfn);
 	senderDump->analyseSender();
 
 	if (GlobOpts::withRecv) {

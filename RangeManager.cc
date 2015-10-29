@@ -1554,10 +1554,12 @@ void RangeManager::calculateRealLoss(map<seq64_t, ByteRange*>::iterator brIt, ma
 						colored_printf(YELLOW, "Failed to match %s (%s) (index: %llu) on %s\n",
 									   STR_ABSOLUTE_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq),
 									   STR_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq), index, conn->getConnKey().c_str());
-						ulong print_limit = 10;
-						if (GlobOpts::verbose > 2)
-							print_limit = 0;
-						brIt->second->printTstampsTcp(print_limit);
+						if (GlobOpts::verbose) {
+							ulong print_limit = 10;
+							if (GlobOpts::verbose > 2)
+								print_limit = 0;
+							brIt->second->printTstampsTcp(print_limit);
+						}
 						if (GlobOpts::debugLevel == 1) {
 							colored_printf(YELLOW, "Enable debug=2 to show further header mismatch warnings.\n");
 							GlobOpts::print_timestamp_mismatch_warn = false;

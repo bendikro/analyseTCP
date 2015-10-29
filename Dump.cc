@@ -9,10 +9,11 @@
 static void look_for_get_request(const pcap_pkthdr* header, const u_char *data, u_int link_layer_header_size);
 
 /* Methods for class Dump */
-Dump::Dump(string src_ip, string dst_ip, string src_port, string dst_port, string tcp_port, string fn)
+Dump::Dump(string src_ip, string dst_ip, string tcp_ip, string src_port, string dst_port, string tcp_port, string fn)
 	: filename(fn)
 	, filterSrcIp(src_ip)
 	, filterDstIp(dst_ip)
+	, filterTCPIp(tcp_ip)
 	, filterSrcPort(src_port)
 	, filterDstPort(dst_port)
 	, filterTCPPort(tcp_port)
@@ -30,6 +31,7 @@ Dump::Dump(const vector<four_tuple_t>& connections, string fn)
 	: filename(fn)
 	, filterSrcIp("")
 	, filterDstIp("")
+	, filterTCPIp("")
 	, filterSrcPort("")
 	, filterDstPort("")
 	, filterTCPPort("")
@@ -79,6 +81,7 @@ Connection* Dump::getConn(const in_addr &srcIpAddr, const in_addr &dstIpAddr, co
 	connKeyToInsert->src_port = connKey.src_port;
 	connKeyToInsert->dst_port = connKey.dst_port;
 	conns.insert(pair<ConnectionMapKey*, Connection*>(connKeyToInsert, tmpConn));
+	vbprintf(2, "New connection: %s\n", tmpConn->getConnKey().c_str());
 	return tmpConn;
 }
 
@@ -139,8 +142,7 @@ void Dump::analyseSender()
 	bool src_port_range;
 	bool dst_port_range;
 
-    if (_connections.size() == 0)
-    {
+    if (_connections.size() == 0) {
 	    /* Set up pcap filter to include only outgoing tcp
 	     * packets with correct ip and port numbers.
 	     */
@@ -161,11 +163,12 @@ void Dump::analyseSender()
         if (!filterTCPPort.empty())
 		    filterExp << " && tcp port " << filterTCPPort;
 
+		if (!filterTCPIp.empty())
+		    filterExp << " && host " << filterTCPIp;
+
 	    // Earlier, only packets with TCP payload were used.
 	    //filterExp << " && (ip[2:2] - ((ip[0]&0x0f)<<2) - (tcp[12]>>2)) >= 1";
-    }
-    else
-    {
+    } else {
 	    src_port_range = false;
 	    dst_port_range = false;
 
@@ -567,7 +570,7 @@ void Dump::processAcks(const pcap_pkthdr* header, const u_char *data, u_int link
 	ackCount++;
 }
 
-/* Analyse receiver dump - create CDFs */
+/* Analyse receiver dump */
 void Dump::processRecvd(string recvFn) {
 	int packetCount = 0;
 	string tmpSrcIp = filterSrcIp;
@@ -582,20 +585,14 @@ void Dump::processRecvd(string recvFn) {
 
 	if (!GlobOpts::sendNatIP.empty()) {
 		tmpSrcIp = GlobOpts::sendNatIP;
-		if (DEBUGL_SENDER(1)) {
-			cerr << "sender side NATing handled" << endl;
-			cerr << "srcIp: " << filterSrcIp << endl;
-			cerr << "tmpSrcIp: " << tmpSrcIp << endl;
-		}
+		dfprintf(stderr, DRECEIVER, 1, "Sender side NATing handled. srcIp: %s, tmpSrcIp: %s\n",
+				 filterSrcIp.c_str(), tmpSrcIp.c_str());
 	}
 
 	if (!GlobOpts::recvNatIP.empty()) {
 		tmpDstIp = GlobOpts::recvNatIP;
-		if (DEBUGL_SENDER(1)) {
-			cerr << "receiver side NATing handled" << endl;
-			cerr << "filterDstIp: " << filterDstIp << endl;
-			cerr << "tmpDstIp: " << tmpDstIp << endl;
-		}
+		dfprintf(stderr, DRECEIVER, 1, "Receiver side NATing handled. filterDstIp: %s, tmpDstIp: %s\n",
+				 filterDstIp.c_str(), tmpDstIp.c_str());
 	}
 
 	pcap_t *fd = pcap_open_offline(recvFn.c_str(), errbuf);
@@ -638,6 +635,9 @@ void Dump::processRecvd(string recvFn) {
 		filterExp << " && src host " << tmpSrcIp;
 	if (!tmpDstIp.empty())
 		filterExp << " && dst host " << tmpDstIp;
+	if (!filterTCPIp.empty())
+		filterExp << " && host " << filterTCPIp;
+
 	if (!filterSrcPort.empty())
 		filterExp << " && src " << (src_port_range ? "portrange " : "port ") << filterSrcPort;
 	if (!filterDstPort.empty())
@@ -698,7 +698,18 @@ void Dump::processRecvd(const pcap_pkthdr* header, const u_char *data, u_int lin
 	tcp = (sniff_tcp*) (data + link_layer_header_size + ipHdrLen);
 	u_int tcpHdrLen = TH_OFF(tcp)*4;
 
-	tmpConn = getConn(ip->ip_src, ip->ip_dst, &tcp->th_sport, &tcp->th_dport, NULL);
+	in_addr srcIpAddr = ip->ip_src;
+	in_addr dstIpAddr = ip->ip_dst;
+
+	if (!GlobOpts::sendNatIP.empty()) {
+		srcIpAddr = strToIp(filterSrcIp);
+	}
+
+	if (!GlobOpts::recvNatIP.empty()) {
+		dstIpAddr = strToIp(filterDstIp);
+	}
+
+	tmpConn = getConn(srcIpAddr, dstIpAddr, &tcp->th_sport, &tcp->th_dport, NULL);
 
 	// It should not be possible that the connection is not yet created
 	// If lingering ack arrives for a closed connection, this may happen
@@ -706,7 +717,7 @@ void Dump::processRecvd(const pcap_pkthdr* header, const u_char *data, u_int lin
 		static bool warning_printed = false;
 		if (warning_printed == false) {
 			cerr << "Connection found in recveiver trace that does not exist in sender: " << makeConnKey(ip->ip_src, ip->ip_dst, &tcp->th_sport, &tcp->th_dport);
-			cerr << ". Maybe NAT is in effect?  Exiting." << endl;
+			cerr << ". Maybe NAT is in effect?" << endl;
 			warn_with_file_and_linenum(__FILE__, __LINE__);
 			warning_printed = true;
 		}

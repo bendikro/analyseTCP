@@ -32,6 +32,12 @@ string ipToStr(const in_addr &ip) {
 	return string(ip_buf);
 }
 
+in_addr strToIp(const string &ip) {
+	in_addr addr;
+	inet_pton(AF_INET, ip.c_str(), &addr);
+	return addr;
+}
+
 string makeHostKey(const in_addr &ip, const uint16_t *port) {
 	return ipToStr(ip) + ":" + to_string(ntohs(*port));
 }
