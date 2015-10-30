@@ -217,11 +217,11 @@ long next_digit(char *str, char **endptr, long *result) {
 	errno = 0;    /* To distinguish success/failure after call */
 	*result = strtol(str, endptr, 10);
 
-	long LONG_MIN = std::numeric_limits<long>::min();
-	long LONG_MAX = std::numeric_limits<long>::max();
+	long long_min_val = std::numeric_limits<long>::min();
+	long long_max_val = std::numeric_limits<long>::max();
 
 	/* Check for various possible errors */
-	if ((errno == ERANGE && (*result == LONG_MAX || *result == LONG_MIN))
+	if ((errno == ERANGE && (*result == long_max_val || *result == long_min_val))
 	    || (errno != 0 && *result == 0)) {
 		return -1;
 	}
