@@ -123,6 +123,7 @@ public:
 	static bool debugReceiver;
 	static bool print_payload_mismatch_warn;
 	static bool print_timestamp_mismatch_warn;
+	static bool print_missing_byterange_warn;
 	/* Debug test variables */
 	static bool conn_key_debug;
 };

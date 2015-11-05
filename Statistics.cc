@@ -207,7 +207,7 @@ void printPacketITTStats(PacketsStats* bs)
 	printStatsSeparator(false);
 	printf("ITT stats:\n");
 	printStats("itt", "usec", bs->itt);
-	bs->itt._percentiles.print("  %*sth percentile %-26s    : %10.0f usec\n");
+	bs->itt._percentiles.print("I %*sth percentile %-26s    : %10.0f usec\n");
 }
 
 void printPacketITTStatsAggr(ConnStats *cs, AggrPacketsStats &aggrStats)
@@ -215,7 +215,7 @@ void printPacketITTStatsAggr(ConnStats *cs, AggrPacketsStats &aggrStats)
 	printStatsSeparator(false);
 	printf("ITT stats (Average for all the connections)\n");
 	printStatsAggr("ITT", "usec", cs, aggrStats.aggregated.itt, aggrStats.minimum.itt, aggrStats.average.itt, aggrStats.maximum.itt);
-	aggrStats.aggregated.itt._percentiles.print("  %*sth percentile %-26s    : %10.0f usec\n");
+	aggrStats.aggregated.itt._percentiles.print("I %*sth percentile %-26s    : %10.0f usec\n");
 }
 
 
@@ -244,14 +244,16 @@ void printPacketsStats(ConnStats *cs) {
 	       "  Total bytes sent (payload)                    : %10llu\n"	\
 	       "  Number of unique bytes                        : %10llu\n"   \
 	       "  Number of retransmitted bytes                 : %10d\n"	\
-		   "  Redundant bytes (bytes already sent)          : %10llu (%.2f %%)\n",
+		   "  Redundant bytes (bytes already sent)          : %10llu (%.2f %%)\n" \
+		   "  Data packets per second (with payload)        : %10.2f\n",
 		   cs->pureAcksCount, syn_fin_rst,
 		   cs->nrRetrans, cs->bundleCount, cs->nrRetrans - cs->nrRetransNoPayload + cs->bundleCount, cs->ackCount,
            cs->totBytesSent,
 	       cs->totUniqueBytesSent,
 		   cs->totRetransBytesSent,
            (cs->totBytesSent - cs->totUniqueBytesSent),
-	       safe_div((cs->totBytesSent - cs->totUniqueBytesSent), cs->totBytesSent) * 100);
+	       safe_div((cs->totBytesSent - cs->totUniqueBytesSent), cs->totBytesSent) * 100,
+		   (double) cs->nrDataPacketsSent / cs->duration);
 
 	if (cs->totUniqueBytesSent != cs->totUniqueBytes) {
 		colored_printf(RED, "  Trace is missing segments. Bytes missing      : %10d\n", cs->totUniqueBytes - cs->totUniqueBytesSent);
@@ -305,9 +307,9 @@ void printPacketsStats(ConnStats *cs) {
 }
 
 void printStats(string prefix, string unit, BaseStats& bs) {
-	printf("  Minimum %10s                            : %7lld %s\n", prefix.c_str(), bs.min, unit.c_str());
-	printf("  Average %10s                            : %7.0f %s\n", prefix.c_str(), bs.get_avg(), unit.c_str());
-	printf("  Maximum %10s                            : %7lld %s\n", prefix.c_str(), bs.max, unit.c_str());
+	printf("  Minimum %-10s                            : %10lld %s\n", prefix.c_str(), bs.min, unit.c_str());
+	printf("  Average %-10s                            : %10.0f %s\n", prefix.c_str(), bs.get_avg(), unit.c_str());
+	printf("  Maximum %-10s                            : %10lld %s\n", prefix.c_str(), bs.max, unit.c_str());
 }
 
 void printStatsAggr(string prefix, string unit, ConnStats *cs, BaseStats& bs,
@@ -357,7 +359,7 @@ void printBytesLatencyStatsConn(PacketsStats* bs) {
 /* Print latency statistics */
 void printBytesLatencyStats(PacketsStats* bs) {
 
-	bs->latency._percentiles.print("L %*sth percentile %-26s    : %10.0f ms\n");
+	bs->latency._percentiles.print("L %*sth percentile %-26s    : %10.0f usec\n");
 
 	if (GlobOpts::verbose > 1) {
 		vector<int>::reverse_iterator curr;

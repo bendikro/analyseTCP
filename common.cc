@@ -41,6 +41,7 @@ bool GlobOpts::conn_key_debug           = false;
 	/* Debug warning prints */
 bool GlobOpts::print_payload_mismatch_warn = true;
 bool GlobOpts::print_timestamp_mismatch_warn = true;
+bool GlobOpts::print_missing_byterange_warn = true;
 
 in_addr GlobOpts::sendNatAddr;
 in_addr GlobOpts::recvNatAddr;

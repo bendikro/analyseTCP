@@ -270,7 +270,7 @@ csv::ofstream& operator<<(csv::ofstream& s, LossInterval& v) {
  				q = "(Second quartile, median) ";
  			else if (it->first == "75")
  				q = "(Third quartile)";
- 			printf(fmt.c_str(), max_char_length, it->first.c_str(), q.c_str(), it->second);
+			printf(fmt.c_str(), max_char_length, it->first.c_str(), q.c_str(), it->second);
  		}
  		else
  			printf(fmt.c_str(), max_char_length, it->first.c_str(), it->second);

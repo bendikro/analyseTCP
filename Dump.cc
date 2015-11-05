@@ -371,7 +371,7 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data, u_int link
 					tmpConn->rm->absolute_seq_pair_str(sd.data.seq, sd.data.endSeq).c_str(),
 					ipSize, sd.totalSize - link_layer_header_size);
 			if (GlobOpts::debugLevel == 1) {
-				fprintf(stderr, "Enable debug=2 to show further header mismatch warnings.\n");
+				fprintf(stderr, "Enable debug mode>=2 to show further header mismatch warnings.\n");
 				GlobOpts::print_payload_mismatch_warn = false;
 			}
 		}
@@ -763,7 +763,7 @@ void Dump::processRecvd(const pcap_pkthdr* header, const u_char *data, u_int lin
 					tmpConn->rm->absolute_seq_pair_str(sd.data.seq, sd.data.endSeq).c_str(),
 					ipSize, sd.totalSize - link_layer_header_size);
 			if (GlobOpts::debugLevel == 1) {
-				fprintf(stderr, "Enable debug=2 to show further header mismatch warnings.\n");
+				fprintf(stderr, "Enable debug mode>=2 to show further header mismatch warnings.\n");
 				GlobOpts::print_payload_mismatch_warn = false;
 			}
 		}

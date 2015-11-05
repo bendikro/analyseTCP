@@ -101,14 +101,17 @@ void RangeManager::insertSentRange(sendData *sd) {
 	else if (startSeq > lastSeq) {
 		// This is most probably the ack on the FIN ack from receiver, so ignore
 		if (sd->data.payloadSize != 0) {
-			if (GlobOpts::validate_ranges) {
-				fprintf(stderr, "RangeManager::insertRange: Missing byte in send range in conn '%s''\n",
+			if (GlobOpts::validate_ranges && DEBUGL_SENDER(1) && GlobOpts::print_missing_byterange_warn) {
+				colored_fprintf(stderr, RED, "\nRangeManager::insertRange: Missing bytes in sender trace (conn '%s')\n",
 					   conn->getConnKey().c_str());
-				fprintf(stderr, "Expected seq: %llu but got %llu\n", (seq64_t) lastSeq, startSeq);
-				fprintf(stderr, "Absolute: lastSeq: %llu, startSeq: %llu. Relative: lastSeq: %llu, startSeq: %llu\n",
-						(seq64_t) lastSeq, startSeq, get_print_seq(lastSeq), get_print_seq(startSeq));
+				fprintf(stderr, "Expected seq: %llu (%llu) but got %llu (%llu)\n",
+						(seq64_t) lastSeq, (seq64_t) absolute_seq(lastSeq), startSeq, (seq64_t) absolute_seq(startSeq));
 				fprintf(stderr, "This is an indication that tcpdump has dropped packets while collecting the trace.\n");
 				warn_with_file_and_linenum(__FILE__, __LINE__);
+				if (GlobOpts::debugLevel == 1) {
+					fprintf(stderr, "Enable debug mode>=2 to show further warnings.\n\n");
+					GlobOpts::print_missing_byterange_warn = false;
+				}
 			}
 		}
 	}
@@ -1097,7 +1100,11 @@ bool RangeManager::processAck(DataSeg *seg) {
 			return true;
 		}
 		prev = it;
-		assert(it != ranges.begin() && "We are at the first range. Will crash!\n");
+		if (it == ranges.begin()) {
+			// We are at the first registered range and cannot search in earlier ranges.
+			// Probably caused by starting tcpdump in the middle of a stream
+			return false;
+		}
 
 		prev--;
 		// ACK incremented one extra after receiving FIN
@@ -1245,10 +1252,12 @@ void RangeManager::genStats(PacketsStats *bs) {
 
 	std::sort(bs->packet_stats.begin(), bs->packet_stats.end());
 
-
 	PacketStats prev = bs->packet_stats[0];
 	long itt;
 	for (size_t i = 1; i < bs->packet_stats.size(); i++) {
+		// We skip pure ACKs when calculating ITTs
+		if (!bs->packet_stats[i].size)
+			continue;
 		itt = bs->packet_stats[i].send_time_us - prev.send_time_us;
 		bs->itt.add((ullint_t) itt);
 		bs->packet_stats[i].itt_usec = (int) itt;
