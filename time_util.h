@@ -6,6 +6,10 @@
 #include <time.h>
 #include <sys/time.h>
 
+/* Convert a timeval to milliseconds */
+#define TV_TO_MS(tv) ((int64_t)((tv).tv_sec * 1000L + ((tv).tv_usec / 1000L)))
+#define TV_TO_MICSEC(tv) ((int64_t)((tv).tv_sec * 1000000L + ((tv).tv_usec)))
+
 typedef enum {SEC_PREC, MSEC_PREC, USEC_PREC} TIME_PREC;
 
 #ifdef __cplusplus

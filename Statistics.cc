@@ -22,7 +22,7 @@ void Statistics::printConns() {
 	char loss_estimated[50];
 
 	if (!GlobOpts::withRecv) {
-		colored_printf(YELLOW, "Loss statistics require reciver dump!\n");
+		colored_printf(YELLOW, "Loss statistics require receiver dump.\n");
 	}
 
 	printf("\nConnections in sender dump: %lu\n\n", dump.conns.size());

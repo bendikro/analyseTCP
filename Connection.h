@@ -8,6 +8,8 @@
 #include <cmath>
 #include <netinet/in.h>
 
+enum relative_seq_type {RELSEQ_NONE, RELSEQ_SEND_OUT, RELSEQ_SEND_ACK, RELSEQ_RECV_INN, RELSEQ_SOJ_SEQ};
+
 struct PacketSize {
 	timeval time;
 	uint16_t packet_size;
@@ -39,6 +41,8 @@ public:
 	}
 };
 ofstream& operator<<(ofstream& stream, const PacketSizeGroup& psGroup);
+
+seq64_t getRelativeSequenceNumber(seq32_t seq, seq32_t firstSeq, seq64_t largestSeq, seq32_t largestSeqAbsolute, Connection *conn);
 
 /* Represents one connection (srcport/dstport pair) */
 class Connection {
@@ -133,7 +137,11 @@ public:
 	uint32_t getDuration(bool analyse_range_duration);
 
 	void registerPacketSize(const timeval& first_tstamp_in_dump, const timeval& pkt_tstamp, const uint32_t pkt_size, const uint16_t payloadSize);
-    void writePacketByteCountAndITT(vector<csv::ofstream*> streams);
+	void writePacketByteCountAndITT(vector<csv::ofstream*> streams);
+	seq64_t getRelativeSequenceNumber(seq32_t seq, relative_seq_type type);
 };
+
+
+//seq64_t getRelativeSequenceNumber(seq32_t seq, seq32_t firstSeq, seq64_t largestAckSeq, seq32_t largestAckSeqAbsolute, Connection *conn);
 
 #endif /* CONNECTION_H */

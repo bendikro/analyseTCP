@@ -1037,6 +1037,8 @@ bool RangeManager::processAck(DataSeg *seg) {
 					}
 				}
 			}
+			if (seg->sacks)
+				it->second->registerSACKS(seg);
 			it->second->ack_count++;
 			highestAckedByteRangeIt = it;
 			it->second->tcp_window = seg->window;
@@ -1169,21 +1171,33 @@ bool RangeManager::processAck(DataSeg *seg) {
 
 
 void RangeManager::genStats(PacketsStats *bs) {
-	map<seq64_t, ByteRange*>::iterator it, it_end;
-	it = analyse_range_start;
-	it_end = analyse_range_end;
-
+	map<seq64_t, ByteRange*>::iterator it, it_end, last_acked = ranges.end();
 	long latency;
 	uint32_t tmp_byte_count;
 	bs->latency.min = bs->packet_length.min = bs->itt.min = (numeric_limits<ullint_t>::max)();
 	ulong dupack_count;
 	SegmentStats psTmp;
+	int16_t pifs = 0;
 
+	it = analyse_range_start;
+	it_end = analyse_range_end;
+
+	for (it = analyse_range_start; it != analyse_range_end; it++) {
+		if (it->second->getOrinalPayloadSize()) {
+			last_acked = it;
+			printf("Last acked set to %lld, ackTime: %ld\n", it->second->startSeq, TV_TO_MS(last_acked->second->ackTime));
+			break;
+		}
+	}
+
+	it = analyse_range_start;
 	for (; it != it_end; it++) {
 		// Skip if invalid (negative) latency
 		tmp_byte_count = static_cast<uint32_t>(it->second->getOrinalPayloadSize());
 
 		if (tmp_byte_count) {
+			pifs++;
+
 			bs->packet_length.add(static_cast<ullint_t>(tmp_byte_count));
 			for (int i = 0; i < it->second->getNumRetrans(); i++) {
 				bs->packet_length.add(static_cast<ullint_t>(tmp_byte_count));
@@ -1193,15 +1207,30 @@ void RangeManager::genStats(PacketsStats *bs) {
 		for (size_t i = 0; i < it->second->sent_tstamp_pcap.size(); i++) {
 			if (it->second->sent_tstamp_pcap[i].second) {
 				if (it->second->sent_tstamp_pcap[i].second == ST_PKT) {
-					assert(it->second->sent_tstamp_pcap[i].second == ST_PKT);
 					psTmp = SegmentStats(ST_PKT, conn->getConnKey(), TV_TO_MICSEC(it->second->sent_tstamp_pcap[i].first), static_cast<uint16_t>(tmp_byte_count));
 					psTmp.sojourn_times = it->second->getSojournTimes();
 					psTmp.ack_latency_usec = static_cast<int>(it->second->getSendAckTimeDiff(this));
+
+					if (it->second->acked) {
+						int64_t sent_ms = TV_TO_MICSEC(it->second->sent_tstamp_pcap[i].first);
+						char t_but[30];
+						sprint_time_ms_prec(t_but, it->second->ackTime);
+
+						if (last_acked != ranges.end()) {
+							while (sent_ms > TV_TO_MICSEC(last_acked->second->ackTime)) {
+								pifs--;
+								last_acked++;
+							}
+						}
+					}
+
+					psTmp.pifs = pifs;
 				}
 				else if (it->second->sent_tstamp_pcap[i].second == ST_RTR) {
 					// This is a retransmit
 					// In case a collapsed retrans packet spans multiple segments, check if next range has retrans data
 					// that is not a retrans packet in itself
+
 					uint32_t tmp_byte_count2 = tmp_byte_count;
 					map<seq64_t, ByteRange*>::iterator it_tmp = it;
 					if (++it_tmp != it_end) {
@@ -1210,7 +1239,7 @@ void RangeManager::genStats(PacketsStats *bs) {
 						}
 					}
 					psTmp = SegmentStats(ST_RTR, conn->getConnKey(), TV_TO_MICSEC(it->second->sent_tstamp_pcap[i].first), tmp_byte_count2);
-					//printf("RETRANS: %llu -> %llu\n", tmp_byte_count, tmp_byte_count2);
+					psTmp.pifs = pifs;
 				}
 				else if (it->second->sent_tstamp_pcap[i].second == ST_PURE_ACK) {
 					psTmp = SegmentStats(ST_PURE_ACK, conn->getConnKey(), TV_TO_MICSEC(it->second->sent_tstamp_pcap[i].first), 0);
@@ -1465,6 +1494,8 @@ void RangeManager::printPacketDetails() {
 				printf(", rdb-miss: %-3d rdb-hit: %-3d", it->second->rdb_miss_count, it->second->rdb_hit_count);
 		}
 
+		printf(", dupACKs: %d", it->second->dupack_count);
+
 		printf(", ACKtime: %.1f", (double) it->second->getSendAckTimeDiff(this) / 1000.0);
 
 		if (not GlobOpts::sojourn_time_file.empty()) {
@@ -1525,6 +1556,25 @@ void RangeManager::printPacketDetails() {
 
 		if (!it->second->data_retrans_count && !it->second->rdb_count && (it->second->rdb_miss_count || it->second->rdb_hit_count)) {
 			printf(" FAIL (RDB hit/miss calculalation has failed)!");
+		}
+
+		if (it->second->tcp_sacks.size() > 0) {
+			for (auto &sack_blocks : it->second->tcp_sacks) {
+				printf("\n");
+				for (size_t i = 0;  i < sack_blocks.size(); i++) {
+
+					char prefix = ' ';
+					if (i == 0 && sack_blocks[0].first < it->second->endSeq) {
+						prefix = 'D';
+					}
+					else if (i == 1 && !after(sack_blocks[0].second, sack_blocks[1].second) && !before(sack_blocks[0].first, sack_blocks[1].first)) {
+						prefix = 'd';
+					}
+
+					printf("%cSACK (%4llu - %4llu) ", prefix,
+						   get_print_seq(sack_blocks[i].first), get_print_seq(sack_blocks[i].second));
+				}
+			}
 		}
 		printf("\n");
 	}

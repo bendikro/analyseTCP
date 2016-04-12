@@ -44,6 +44,8 @@ inline bool before(seq32_t seq1, seq32_t seq2) {
 	return (signed int) (seq1 - seq2) < 0;
 }
 
+#define after(seq2, seq1)   before(seq1, seq2)
+
 inline bool after_or_equal(seq32_t seq1, seq32_t seq2) {
 	return (signed int) (seq2 - seq1) >= 0;
 }

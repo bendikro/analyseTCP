@@ -11,8 +11,8 @@ using namespace std;
 
 class ByteRange {
 public:
-	seq64_t startSeq;                 // The relative sequence number of the first byte in this range
-	seq64_t endSeq;                   // The relative sequence number of the last byte in this range
+	seq64_t startSeq;                  // The relative sequence number of the first byte in this range
+	seq64_t endSeq;                    // The relative sequence number of the last byte in this range
 	uint16_t byte_count;               // The number of bytes in this range
 	uint16_t original_payload_size;
 	uint8_t packet_sent_count;         // Count number of packet transmissions. This value is not copied when splitting a byte range!
@@ -32,6 +32,7 @@ public:
 	uint32_t received_tstamp_tcp;
 	vector< pair<uint32_t, uint32_t> > tstamps_tcp;
 	vector< uint32_t> rdb_tstamps_tcp;  // tcp tstamp for data in RDB packets
+	vector< vector< pair<seq64_t, seq64_t> > > tcp_sacks;  // tcp tstamp for data in RDB packets
 
 	vector< pair<uint32_t, timeval> > lost_tstamps_tcp; // tcp tstamp matched to received used to find which packets were lost
 
@@ -166,6 +167,7 @@ public:
 		return new_br;
 	}
 
+	void registerSACKS(DataSeg* data) { tcp_sacks.push_back(data->tcp_sacks); }
 	bool matchReceivedType(RangeManager *rm, bool print=false);
 	void printTstampsTcp(ulong limit);
 

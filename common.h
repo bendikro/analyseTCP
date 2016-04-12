@@ -69,10 +69,6 @@ using namespace std;
 
 #define safe_div(x, y) ((y) != 0 ? ((double) (x)) / (y) : 0.0)
 
-/* Convert a timeval to milliseconds */
-#define TV_TO_MS(tv) ((int64_t)((tv).tv_sec * 1000L + ((tv).tv_usec / 1000L)))
-#define TV_TO_MICSEC(tv) ((int64_t)((tv).tv_sec * 1000000L + ((tv).tv_usec)))
-
 enum sent_type {ST_NONE, ST_PKT, ST_RTR, ST_PURE_ACK, ST_RST};
 
 /* Compare two timevals */
@@ -140,13 +136,15 @@ struct DataSeg {
 	seq32_t seq_absolute;  /* Absolute value of the sequence number */
 	seq64_t ack;
 	uint16_t window;
-	uint16_t payloadSize;       /* Payload size */
-	bool retrans : 1,       /* is a retransmission */
-		is_rdb : 1,         /* is a rdb packet */
-		in_sequence : 1;    // Is the segment expected or out of order
+	uint16_t payloadSize;   /* Payload size */
+	bool retrans : 1,       /* Is a retransmission */
+		is_rdb : 1,         /* Is a rdb packet */
+		sacks : 1,          /* Has SACK blocks */
+		in_sequence : 1;    /* Is the segment expected or out of order */
 	timeval tstamp_pcap;
 	uint32_t tstamp_tcp;
 	uint32_t tstamp_tcp_echo;
+	vector< pair<seq64_t, seq64_t> > tcp_sacks;
 	u_char flags;
 	DataSeg() : seq(0), endSeq(0), rdb_end_seq(0), seq_absolute(0), ack(0),
 		window(0), payloadSize(0), retrans(0), is_rdb(0), in_sequence(0),

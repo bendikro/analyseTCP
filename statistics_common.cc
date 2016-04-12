@@ -32,6 +32,8 @@ void PacketStats::writeHeader(csv::ofstream& stream) {
 		   << "itt"
 		   << "payload_bytes"
 		   << "ack_latency"
+		   << "packet_type"
+		   << "pifs"
 		   << NEWLINE;
 }
 
@@ -41,6 +43,8 @@ csv::ofstream& operator<<(csv::ofstream& stream, PacketStats& s) {
 		   << s.itt_usec
 		   << s.size
 		   << s.ack_latency_usec
+		   << s.s_type
+		   << s.pifs
 		   << NEWLINE;
 	return stream;
 }

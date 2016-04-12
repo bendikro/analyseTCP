@@ -162,9 +162,10 @@ public:
 	uint32_t size;
 	int itt_usec;
 	int ack_latency_usec;
+	int16_t pifs; // Packets in flight after this packet was sent
 	PacketStats() {}
 	PacketStats(sent_type type, string connKey, int64_t time, uint32_t s)
-		: s_type(type), stream_id(connKey), send_time_us(time), size(s), itt_usec(0)
+		: s_type(type), stream_id(connKey), send_time_us(time), size(s), itt_usec(0), pifs(0)
 	{}
 	static void writeHeader(csv::ofstream& stream);
 

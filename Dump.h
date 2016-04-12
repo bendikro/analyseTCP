@@ -108,12 +108,13 @@ public:
 
 	~Dump();
 
-	seq64_t getRelativeSequenceNumber(seq32_t ack, seq32_t firstSeq, seq64_t largestAckSeq, seq32_t largestAckSeqAbsolute, Connection *conn);
 	void analyseSender();
 	void processRecvd(string fn);
 	void calculateRetransAndRDBStats();
 	void printPacketDetails();
-	void findTCPTimeStamp(DataSeg* data, uint8_t* opts, uint option_length);
+	void parseTCPOptions(DataSeg* data, uint8_t* opts, uint option_length,
+						 Connection* tmpConn, relative_seq_type type);
+
 	Connection* getConn(const in_addr &srcIpAddr, const in_addr &dstIpAddr, const uint16_t *srcPort, const uint16_t *dstPort, const seq32_t *seq);
 	Connection* getConn(string &srcIpStr, string &dstIpStr, string &srcPortStr, string &dstPortStr);
 	void calculateLatencyVariation();

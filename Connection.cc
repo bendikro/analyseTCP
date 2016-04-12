@@ -14,6 +14,97 @@ string PacketSizeGroup::str() const {
 	return buffer.str();
 }
 
+/**
+ * This function generates the relative sequence number of packets read from pcap files.
+ *
+ * seq:                The sequence number of the packet
+ * firstSeq:           The first sequence number in the stream
+ * largestSeq:         The largest relative sequence number that has been read for this stream
+ * largestSeqAbsolute: The largest absolute (raw) sequence number that has been read for this stream
+ *
+ * Returns the relative sequence number or std::numeric_limits<ulong>::max() if it failed.
+ **/
+seq64_t getRelativeSequenceNumber(seq32_t seq, seq32_t firstSeq, seq64_t largestSeq, seq32_t largestSeqAbsolute, Connection *conn) {
+	ullint_t wrap_index;
+	seq64_t seq_relative;
+	wrap_index = firstSeq + largestSeq;
+	wrap_index += 1;
+
+	//printf("getRelativeSequenceNumber: seq: %u, firstSeq: %u, largestSeq: %llu, largestSeqAbsolute: %u, wrap_index: %llu\n", seq, firstSeq, largestSeq, largestSeqAbsolute, wrap_index);
+	// Either seq has wrapped, or a retrans (or maybe reorder if netem is run on sender machine)
+	if (seq < largestSeqAbsolute) {
+		// This is an earlier sequence number
+		if (before(seq, largestSeqAbsolute)) {
+			if (before(seq, firstSeq)) {
+				return std::numeric_limits<ulong>::max();
+				//printf("Before first!\n");
+			}
+			wrap_index -= (largestSeqAbsolute - seq);
+		}
+		// Sequence number has wrapped
+		else {
+			wrap_index += (0 - largestSeqAbsolute) + seq;
+		}
+	}
+	// When seq is greater, it is either newer data, or it is older data because
+	// largestSeqAbsolute just wrapped. E.g. largestSeqAbsolute == 10, and seq = 4294967250
+	else {
+		//printf("wrap_index: %lu\n", wrap_index);
+		// This is newer seq
+		if (after_or_equal(largestSeqAbsolute, seq)) {
+			//printf("after_or_equal\n");
+			wrap_index += (seq - largestSeqAbsolute);
+			//printf("new wrap_index: %lu\n", wrap_index);
+		}
+		// Acks older data than largestAckSeqAbsolute, largestAckSeqAbsolute has wrapped.
+		else {
+			wrap_index -= ((0 - seq) + largestSeqAbsolute);
+		}
+	}
+
+	wrap_index /= 4294967296L;
+	// When seq has wrapped, wrap_index will make sure the relative sequence number continues to grow
+	seq_relative = seq + (wrap_index * 4294967296L) - firstSeq;
+	if (seq_relative > 9999999999) {// TODO: Do a better check than this, e.g. checking for distance of largestSeq and seq_relative > a large number
+		// use stderr for error messages for crying out loud!!!!!
+		//fprintf(stderr, "wrap_index: %lu\n", wrap_index);
+		//fprintf(stderr, "\ngetRelativeSequenceNumber: seq: %u, firstSeq: %u, largestSeq: %lu, largestSeqAbsolute: %u\n", seq, firstSeq, largestSeq, largestSeqAbsolute);
+		//fprintf(stderr, "seq_relative: %lu\n", seq_relative);
+		//fprintf(stderr, "Conn: %s\n", conn->getConnKey().c_str());
+
+#if !defined(NDEBUG)
+		fprintf(stderr, "Encountered invalid sequence number for connection %s: %u (firstSeq=%u, largestSeq=%llu, largestSeqAbsolute=%u\n",
+				conn->getConnKey().c_str(),
+				seq,
+				firstSeq,
+				largestSeq,
+				largestSeqAbsolute);
+#endif
+
+		//assert(0 && "Incorrect sequence number calculation!\n");
+		return std::numeric_limits<ulong>::max();
+	}
+	//printf("RETURN seq_relative: %llu\n", seq_relative);
+	return seq_relative;
+}
+
+seq64_t Connection::getRelativeSequenceNumber(seq32_t seq, relative_seq_type type) {
+	switch (type) {
+	case RELSEQ_SEND_OUT: // sender outgoing seq
+		return ::getRelativeSequenceNumber(seq, rm->firstSeq, lastLargestEndSeq, lastLargestSeqAbsolute, this);
+	case RELSEQ_SEND_ACK: // sender incomming (ack) seq
+		return ::getRelativeSequenceNumber(seq, rm->firstSeq, lastLargestAckSeq, lastLargestAckSeqAbsolute, this);
+	case RELSEQ_RECV_INN: // receiver incomming seq
+		return ::getRelativeSequenceNumber(seq, rm->firstSeq, lastLargestRecvEndSeq, lastLargestRecvSeqAbsolute, this);
+	case RELSEQ_SOJ_SEQ: // sojourn time seq
+		return ::getRelativeSequenceNumber(seq, rm->firstSeq, lastLargestSojournEndSeq, lastLargestSojournSeqAbsolute, this);
+	case RELSEQ_NONE: // sender outgoing seq
+		break;
+	}
+	return std::numeric_limits<ulong>::max();
+}
+
+
 uint32_t Connection::getDuration(bool analyse_range_duration) {
 	double d;
 	if (analyse_range_duration) {

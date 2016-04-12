@@ -298,7 +298,9 @@ void Dump::analyseSender()
 }
 
 
-void Dump::findTCPTimeStamp(DataSeg* data, uint8_t* opts, uint option_length) {
+void Dump::parseTCPOptions(DataSeg* data, uint8_t* opts, uint option_length,
+						   Connection* tmpConn = NULL,
+						   relative_seq_type seq_type = RELSEQ_NONE) {
 
 	typedef struct {
 		uint8_t kind;
@@ -308,7 +310,9 @@ void Dump::findTCPTimeStamp(DataSeg* data, uint8_t* opts, uint option_length) {
 
 	while (*opts != 0 && offset < option_length) {
 		tcp_option_t* _opt = (tcp_option_t*) (opts + offset);
-
+		if (_opt->kind == 0) { /* End of options list */
+			break;
+		}
 		if (_opt->kind == 1) {  /* NOP */
 			offset += 1;
 			continue;
@@ -316,10 +320,17 @@ void Dump::findTCPTimeStamp(DataSeg* data, uint8_t* opts, uint option_length) {
 		if (_opt->kind == 8) {  /* Timestamp */
 			data->tstamp_tcp = ntohl(*(((uint32_t*) (opts + offset + 2))));
 			data->tstamp_tcp_echo = ntohl(*(((uint32_t*) (opts + offset + 6))));
-			break;
 		}
-		if (_opt->kind == 0) { /* End of options list */
-			break;
+		if (_opt->kind == 5 && seq_type != RELSEQ_NONE) {  /* SACK */
+			int blocks = (_opt->size - 2) / 8;
+			data->sacks = true;
+			for (int i = 0; i < blocks; i++) {
+				seq64_t left = ntohl(*(((uint32_t*) (opts + offset + 2 + (4 * blocks * i)))));
+				seq64_t right = ntohl(*(((uint32_t*) (opts + offset + 6  + (4 * blocks * i)))));
+				left = tmpConn->getRelativeSequenceNumber(left, RELSEQ_SEND_ACK);
+				right = tmpConn->getRelativeSequenceNumber(right, RELSEQ_SEND_ACK);
+				data->tcp_sacks.push_back(pair<uint64_t, uint32_t>(left, right));
+			}
 		}
 		offset += _opt->size;
 	}
@@ -354,10 +365,11 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data, u_int link
 	sd.data.payloadSize    = static_cast<uint16_t>(sd.totalSize - (ipHdrLen + tcpHdrLen + link_layer_header_size));
 	sd.data.tstamp_pcap    = header->ts;
 	sd.data.seq_absolute   = ntohl(tcp->th_seq);
-	sd.data.seq            = getRelativeSequenceNumber(sd.data.seq_absolute, tmpConn->rm->firstSeq, tmpConn->lastLargestEndSeq, tmpConn->lastLargestSeqAbsolute, tmpConn);
+	sd.data.seq            = tmpConn->getRelativeSequenceNumber(sd.data.seq_absolute, RELSEQ_SEND_OUT);
 	sd.data.endSeq         = sd.data.seq + sd.data.payloadSize;
 	sd.data.retrans        = false;
 	sd.data.is_rdb         = false;
+	sd.data.sacks          = false;
 	sd.data.rdb_end_seq    = 0;
 	sd.data.flags          = tcp->th_flags;
 	sd.data.tstamp_tcp      = 0;
@@ -401,7 +413,7 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data, u_int link
 	}
 
 	uint8_t* opt = (uint8_t*) tcp + 20;
-	findTCPTimeStamp(&sd.data, opt, sd.tcpOptionLen);
+	parseTCPOptions(&sd.data, opt, sd.tcpOptionLen);
 
 	/* define/compute tcp payload (segment) offset */
 	//sd.data.data = (u_char *) (data + link_layer_header_size + ipHdrLen + tcpHdrLen);
@@ -432,79 +444,6 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data, u_int link
 }
 
 
-/**
- * This function generates the relative sequence number of packets read from pcap files.
- *
- * seq:                The sequence number of the packet
- * firstSeq:           The first sequence number in the stream
- * largestSeq:         The largest relative sequence number that has been read for this stream
- * largestSeqAbsolute: The largest absolute (raw) sequence number that has been read for this stream
- *
- * Returns the relative sequence number or std::numeric_limits<ulong>::max() if it failed.
- **/
-seq64_t Dump::getRelativeSequenceNumber(seq32_t seq, seq32_t firstSeq, seq64_t largestSeq, seq32_t largestSeqAbsolute, Connection *conn) {
-	ullint_t wrap_index;
-	seq64_t seq_relative;
-	wrap_index = firstSeq + largestSeq;
-	wrap_index += 1;
-
-	//printf("getRelativeSequenceNumber: seq: %u, firstSeq: %u, largestSeq: %llu, largestSeqAbsolute: %u, wrap_index: %llu\n", seq, firstSeq, largestSeq, largestSeqAbsolute, wrap_index);
-	// Either seq has wrapped, or a retrans (or maybe reorder if netem is run on sender machine)
-	if (seq < largestSeqAbsolute) {
-		// This is an earlier sequence number
-		if (before(seq, largestSeqAbsolute)) {
-			if (before(seq, firstSeq)) {
-				return std::numeric_limits<ulong>::max();
-				//printf("Before first!\n");
-			}
-			wrap_index -= (largestSeqAbsolute - seq);
-		}
-		// Sequence number has wrapped
-		else {
-			wrap_index += (0 - largestSeqAbsolute) + seq;
-		}
-	}
-	// When seq is greater, it is either newer data, or it is older data because
-	// largestSeqAbsolute just wrapped. E.g. largestSeqAbsolute == 10, and seq = 4294967250
-	else {
-		//printf("wrap_index: %lu\n", wrap_index);
-		// This is newer seq
-		if (after_or_equal(largestSeqAbsolute, seq)) {
-			//printf("after_or_equal\n");
-			wrap_index += (seq - largestSeqAbsolute);
-			//printf("new wrap_index: %lu\n", wrap_index);
-		}
-		// Acks older data than largestAckSeqAbsolute, largestAckSeqAbsolute has wrapped.
-		else {
-			wrap_index -= ((0 - seq) + largestSeqAbsolute);
-		}
-	}
-
-	wrap_index /= 4294967296L;
-	// When seq has wrapped, wrap_index will make sure the relative sequence number continues to grow
-	seq_relative = seq + (wrap_index * 4294967296L) - firstSeq;
-	if (seq_relative > 9999999999) {// TODO: Do a better check than this, e.g. checking for distance of largestSeq and seq_relative > a large number
-		// use stderr for error messages for crying out loud!!!!!
-		//fprintf(stderr, "wrap_index: %lu\n", wrap_index);
-		//fprintf(stderr, "\ngetRelativeSequenceNumber: seq: %u, firstSeq: %u, largestSeq: %lu, largestSeqAbsolute: %u\n", seq, firstSeq, largestSeq, largestSeqAbsolute);
-		//fprintf(stderr, "seq_relative: %lu\n", seq_relative);
-		//fprintf(stderr, "Conn: %s\n", conn->getConnKey().c_str());
-
-#if !defined(NDEBUG)
-		fprintf(stderr, "Encountered invalid sequence number for connection %s: %u (firstSeq=%u, largestSeq=%llu, largestSeqAbsolute=%u\n",
-				conn->getConnKey().c_str(),
-				seq,
-				firstSeq,
-				largestSeq,
-				largestSeqAbsolute);
-#endif
-
-		//assert(0 && "Incorrect sequence number calculation!\n");
-		return std::numeric_limits<ulong>::max();
-	}
-	//printf("RETURN seq_relative: %llu\n", seq_relative);
-	return seq_relative;
-}
 
 /* Process incoming ACKs */
 void Dump::processAcks(const pcap_pkthdr* header, const u_char *data, u_int link_layer_header_size) {
@@ -529,14 +468,13 @@ void Dump::processAcks(const pcap_pkthdr* header, const u_char *data, u_int link
 	// If lingering ack arrives for a closed connection, this may happen
 	if (tmpConn == NULL) {
 		cerr << "Ack for unregistered connection found. Ignoring. Conn: " << makeConnKey(ip->ip_src, ip->ip_dst, &tcp->th_sport, &tcp->th_dport) << endl;
-		//exit_with_file_and_linenum(1, __FILE__, __LINE__);
 		return;
 	}
 	ack = ntohl(tcp->th_ack);
 
 	DataSeg seg;
 	memset(&seg, 0, sizeof(DataSeg));
-	seg.ack         = getRelativeSequenceNumber(ack, tmpConn->rm->firstSeq, tmpConn->lastLargestAckSeq, tmpConn->lastLargestAckSeqAbsolute, tmpConn);
+	seg.ack         = tmpConn->getRelativeSequenceNumber(ack, RELSEQ_SEND_ACK);
 	seg.tstamp_pcap = header->ts;
 	seg.window = ntohs(tcp->th_win);
 	seg.flags  = tcp->th_flags;
@@ -545,7 +483,7 @@ void Dump::processAcks(const pcap_pkthdr* header, const u_char *data, u_int link
 		if (tmpConn->closed) {
 			// Probably closed due to port reuse
 		}
-		else {//if (DEBUGL_SENDER(1)) {
+		else {
 			dclfprintf(stderr, DSENDER, 1, RED, "Invalid sequence number for ACK(%u)! (SYN=%d) on connection: %s\n",
 					   ack, !!(seg.flags & TH_SYN), tmpConn->getConnKey().c_str());
 		}
@@ -553,7 +491,7 @@ void Dump::processAcks(const pcap_pkthdr* header, const u_char *data, u_int link
 	}
 
 	uint8_t* opt = (uint8_t*) tcp + 20;
-	findTCPTimeStamp(&seg, opt, tcpOptionLen);
+	parseTCPOptions(&seg, opt, tcpOptionLen, tmpConn, RELSEQ_SEND_ACK);
 
 	ret = tmpConn->registerAck(&seg);
 	if (!ret) {
@@ -743,10 +681,11 @@ void Dump::processRecvd(const pcap_pkthdr* header, const u_char *data, u_int lin
 	sd.tcpOptionLen      = tcpHdrLen - 20;
 	sd.data.payloadSize  = static_cast<uint16_t>(sd.totalSize - (ipHdrLen + tcpHdrLen + link_layer_header_size));
 	sd.data.seq_absolute = ntohl(tcp->th_seq);
-	sd.data.seq          = getRelativeSequenceNumber(sd.data.seq_absolute, tmpConn->rm->firstSeq, tmpConn->lastLargestRecvEndSeq, tmpConn->lastLargestRecvSeqAbsolute, tmpConn);
+	sd.data.seq          = tmpConn->getRelativeSequenceNumber(sd.data.seq_absolute, RELSEQ_RECV_INN);
 	sd.data.endSeq       = sd.data.seq + sd.data.payloadSize;
 	sd.data.tstamp_pcap  = header->ts;
 	sd.data.is_rdb       = false;
+	sd.data.sacks        = false;
 	sd.data.rdb_end_seq  = 0;
 	sd.data.retrans      = 0;
 	sd.data.in_sequence  = 0;
@@ -794,7 +733,7 @@ void Dump::processRecvd(const pcap_pkthdr* header, const u_char *data, u_int lin
 	}
 
 	uint8_t* opt = (uint8_t*) tcp + 20;
-	findTCPTimeStamp(&sd.data, opt, sd.tcpOptionLen);
+	parseTCPOptions(&sd.data, opt, sd.tcpOptionLen);
 
 	/* define/compute tcp payload (segment) offset */
 	//sd.data.data = (u_char *) (data + link_layer_header_size + ipHdrLen + tcpHdrLen);
@@ -864,9 +803,7 @@ void Dump::calculateSojournTime() {
 
 		DataSeg tmpSeg;
 		tmpSeg.seq_absolute = max(tmp1, tmp2);
-		tmpSeg.seq = getRelativeSequenceNumber(tmpSeg.seq_absolute, tmpConn->rm->firstSeq,
-												  tmpConn->lastLargestSojournEndSeq,
-												  tmpConn->lastLargestSojournSeqAbsolute, tmpConn);
+		tmpSeg.seq = tmpConn->getRelativeSequenceNumber(tmpSeg.seq_absolute, RELSEQ_SOJ_SEQ);
 		tmpSeg.payloadSize = static_cast<uint16_t>(std::stoul(size));
 		tmpSeg.endSeq       = tmpSeg.seq + tmpSeg.payloadSize;
 		tmpSeg.tstamp_pcap.tv_sec = std::stoi(k_time.substr(0, k_time.find(".")));
