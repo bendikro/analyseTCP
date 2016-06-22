@@ -737,7 +737,9 @@ public:
 
 		for (idx = 0; idx < num; ++idx) {
 			PacketSizeGroup psGroup = conn.packetSizeGroups[idx];
-			aggrPacketSizeGroups[idx] += psGroup;
+			if (GlobOpts::aggregate) {
+				aggrPacketSizeGroups.at(idx) += psGroup;
+			}
 			if (!GlobOpts::aggOnly) {
 				writeToStream(idx, psGroup, *connStream);
 			}

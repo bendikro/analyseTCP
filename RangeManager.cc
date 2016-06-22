@@ -1216,11 +1216,10 @@ void RangeManager::genStats(PacketsStats *bs) {
 						char t_but[30];
 						sprint_time_ms_prec(t_but, it->second->ackTime);
 
-						if (last_acked != ranges.end()) {
-							while (sent_ms > TV_TO_MICSEC(last_acked->second->ackTime)) {
-								pifs--;
-								last_acked++;
-							}
+						while (last_acked != ranges.end() &&
+							   sent_ms > TV_TO_MICSEC(last_acked->second->ackTime)) {
+							pifs--;
+							last_acked++;
 						}
 					}
 
