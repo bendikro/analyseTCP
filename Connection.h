@@ -10,37 +10,6 @@
 
 enum relative_seq_type {RELSEQ_NONE, RELSEQ_SEND_OUT, RELSEQ_SEND_ACK, RELSEQ_RECV_INN, RELSEQ_SOJ_SEQ};
 
-struct PacketSize {
-	timeval time;
-	uint16_t packet_size;
-	uint16_t payload_size;
-	PacketSize(timeval t, uint16_t ps, uint16_t pls) : time(t), packet_size(ps), payload_size(pls) {}
-};
-
-class PacketSizeGroup {
-public:
-	vector<PacketSize> packetSizes;
-	ullint_t bytes;
-	ullint_t _size;
-	ullint_t size() {
-		return _size;
-	}
-
-	void add(PacketSize &ps) {
-		packetSizes.push_back(ps);
-		bytes += ps.packet_size;
-		_size += 1;
-	}
-	string str() const;
-	PacketSizeGroup() : bytes(0), _size(0) {}
-
-	PacketSizeGroup& operator+=(PacketSizeGroup &rhs) {
-		bytes += rhs.bytes;
-		_size += rhs.size();
-		return *this;
-	}
-};
-ofstream& operator<<(ofstream& stream, const PacketSizeGroup& psGroup);
 
 seq64_t getRelativeSequenceNumber(seq32_t seq, seq32_t firstSeq, seq64_t largestSeq, seq32_t largestSeqAbsolute, Connection *conn);
 
@@ -135,13 +104,10 @@ public:
 	void setAnalyseRangeInterval();
 	void calculateRetransAndRDBStats();
 	uint32_t getDuration(bool analyse_range_duration);
-
-	void registerPacketSize(const timeval& first_tstamp_in_dump, const timeval& pkt_tstamp, const uint32_t pkt_size, const uint16_t payloadSize);
+	void registerPacketSize(const timeval& first_tstamp_in_dump, const timeval& pkt_tstamp, const uint32_t pkt_size,
+							const uint16_t payloadSize, bool retrans);
 	void writePacketByteCountAndITT(vector<csv::ofstream*> streams);
 	seq64_t getRelativeSequenceNumber(seq32_t seq, relative_seq_type type);
 };
-
-
-//seq64_t getRelativeSequenceNumber(seq32_t seq, seq32_t firstSeq, seq64_t largestAckSeq, seq32_t largestAckSeqAbsolute, Connection *conn);
 
 #endif /* CONNECTION_H */

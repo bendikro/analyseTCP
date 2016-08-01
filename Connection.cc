@@ -3,16 +3,6 @@
 #include "util.h"
 #include "color_print.h"
 
-ofstream& operator<<(ofstream& stream, const PacketSizeGroup& psGroup) {
-	stream << psGroup.str();
-	return stream;
-}
-
-string PacketSizeGroup::str() const {
-	ostringstream buffer;
-	buffer << packetSizes.size() << "," << bytes;
-	return buffer.str();
-}
 
 /**
  * This function generates the relative sequence number of packets read from pcap files.
@@ -25,12 +15,24 @@ string PacketSizeGroup::str() const {
  * Returns the relative sequence number or std::numeric_limits<ulong>::max() if it failed.
  **/
 seq64_t getRelativeSequenceNumber(seq32_t seq, seq32_t firstSeq, seq64_t largestSeq, seq32_t largestSeqAbsolute, Connection *conn) {
+
+#ifdef DEBUG
+	bool debug = false;
+
+	if (debug)
+		fprintf(stderr, "getRelativeSequenceNumber!\n");
+#endif
+
 	ullint_t wrap_index;
 	seq64_t seq_relative;
 	wrap_index = firstSeq + largestSeq;
 	wrap_index += 1;
 
-	//printf("getRelativeSequenceNumber: seq: %u, firstSeq: %u, largestSeq: %llu, largestSeqAbsolute: %u, wrap_index: %llu\n", seq, firstSeq, largestSeq, largestSeqAbsolute, wrap_index);
+#ifdef DEBUG
+	if (debug)
+		printf("getRelativeSequenceNumber: seq: %u, firstSeq: %u, largestSeq: %llu, largestSeqAbsolute: %u, wrap_index: %llu\n", seq, firstSeq, largestSeq, largestSeqAbsolute, wrap_index);
+#endif
+
 	// Either seq has wrapped, or a retrans (or maybe reorder if netem is run on sender machine)
 	if (seq < largestSeqAbsolute) {
 		// This is an earlier sequence number
@@ -49,6 +51,13 @@ seq64_t getRelativeSequenceNumber(seq32_t seq, seq32_t firstSeq, seq64_t largest
 	// When seq is greater, it is either newer data, or it is older data because
 	// largestSeqAbsolute just wrapped. E.g. largestSeqAbsolute == 10, and seq = 4294967250
 	else {
+#ifdef DEBUG
+		if (debug) {
+			printf("JAU 3\n");
+			printf("largestSeqAbsolute: %u\n", largestSeqAbsolute);
+			printf("seq: %u\n", seq);
+		}
+#endif
 		//printf("wrap_index: %lu\n", wrap_index);
 		// This is newer seq
 		if (after_or_equal(largestSeqAbsolute, seq)) {
@@ -58,30 +67,46 @@ seq64_t getRelativeSequenceNumber(seq32_t seq, seq32_t firstSeq, seq64_t largest
 		}
 		// Acks older data than largestAckSeqAbsolute, largestAckSeqAbsolute has wrapped.
 		else {
+#ifdef DEBUG
+			if (debug) {
+				printf("JAU 5\n");
+				printf("seq: %u\n", (seq));
+				printf("0 - seq: %u\n", (0 - seq));
+				printf("largestSeqAbsolute: %u\n", largestSeqAbsolute);
+				printf("wrap_index: %llu\n", wrap_index);
+				printf("wrap_index -= %u\n", ((0 - seq) + largestSeqAbsolute));
+				printf("wrap_index -= %u\n", (largestSeqAbsolute - seq));
+				printf("wrap_index <- %llu\n", wrap_index - ((0 - seq) + largestSeqAbsolute));
+			}
+#endif
 			wrap_index -= ((0 - seq) + largestSeqAbsolute);
 		}
 	}
+	ullint_t wrap_index_tmp = wrap_index;
 
+	// 4294967295
 	wrap_index /= 4294967296L;
 	// When seq has wrapped, wrap_index will make sure the relative sequence number continues to grow
 	seq_relative = seq + (wrap_index * 4294967296L) - firstSeq;
 	if (seq_relative > 9999999999) {// TODO: Do a better check than this, e.g. checking for distance of largestSeq and seq_relative > a large number
 		// use stderr for error messages for crying out loud!!!!!
-		//fprintf(stderr, "wrap_index: %lu\n", wrap_index);
-		//fprintf(stderr, "\ngetRelativeSequenceNumber: seq: %u, firstSeq: %u, largestSeq: %lu, largestSeqAbsolute: %u\n", seq, firstSeq, largestSeq, largestSeqAbsolute);
-		//fprintf(stderr, "seq_relative: %lu\n", seq_relative);
+		//fprintf(stderr, "wrap_index_tmp: %llu\n", wrap_index_tmp);
+		//fprintf(stderr, "wrap_index: %llu\n", wrap_index);
+		//fprintf(stderr, "\ngetRelativeSequenceNumber: seq: %u, firstSeq: %u, largestSeq: %llu, largestSeqAbsolute: %u\n", seq, firstSeq, largestSeq, largestSeqAbsolute);
+		//fprintf(stderr, "seq_relative: %llu\n", seq_relative);
 		//fprintf(stderr, "Conn: %s\n", conn->getConnKey().c_str());
 
 #if !defined(NDEBUG)
-		fprintf(stderr, "Encountered invalid sequence number for connection %s: %u (firstSeq=%u, largestSeq=%llu, largestSeqAbsolute=%u\n",
+		fprintf(stderr, "Encountered invalid sequence number for connection %s: seq_relative: %lld, seq: %u (firstSeq=%u, largestSeq=%llu, largestSeqAbsolute=%u\n",
 				conn->getConnKey().c_str(),
+				seq_relative,
 				seq,
 				firstSeq,
 				largestSeq,
 				largestSeqAbsolute);
 #endif
 
-		//assert(0 && "Incorrect sequence number calculation!\n");
+		assert(0 && "Incorrect sequence number calculation!\n");
 		return std::numeric_limits<ulong>::max();
 	}
 	//printf("RETURN seq_relative: %llu\n", seq_relative);
@@ -510,7 +535,8 @@ ullint_t Connection::getNumUniqueBytes() {
 	return unique_data_bytes;
 }
 
-void Connection::registerPacketSize(const timeval& first, const timeval& ts, const uint32_t ps, const uint16_t payloadSize) {
+void Connection::registerPacketSize(const timeval& first, const timeval& ts, const uint32_t ps,
+									const uint16_t payloadSize, bool retrans) {
 	const uint64_t relative_ts = static_cast<uint64_t>(TV_TO_MS(ts) - TV_TO_MS(first));
 	const uint64_t sent_time_bucket_idx = relative_ts / GlobOpts::throughputAggrMs;
 
@@ -520,7 +546,8 @@ void Connection::registerPacketSize(const timeval& first, const timeval& ts, con
 		PacketSizeGroup empty2;
 		packetSizeGroups.push_back(empty2);
 	}
-	PacketSize pSize(ts, static_cast<uint16_t>(ps), payloadSize);
+
+	PacketSize pSize(ts, static_cast<uint16_t>(ps), payloadSize, retrans);
 	packetSizes[sent_time_bucket_idx].push_back(pSize);
 	packetSizeGroups[sent_time_bucket_idx].add(pSize);
 }

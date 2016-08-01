@@ -225,154 +225,154 @@ csv::ofstream& operator<<(csv::ofstream& s, LossInterval& v) {
 }
 
 
- /*****************************************
+/*****************************************
   * Percentiles
-  *****************************************/
- void Percentiles::init()
- {
- 	max_char_length = 0;
- 	std::istringstream ss(GlobOpts::percentiles);
- 	std::string token;
- 	double num;
-     while (std::getline(ss, token, ','))
-     {
- 		istringstream(token) >> num;
- 		if (num >= 100) {
- 			colored_printf(YELLOW, "Invalid percentile '%s'\n", token.c_str());
- 			continue;
- 		}
+ *****************************************/
+void Percentiles::init()
+{
+	max_char_length = 0;
+	std::istringstream ss(GlobOpts::percentiles);
+	std::string token;
+	double num;
+	while (std::getline(ss, token, ','))
+	{
+		istringstream(token) >> num;
+		if (num >= 100) {
+			colored_printf(YELLOW, "Invalid percentile '%s'\n", token.c_str());
+			continue;
+		}
 		max_char_length = static_cast<int>(token.length());
- 		percentiles.insert(pair<string, double>(token, 0));
-     }
- }
+		percentiles.insert(pair<string, double>(token, 0));
+	}
+}
 
- void Percentiles::compute(const vector<double>& v)
- {
- 	double num;
-     auto it  = percentiles.begin();
-     auto end = percentiles.end();
-     for (; it!=end; it++)
-     {
-		 istringstream(it->first) >> num;
- 		vector<double>::const_iterator it_p = v.begin() + ((int) ceil(v.size() * (num / 100.0)));
- 		it->second = *it_p;
- 	}
- }
+void Percentiles::compute(const vector<double>& v)
+{
+	double num;
+	auto it	 = percentiles.begin();
+	auto end = percentiles.end();
+	for (; it!=end; it++)
+	{
+		istringstream(it->first) >> num;
+		vector<double>::const_iterator it_p = v.begin() + ((int) ceil(v.size() * (num / 100.0)));
+		it->second = *it_p;
+	}
+}
 
- void Percentiles::print(string fmt, bool show_quartiles)
- {
- 	if (!percentiles.size())
- 		return;
+void Percentiles::print(string fmt, bool show_quartiles)
+{
+	if (!percentiles.size())
+		return;
 
- 	map<string, double>::iterator it;
- 	for (it = percentiles.begin(); it != percentiles.end(); it++) {
- 		if (show_quartiles) {
- 			string q = "";
- 			if (it->first == "25")
- 				q = "(First quartile)";
- 			else if (it->first == "50")
- 				q = "(Second quartile, median) ";
- 			else if (it->first == "75")
- 				q = "(Third quartile)";
+	map<string, double>::iterator it;
+	for (it = percentiles.begin(); it != percentiles.end(); it++) {
+		if (show_quartiles) {
+			string q = "";
+			if (it->first == "25")
+				q = "(First quartile)";
+			else if (it->first == "50")
+				q = "(Second quartile, median) ";
+			else if (it->first == "75")
+				q = "(Third quartile)";
 			printf(fmt.c_str(), max_char_length, it->first.c_str(), q.c_str(), it->second);
- 		}
- 		else
- 			printf(fmt.c_str(), max_char_length, it->first.c_str(), it->second);
- 	}
- }
+		}
+		else
+			printf(fmt.c_str(), max_char_length, it->first.c_str(), it->second);
+	}
+}
 
- /*****************************************
-  * BaseStats
-  *****************************************/
+/*****************************************
+ * BaseStats
+ *****************************************/
 
- void BaseStats::init() {
-     min = std::numeric_limits<uint64_t>::max();
-     max = 0;
-     cum = 0;
-     _counter = 0;
-	 _percentiles.init();
-	 _values.clear();
- }
+void BaseStats::init() {
+	min = std::numeric_limits<uint64_t>::max();
+	max = 0;
+	cum = 0;
+	_counter = 0;
+	_percentiles.init();
+	_values.clear();
+}
 
- void BaseStats::add(ullint_t val)
- {
-     assert(_is_aggregate == false);
-     assert(valid);
-     _counter++;
-     this->min = std::min<ullint_t>(this->min, val);
-     this->max = std::max<ullint_t>(this->max, val);
-     this->cum += val;
-	 _values.push_back(val);
- }
+void BaseStats::add(ullint_t val)
+{
+	assert(_is_aggregate == false);
+	assert(valid);
+	_counter++;
+	this->min = std::min<ullint_t>(this->min, val);
+	this->max = std::max<ullint_t>(this->max, val);
+	this->cum += val;
+	_values.push_back(val);
+}
 
- double BaseStats::get_avg() const
- {
-     if (_counter == 0) return 0;
-     return (double) cum / (double) _counter;
- }
+double BaseStats::get_avg() const
+{
+	if (_counter == 0) return 0;
+	return (double) cum / (double) _counter;
+}
 
- uint32_t BaseStats::get_counter() const
- {
-     return _counter;
- }
+uint32_t BaseStats::get_counter() const
+{
+	return _counter;
+}
 
- void BaseStats::add_to_aggregate(const BaseStats &rhs)
- {
-     assert(_is_aggregate == true);
-     assert(valid);
-     if (!rhs.valid)
-     {
-         cerr << "WARNING: rhs is invalid in " << __FILE__ << ":" << __LINE__ << endl;
-         return;
-     }
-     this->min = std::min<ullint_t>(this->min, rhs.min);
-     this->max = std::max<ullint_t>(this->max, rhs.max);
-     this->cum += rhs.cum;
-	 _values.insert(_values.end(), rhs._values.begin(), rhs._values.end());
-     _counter += rhs._values.size();
- }
+void BaseStats::add_to_aggregate(const BaseStats &rhs)
+{
+	assert(_is_aggregate == true);
+	assert(valid);
+	if (!rhs.valid)
+	{
+		cerr << "WARNING: rhs is invalid in " << __FILE__ << ":" << __LINE__ << endl;
+		return;
+	}
+	this->min = std::min<ullint_t>(this->min, rhs.min);
+	this->max = std::max<ullint_t>(this->max, rhs.max);
+	this->cum += rhs.cum;
+	_values.insert(_values.end(), rhs._values.begin(), rhs._values.end());
+	_counter += rhs._values.size();
+}
 
 void BaseStats::makeStats()
 {
-    if (_values.size())
-    {
-        if (_values.size() != BaseStats::get_counter())
-        {
-            cerr << "Crashing !" << endl
-                 << "Array size: " << _values.size() << endl
-                 << "Counter:    " << BaseStats::get_counter() << endl;
-            assert(_values.size() == BaseStats::get_counter());
-        }
+	if (_values.size())
+	{
+		if (_values.size() != BaseStats::get_counter())
+		{
+			cerr << "Crashing !" << endl
+				 << "Array size: " << _values.size() << endl
+				 << "Counter:	 " << BaseStats::get_counter() << endl;
+			assert(_values.size() == BaseStats::get_counter());
+		}
 
-        double mean   = BaseStats::get_avg();
-        double temp   = 0;
+		double mean	  = BaseStats::get_avg();
+		double temp	  = 0;
 
-        auto it  = _values.begin();
-        auto end = _values.end();
-        for (; it!=end; it++)
-        {
-            double val = (*it) - mean;
-            temp += val * val;
-        }
-        _std_dev = sqrt(temp / BaseStats::get_counter());
+		auto it	 = _values.begin();
+		auto end = _values.end();
+		for (; it!=end; it++)
+		{
+			double val = (*it) - mean;
+			temp += val * val;
+		}
+		_std_dev = sqrt(temp / BaseStats::get_counter());
 
-        std::sort(_values.begin(), _values.end());
-        _percentiles.compute(_values);
-    }
-    else
-    {
-        BaseStats::valid = false;
-    }
+		std::sort(_values.begin(), _values.end());
+		_percentiles.compute(_values);
+	}
+	else
+	{
+		BaseStats::valid = false;
+	}
 }
 
 void BaseStats::sortValues()
 {
-    std::sort(_values.begin(), _values.end());
+	std::sort(_values.begin(), _values.end());
 }
 
 void BaseStats::computePercentiles()
 {
-    _percentiles.compute(_values);
+	_percentiles.compute(_values);
 }
 
  /*****************************************
@@ -401,11 +401,11 @@ void BaseStats::computePercentiles()
 		maximum.itt.add(bs.itt.max);
 	}
 
- 	// Add retrans stats
- 	if ((ulong) bs.retrans.size() > aggregated.retrans.size()) {
- 		for (ulong i = aggregated.retrans.size(); i < bs.retrans.size(); i++) {
- 			aggregated.retrans.push_back(0);
- 		}
+	// Add retrans stats
+	if ((ulong) bs.retrans.size() > aggregated.retrans.size()) {
+		for (ulong i = aggregated.retrans.size(); i < bs.retrans.size(); i++) {
+			aggregated.retrans.push_back(0);
+		}
 	}
 
 	for (ulong i = 0; i < bs.retrans.size(); i++) {

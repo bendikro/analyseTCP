@@ -438,7 +438,7 @@ void Dump::processSent(const pcap_pkthdr* header, const u_char *data, u_int link
 		tmpConn->registerRange(&sd);
 
 		if (GlobOpts::withThroughput) {
-			tmpConn->registerPacketSize(first_sent_time, header->ts, header->len, sd.data.payloadSize);
+			tmpConn->registerPacketSize(first_sent_time, header->ts, header->len, sd.data.payloadSize, sd.data.retrans);
 		}
 	}
 }

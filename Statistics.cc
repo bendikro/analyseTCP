@@ -737,6 +737,7 @@ public:
 
 		for (idx = 0; idx < num; ++idx) {
 			PacketSizeGroup psGroup = conn.packetSizeGroups[idx];
+
 			if (GlobOpts::aggregate) {
 				aggrPacketSizeGroups.at(idx) += psGroup;
 			}
@@ -744,6 +745,7 @@ public:
 				writeToStream(idx, psGroup, *connStream);
 			}
 		}
+
 		if (!GlobOpts::aggOnly)
 			delete connStream;
 	}
@@ -759,15 +761,16 @@ public:
 	}
 
 	void writeToStream(uint64_t idx, PacketSizeGroup &psGroup, csv::ofstream &stream) {
-		stream << idx  << psGroup.size() << psGroup.bytes
-			   << (psGroup.bytes * 8.0) / (GlobOpts::throughputAggrMs / 1000.0) << NEWLINE;
+		stream << idx  << psGroup.size() << psGroup.packet_size_bytes << psGroup.payload_bytes
+			   << psGroup.payload_bytes - psGroup.retrans_payload_bytes
+			   << (psGroup.packet_size_bytes * 8.0) / (GlobOpts::throughputAggrMs / 1000.0) << NEWLINE;
 	}
 };
 
 void Statistics::writeByteCountGroupedByInterval() {
 	ByteCountGroupedByInterval conf;
 	conf.setFilenameID("throughput");
-	conf.setHeader("interval,packet_count,byte_count,throughput");
+	conf.setHeader("interval,packet_count,byte_count,payload_bytes,payload_goodput_bytes,throughput");
 	writeStatisticsFiles(conf);
 }
 

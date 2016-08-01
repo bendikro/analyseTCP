@@ -246,6 +246,52 @@ public:
 };
 
 
+/*****************************************
+ * PacketSizeGroup
+ *****************************************/
+
+struct PacketSize {
+	timeval time;
+	uint16_t packet_size;
+	uint16_t payload_size;
+	bool retrans;
+	PacketSize(timeval t, uint16_t ps, uint16_t pls, bool _retrans) :
+		time(t),
+		packet_size(ps),
+		payload_size(pls),
+		retrans(_retrans){}
+};
+
+class PacketSizeGroup {
+public:
+	vector<PacketSize> packetSizes;
+	ullint_t packet_size_bytes;
+	ullint_t payload_bytes;
+	ullint_t retrans_payload_bytes;
+	ullint_t _size;
+	ullint_t size() {return _size;}
+
+	void add(PacketSize &ps) {
+		packetSizes.push_back(ps);
+		packet_size_bytes += ps.packet_size;
+		payload_bytes += ps.payload_size;
+		if (ps.retrans)
+			retrans_payload_bytes += ps.payload_size;
+		_size += 1;
+	}
+
+	PacketSizeGroup() : packet_size_bytes(0), payload_bytes(0), retrans_payload_bytes(0), _size(0) {}
+
+	PacketSizeGroup& operator+=(PacketSizeGroup &rhs) {
+		packet_size_bytes += rhs.packet_size_bytes;
+		payload_bytes += rhs.payload_bytes;
+		retrans_payload_bytes += rhs.retrans_payload_bytes;
+		_size += rhs.size();
+		return *this;
+	}
+};
+
+
 /* Forward declarations */
 class Connection;
 

@@ -118,6 +118,7 @@ public:
 	void calculateRetransAndRDBStats();
 	void calculateLossGroupedByInterval(const int64_t first_tstamp, vector<LossInterval>& aggr_loss, vector<LossInterval>& loss);
 	void printPacketDetails();
+	void printPacketDetails(map<seq64_t, ByteRange*>::iterator it, map<seq64_t, ByteRange*>::iterator it_end);
 };
 
 int seqWithPrintRange(seq64_t start, seq64_t end, size_t &print_packet_ranges_index);
