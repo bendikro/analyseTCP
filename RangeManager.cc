@@ -1197,7 +1197,7 @@ void RangeManager::genStats(PacketsStats *bs) {
 	for (it = analyse_range_start; it != analyse_range_end; it++) {
 		if (it->second->getOrinalPayloadSize()) {
 			last_acked = it;
-			printf("Last acked set to %lld, ackTime: %ld\n", it->second->startSeq, TV_TO_MS(last_acked->second->ackTime));
+			printf("Last acked set to %lld, ackTime: %lld\n", it->second->startSeq, TV_TO_MS(last_acked->second->ackTime));
 			break;
 		}
 	}
@@ -1579,7 +1579,7 @@ void RangeManager::printPacketDetails(map<seq64_t, ByteRange*>::iterator it, map
 					if (i == 0 && sack_blocks[0].first < it->second->endSeq) {
 						prefix = 'D';
 					}
-					else if (i == 1 && !after(sack_blocks[0].second, sack_blocks[1].second) && !before(sack_blocks[0].first, sack_blocks[1].first)) {
+					else if (i == 1 && !after(uint32_t(sack_blocks[0].second), uint32_t(sack_blocks[1].second)) && !before(uint32_t(sack_blocks[0].first), uint32_t(sack_blocks[1].first))) {
 						prefix = 'd';
 					}
 

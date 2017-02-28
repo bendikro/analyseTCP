@@ -82,7 +82,7 @@ seq64_t getRelativeSequenceNumber(seq32_t seq, seq32_t firstSeq, seq64_t largest
 			wrap_index -= ((0 - seq) + largestSeqAbsolute);
 		}
 	}
-	ullint_t wrap_index_tmp = wrap_index;
+	// ullint_t wrap_index_tmp = wrap_index;
 
 	// 4294967295
 	wrap_index /= 4294967296L;
@@ -165,11 +165,11 @@ bool Connection::registerSent(sendData* sd) {
 		// 2014-08-12: This is expected for SYN retries after timeout (aka new connections)
 		if (sd->data.flags & TH_SYN) {
 
-			if (std::labs(sd->data.seq_absolute - rm->firstSeq) > 10) {
+			if (std::labs((int64_t)sd->data.seq_absolute - (int64_t)rm->firstSeq) > 10) {
 				colored_fprintf(stderr, RED, "New SYN changes sequence number by more than 10 (%ld) on connection with %ld ranges already registered.\n"
 								"This is presumably due to TCP port number reused for a new connection. "
 								"Marking this connection as closed and ignore any packets in the new connection.\n",
-								std::labs(sd->data.seq_absolute - rm->firstSeq), rm->ranges.size());
+								std::labs((int64_t)sd->data.seq_absolute - (int64_t)rm->firstSeq), rm->ranges.size());
 				closed = true;
 			}
 			else {
@@ -401,7 +401,7 @@ void Connection::setAnalyseRangeInterval() {
 			}
 
 			tmp_it = begin_it;
-			std::advance(tmp_it, advance);
+			std::advance(tmp_it, (long)advance);
 
 			timersub(&(tmp_it->second->sent_tstamp_pcap[0].first), &begin_tv, &tv);
 			// Compares seconds, does not take into account milliseconds

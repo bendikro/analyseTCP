@@ -325,10 +325,10 @@ void Dump::parseTCPOptions(DataSeg* data, uint8_t* opts, uint option_length,
 			int blocks = (_opt->size - 2) / 8;
 			data->sacks = true;
 			for (int i = 0; i < blocks; i++) {
-				seq64_t left = ntohl(*(((uint32_t*) (opts + offset + 2 + (4 * blocks * i)))));
-				seq64_t right = ntohl(*(((uint32_t*) (opts + offset + 6  + (4 * blocks * i)))));
-				left = tmpConn->getRelativeSequenceNumber(left, RELSEQ_SEND_ACK);
-				right = tmpConn->getRelativeSequenceNumber(right, RELSEQ_SEND_ACK);
+				seq32_t leftin = ntohl(*(((uint32_t*) (opts + offset + 2 + (4 * blocks * i)))));
+				seq32_t rightin = ntohl(*(((uint32_t*) (opts + offset + 6  + (4 * blocks * i)))));
+				seq64_t left = tmpConn->getRelativeSequenceNumber(leftin, RELSEQ_SEND_ACK);
+				seq64_t right = tmpConn->getRelativeSequenceNumber(rightin, RELSEQ_SEND_ACK);
 				data->tcp_sacks.push_back(pair<uint64_t, uint32_t>(left, right));
 			}
 		}

@@ -15,11 +15,11 @@ bool ByteRange::matchReceivedType(RangeManager *rm, bool print) {
 			printf("     timestamp: %u\n", tstamps_tcp[i].first);
  		}
 		if (tstamps_tcp[i].first == received_tstamp_tcp) {
-			send_tcp_stamp_recv_index = i; // Store the index of the send packet that matches the first received packet
+			send_tcp_stamp_recv_index = (uint8_t)i; // Store the index of the send packet that matches the first received packet
 			// Retrans
 			if (i > 0) {
 				recv_type = RETR;
-				recv_type_num = i;
+				recv_type_num = (uint8_t)i;
 				return true;
 			}
 			// First regular TCP packet
