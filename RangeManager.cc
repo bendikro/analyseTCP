@@ -1197,7 +1197,7 @@ void RangeManager::genStats(PacketsStats *bs) {
 	for (it = analyse_range_start; it != analyse_range_end; it++) {
 		if (it->second->getOrinalPayloadSize()) {
 			last_acked = it;
-			printf("Last acked set to %lld, ackTime: %lld\n", it->second->startSeq, TV_TO_MS(last_acked->second->ackTime));
+			printf("Last acked set to %lld, ackTime: %lld\n", it->second->startSeq, (llint_t) TV_TO_MS(last_acked->second->ackTime));
 			break;
 		}
 	}
