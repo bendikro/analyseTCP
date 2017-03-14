@@ -24,8 +24,8 @@ char* sprint_time_sec_prec(char *buf, struct timeval t);
 char* sprint_readable_time_now(char *buf);
 struct timeval sprint_readable_time_diff(char *buf, struct timeval oldest, struct timeval newest);
 struct timeval sprint_readable_time_now_diff(char *buf, struct timeval old_time);
-long get_msecs(struct timeval *tv);
-long get_usecs(struct timeval *tv);
+long get_msecs(const struct timeval *tv);
+long get_usecs(const struct timeval *tv);
 
 void timevalfix(struct timeval *tv);
 void timevaladd(struct timeval *to, struct timeval *val);

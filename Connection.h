@@ -8,9 +8,6 @@
 #include <cmath>
 #include <netinet/in.h>
 
-enum relative_seq_type {RELSEQ_NONE, RELSEQ_SEND_OUT, RELSEQ_SEND_ACK, RELSEQ_RECV_INN, RELSEQ_SOJ_SEQ};
-
-
 seq64_t getRelativeSequenceNumber(seq32_t seq, seq32_t firstSeq, seq64_t largestSeq, seq32_t largestSeqAbsolute, Connection *conn);
 
 /* Represents one connection (srcport/dstport pair) */
@@ -24,7 +21,7 @@ public:
 	ullint_t totRDBBytesSent;
 	ullint_t totNewDataSent;
 	ullint_t totRetransBytesSent;
-	ullint_t nrRetrans;
+	ullint_t nrPacketRetrans; // Not actually used...
 	in_addr srcIp;
 	in_addr dstIp;
 	ullint_t bundleCount; // Number of packets with RDB data
@@ -40,7 +37,7 @@ public:
 	seq32_t lastLargestSojournSeqAbsolute;  // For receiver side analyse
 
 	bool closed;
-	int ignored_count;
+	int ignored_count;                      // Number of packets ignored due to being closed
 
 	vector< vector<PacketSize> > packetSizes;
 	vector<PacketSizeGroup> packetSizeGroups;
@@ -56,7 +53,7 @@ public:
 			   const in_addr &dst_ip, const uint16_t *dst_port,
 			   seq32_t seq) : nrPacketsSent(0), nrDataPacketsSent(0), totPacketSize(0),
 							  totBytesSent(0), totRDBBytesSent(0), totNewDataSent(0),
-							  totRetransBytesSent(0), nrRetrans(0), bundleCount(0), lastLargestStartSeq(0),
+							  totRetransBytesSent(0), nrPacketRetrans(0), bundleCount(0), lastLargestStartSeq(0),
 							  lastLargestEndSeq(0), lastLargestRecvEndSeq(0), lastLargestAckSeq(0),
 							  lastLargestSojournEndSeq(0), lastLargestSojournSeqAbsolute(0), closed(false),
 							  ignored_count(0)
@@ -79,13 +76,12 @@ public:
 		delete rm;
 	}
 
-	bool registerSent(sendData* pd);
-	void registerRange(sendData* sd);
-	void registerRecvd(sendData *sd);
+	bool registerSent(PcapPacket *pkt);
+	void registerRange(DataSeg *seg);
+	void registerRecvd(DataSeg *seg);
 	bool registerAck(DataSeg *seg);
-	void addConnStats(ConnStats* cs);
+	void addConnStats(ConnStats *cs);
 	PacketsStats* getBytesLatencyStats();
-	void genBytesLatencyStats(PacketsStats* bs);
 	void validateRanges();
 	timeval get_duration() ;
 	void genByteCountGroupedByInterval();

@@ -63,15 +63,15 @@ public:
 	ullint_t totUniqueBytesSent;
 	ullint_t redundantBytes;
 	ullint_t bytes_lost;
-	int totRetransBytesSent;
-	int totPacketSize;
+	ullint_t totRetransBytesSent;
+	ullint_t totPacketSize;
 	int nrDataPacketsSent;
 	int nrPacketsSent;
 	int nrPacketsSentFoundInDump; // This is the number of packets saved in the trace dump.
 	                              // This might differ from actual packets on the wire because TCP segmentation offloading
 	int nrPacketsReceivedFoundInDump;
-	int nrRetrans;
-	int nrRetransNoPayload;
+	int nrPacketRetrans;
+	int nrPacketRetransNoPayload;
 	int bundleCount;
 	int ackCount;
 	int synCount;

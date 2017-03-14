@@ -3,7 +3,7 @@
 #include "color_print.h"
 
 Statistics::Statistics(Dump &d)
-    : dump(d)
+	: dump(d)
 {}
 
 void Statistics::fillWithSortedConns(map<ConnectionMapKey*, Connection*, SortedConnectionKeyComparator> &sortedConns) {
@@ -22,7 +22,7 @@ void Statistics::printConns() {
 	char loss_estimated[50];
 
 	if (!GlobOpts::withRecv) {
-		colored_printf(YELLOW, "Loss statistics require receiver dump.\n");
+		colored_printf(COLOR_INFO, "Loss statistics require receiver dump.\n");
 	}
 
 	printf("\nConnections in sender dump: %lu\n\n", dump.conns.size());
@@ -39,10 +39,10 @@ void Statistics::printConns() {
 		cIt->second->addConnStats(&csAggregated);
 
 		if (cs.nrPacketsSent != cs.nrPacketsSentFoundInDump) {
-			sprintf(loss_estimated, "%.2f / %.2f", ((double) cs.nrRetrans / cs.nrPacketsSent) * 100, ((double) cs.nrRetrans / cs.nrPacketsSentFoundInDump) * 100);
+			sprintf(loss_estimated, "%.2f / %.2f", ((double) cs.nrPacketRetrans / cs.nrPacketsSent) * 100, ((double) cs.nrPacketRetrans / cs.nrPacketsSentFoundInDump) * 100);
 		}
 		else {
-			sprintf(loss_estimated, "%.2f / %.2f", ((double) cs.nrRetrans / cs.nrPacketsSent) * 100, ((double) cs.nrRetrans / cs.nrPacketsSentFoundInDump) * 100);
+			sprintf(loss_estimated, "%.2f / %.2f", ((double) cs.nrPacketRetrans / cs.nrPacketsSent) * 100, ((double) cs.nrPacketRetrans / cs.nrPacketsSentFoundInDump) * 100);
 		}
 		printf("   %-40s %-13d %-15s  %-14d", (cIt->second->getConnKey() + ":").c_str(), cs.duration, loss_estimated, cs.nrPacketsSentFoundInDump);
 
@@ -63,7 +63,7 @@ void Statistics::printConns() {
 	}
 
 	if (csAggregated.nrPacketsSentFoundInDump != csAggregated.nrPacketsSent) {
-		colored_printf(YELLOW, "Note: Packets in trace dumps may differ from actual packets due to offloading\n");
+		colored_printf(COLOR_NOTICE, "Note: Packets in trace dumps may differ from actual packets due to offloading\n");
 	}
 
 	printf("\n");
@@ -74,20 +74,27 @@ void Statistics::printDumpStats() {
 	if (!GlobOpts::verbose)
 		return;
 
-	cout << endl;
-	colored_printf(YELLOW, "General info for entire dump:\n");
-	printf("  %s:%s -> %s:%s\n", dump.filterSrcIp.c_str(), dump.filterSrcPort.c_str(), dump.filterDstIp.c_str(), dump.filterDstPort.c_str());
-	cout << "  Filename: " << dump.filename << endl;
-	cout << "  Sent Packet Count     : " << dump.sentPacketCount << endl;
-	cout << "  Received Packet Count : " << dump.recvPacketCount << endl;
-	cout << "  ACK Count             : " << dump.ackCount << endl;
-	cout << "  Sent Bytes Count      : " << dump.sentBytesCount << endl;
-	cout << "  Max payload size      : " << dump.max_payload_size;
-	if (dump.max_payload_size > 1460) {
-		colored_printf(YELLOW, "   (Max payload for a packet is bigger than 1460. This may be caused by GSO/TSO (see readme))");
-	}
+	printf("\n");
+	colored_printf(COLOR_INFO, "General info for entire dump:\n");
+	printf("  Filename                 : %s\n", dump.senderFilename.c_str());
+	printf("  Filter                   : %s:%s -> %s:%s\n", dump.filterSrcIp.c_str(), dump.filterSrcPort.c_str(), dump.filterDstIp.c_str(), dump.filterDstPort.c_str());
+	printf("  Sent Packet Count        : %lld\n", dump.sentPacketCount);
+	printf("  Received Packet Count    : %lld\n", dump.recvPacketCount);
+	printf("  ACK Count                : %llu\n", dump.ackCount);
+	printf("  Sent Bytes Count         : %llu\n", dump.sentBytesCount);
+	printf("  Max payload size         : %u", dump.max_payload_size);
 
-	cout << endl;
+	if (dump.max_payload_size > 1460) {
+		colored_printf(COLOR_NOTICE, "   (Max payload for a packet is bigger than 1460. This may be caused by GSO/TSO (see readme))");
+	}
+	printf("\n");
+
+	printf("  Truncated TCP headers    : %d\n", GlobOpts::pkt_header_caplen_truncated_count);
+
+	if (GlobOpts::pkt_header_caplen_truncated_count) {
+		colored_printf(COLOR_NOTICE, "\n%d packets are missing parts of the TCP header information due to limitation on the capture length.\n"
+					   "Increase the tcpdump snaplen size to ensure the entire TCP header is captured.\n", GlobOpts::pkt_header_caplen_truncated_count);
+	}
 
 	if (GlobOpts::withRecv) {
 		map<ConnectionMapKey*, Connection*>::iterator cIt, cItEnd;
@@ -101,7 +108,7 @@ void Statistics::printDumpStats() {
 		}
 		cout << "  Received Bytes        : " << dump.recvBytesCount << endl;
 		if ((dump.sentPacketCount - dump.recvPacketCount) < 0) {
-			colored_printf(YELLOW, "Negative loss values is probably caused by GSO/TSO on sender side (see readme)\n");
+			colored_printf(COLOR_NOTICE, "Negative loss values is probably caused by GSO/TSO on sender side (see readme)\n");
 		}
 		cout << "  Packets Lost          : " << (dump.sentPacketCount - dump.recvPacketCount) << endl;
 		cout << "  Packet Loss           : " << ((double) (dump.sentPacketCount - dump.recvPacketCount) / dump.sentPacketCount) * 100 <<  " %" << endl;
@@ -141,10 +148,10 @@ void Statistics::printStatistics() {
 		PacketsStats *packetsStats = cIt->second->getBytesLatencyStats();
 
 		if (!GlobOpts::aggOnly) {
-			colored_printf(YELLOW, "STATS FOR CONN: %s -> %s", cIt->second->getSenderKey().c_str(), cIt->second->getReceiverKey().c_str());
+			colored_printf(COLOR_INFO, "STATS FOR CONN: %s -> %s", cIt->second->getSenderKey().c_str(), cIt->second->getReceiverKey().c_str());
 
 			if (GlobOpts::analyse_start || GlobOpts::analyse_end || GlobOpts::analyse_duration) {
-				colored_printf(YELLOW, " (Interval analysed (sec): %d-%d)", cIt->second->rm->analyse_time_sec_start, cIt->second->rm->analyse_time_sec_end);
+				colored_printf(COLOR_INFO, " (Interval analysed (sec): %d-%d)", cIt->second->rm->analyse_time_sec_start, cIt->second->rm->analyse_time_sec_end);
 			}
 			printf("\n");
 			printPacketsStats(&cs);
@@ -235,41 +242,43 @@ void printPacketsStats(ConnStats *cs) {
 	char syn_fin_rst[30];
 	sprintf(syn_fin_rst, "%d/%d/%d", cs->synCount, cs->finCount, cs->rstCount);
 
-	printf("  Total pure acks (no payload)                  : %10d\n"	\
-	       "  SYN/FIN/RST packets sent                      : %10s\n"	\
-	       "  Number of retransmissions                     : %10d\n"	\
-	       "  Number of packets with bundled segments       : %10d\n"	\
-		   "  Number of packets with redundant data         : %10d\n"	\
-		   "  Number of received acks                       : %10d\n"   \
-	       "  Total bytes sent (payload)                    : %10llu\n"	\
-	       "  Number of unique bytes                        : %10llu\n"   \
-	       "  Number of retransmitted bytes                 : %10d\n"	\
-		   "  Redundant bytes (bytes already sent)          : %10llu (%.2f %%)\n" \
-		   "  Data packets per second (with payload)        : %10.2f\n",
+	printf("  Total pure acks (no payload)					: %10d\n"
+		   "  SYN/FIN/RST packets sent						: %10s\n"
+		   "  Number of retransmissions						: %10d\n"
+		   "  Number of packets with bundled segments		: %10d\n"
+		   "  Number of packets with redundant data			: %10d\n"
+		   "  Number of received acks						: %10d\n"
+		   "  Total bytes sent (payload)					: %10llu\n"
+		   "  Number of unique bytes						: %10llu\n"
+		   "  Number of retransmitted bytes					: %10llu\n"
+		   "  Redundant bytes (bytes already sent)			: %10llu (%.2f %%)\n"
+		   "  Total byte count sent (includes headers)		: %10llu\n"
+		   "  Data packets per second (with payload)		: %10.2f\n",
 		   cs->pureAcksCount, syn_fin_rst,
-		   cs->nrRetrans, cs->bundleCount, cs->nrRetrans - cs->nrRetransNoPayload + cs->bundleCount, cs->ackCount,
-           cs->totBytesSent,
-	       cs->totUniqueBytesSent,
+		   cs->nrPacketRetrans, cs->bundleCount, cs->nrPacketRetrans - cs->nrPacketRetransNoPayload + cs->bundleCount, cs->ackCount,
+		   cs->totBytesSent,
+		   cs->totUniqueBytesSent,
 		   cs->totRetransBytesSent,
-           (cs->totBytesSent - cs->totUniqueBytesSent),
-	       safe_div((cs->totBytesSent - cs->totUniqueBytesSent), cs->totBytesSent) * 100,
+		   (cs->totBytesSent - cs->totUniqueBytesSent),
+		   safe_div((cs->totBytesSent - cs->totUniqueBytesSent), cs->totBytesSent) * 100,
+		   cs->totPacketSize, // Total number of bytes for all packets sent (includes all network headers including link layer)
 		   (double) cs->nrDataPacketsSent / cs->duration);
 
 	if (cs->totUniqueBytesSent != cs->totUniqueBytes) {
-		colored_printf(RED, "  Trace is missing segments. Bytes missing      : %10d\n", cs->totUniqueBytes - cs->totUniqueBytesSent);
+		colored_printf(COLOR_WARN, "  Trace is missing segments. Bytes missing      : %10d\n", cs->totUniqueBytes - cs->totUniqueBytesSent);
 	}
 
 	if (cs->nrPacketsSent != cs->nrPacketsSentFoundInDump) {
 		printf("  Estimated loss rate based on retransmission\n");
 		printf("    Based on sent pkts (adj. for fragmentation) : %10.2f %%\n",
-			   safe_div(cs->nrRetrans, cs->nrPacketsSent) * 100);
+			   safe_div(cs->nrPacketRetrans, cs->nrPacketsSent) * 100);
 		printf("    Based on sent pkts (found in dump)          : %10.2f %%\n",
-			   safe_div(cs->nrRetrans, cs->nrPacketsSentFoundInDump) * 100);
+			   safe_div(cs->nrPacketRetrans, cs->nrPacketsSentFoundInDump) * 100);
 
 	}
 	else {
 		printf("  Estimated loss rate based on retransmissions  : %10.2f %%\n",
-			   safe_div(cs->nrRetrans, cs->nrPacketsSent) * 100);
+			   safe_div(cs->nrPacketRetrans, cs->nrPacketsSent) * 100);
 	}
 
 	if (GlobOpts::withRecv && cs->ranges_sent) {

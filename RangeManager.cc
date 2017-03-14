@@ -62,9 +62,9 @@ seq64_t RangeManager::get_print_seq(seq64_t seq) {
 }
 
 /* Register all bytes with a common send time as a range */
-void RangeManager::insertSentRange(sendData *sd) {
-	seq64_t startSeq = sd->data.seq;
-	seq64_t endSeq = sd->data.endSeq;
+void RangeManager::insertSentRange(DataSeg *seg) {
+	seq64_t startSeq = seg->seq;
+	seq64_t endSeq = seg->endSeq;
 
 #ifdef DEBUG
 	int debug_print = 0;
@@ -72,24 +72,24 @@ void RangeManager::insertSentRange(sendData *sd) {
 		printf("\ninsertSentRange (%llu): (%s) (%s), retrans: %d, is_rdb: %d\n",
                (seq64_t) (endSeq - startSeq),
 			   STR_ABSOLUTE_SEQNUM_PAIR(startSeq, endSeq),
-			   STR_SEQNUM_PAIR(startSeq, endSeq), sd->data.retrans, sd->data.is_rdb);
+			   STR_SEQNUM_PAIR(startSeq, endSeq), seg->retrans, seg->is_rdb);
 	}
 #endif
-	insertByteRange(startSeq, endSeq, INSERT_SENT, &(sd->data), 0);
+	insertByteRange(startSeq, endSeq, INSERT_SENT, seg, 0);
 
-	if (sd->data.payloadSize == 0) { /* First or second packet in stream */
+	if (seg->payloadSize == 0) { /* First or second packet in stream */
 #ifdef DEBUG
 		if (debug_print)
 			printf("-------Creating first range---------\n");
 #endif
-		if (!(sd->data.flags & TH_RST)) {
+		if (!(seg->flags & TH_RST)) {
 			lastSeq = endSeq;
-			if (sd->data.flags & TH_SYN)
+			if (seg->flags & TH_SYN)
 				lastSeq += 1;
 		}
 	}
 	else if (startSeq == lastSeq) { /* Next packet in correct sequence */
-		lastSeq = startSeq + sd->data.payloadSize;
+		lastSeq = startSeq + seg->payloadSize;
 #ifdef DEBUG
 		if (debug_print) {
 			printf("-------New range equivalent with packet---------\n");
@@ -100,9 +100,9 @@ void RangeManager::insertSentRange(sendData *sd) {
 	/* Check for instances where sent packets are lost from the packet trace */
 	else if (startSeq > lastSeq) {
 		// This is most probably the ack on the FIN ack from receiver, so ignore
-		if (sd->data.payloadSize != 0) {
+		if (seg->payloadSize != 0) {
 			if (GlobOpts::validate_ranges && DEBUGL_SENDER(1) && GlobOpts::print_missing_byterange_warn) {
-				colored_fprintf(stderr, RED, "\nRangeManager::insertRange: Missing bytes in sender trace (conn '%s')\n",
+				colored_fprintf(stderr, COLOR_ERROR, "\nRangeManager::insertRange: Missing bytes in sender trace (conn '%s')\n",
 					   conn->getConnKey().c_str());
 				fprintf(stderr, "Expected seq: %llu (%llu) but got %llu (%llu)\n",
 						(seq64_t) lastSeq, (seq64_t) absolute_seq(lastSeq), startSeq, (seq64_t) absolute_seq(startSeq));
@@ -117,14 +117,14 @@ void RangeManager::insertSentRange(sendData *sd) {
 	}
 	else if (startSeq > lastSeq) {
 		// This is an ack
-		if (sd->data.payloadSize == 0) {
-			lastSeq = startSeq + sd->data.payloadSize;
+		if (seg->payloadSize == 0) {
+			lastSeq = startSeq + seg->payloadSize;
 		}
 		else {
-			lastSeq = startSeq + sd->data.payloadSize;
+			lastSeq = startSeq + seg->payloadSize;
 #ifdef DEBUG
 			if (lastSeq != (endSeq + 1)) {
-				fprintf(stderr, "INCORRECT: %u\n", sd->data.payloadSize);
+				fprintf(stderr, "INCORRECT: %u\n", seg->payloadSize);
 				warn_with_file_and_linenum(__FILE__, __LINE__);
 			}
 #endif
@@ -148,15 +148,15 @@ void RangeManager::insertSentRange(sendData *sd) {
 			if (debug_print)
 				printf("-------Overlap: registering some bytes---------");
 
-			if ((endSeq - startSeq) != sd->data.payloadSize) {
+			if ((endSeq - startSeq) != seg->payloadSize) {
 				fprintf(stderr, "Data len incorrect!\n");
 				warn_with_file_and_linenum(__FILE__, __LINE__);
 			}
 #endif
-			lastSeq = startSeq + sd->data.payloadSize;
+			lastSeq = startSeq + seg->payloadSize;
 #ifdef DEBUG
 			if (lastSeq != (endSeq)) {
-				fprintf(stderr, "INCORRECT: %u\n", sd->data.payloadSize);
+				fprintf(stderr, "INCORRECT: %u\n", seg->payloadSize);
 				warn_with_file_and_linenum(__FILE__, __LINE__);
 			}
 #endif
@@ -164,35 +164,23 @@ void RangeManager::insertSentRange(sendData *sd) {
 	}
 }
 
-void RangeManager::insertReceivedRange(sendData *sd) {
-	DataSeg tmpSeg;
-	tmpSeg.seq = sd->data.seq;
-	tmpSeg.endSeq = sd->data.endSeq;
-	tmpSeg.tstamp_pcap = (sd->data.tstamp_pcap);
-	//tmpSeg.data = sd->data.data;
-	tmpSeg.payloadSize = sd->data.payloadSize;
-	tmpSeg.is_rdb = sd->data.is_rdb;
-	tmpSeg.retrans = sd->data.retrans;
-	tmpSeg.tstamp_tcp = sd->data.tstamp_tcp;
-	tmpSeg.window = sd->data.window;
-	tmpSeg.flags = sd->data.flags;
-
+void RangeManager::insertReceivedRange(DataSeg *seg) {
 	if (DEBUGL_RECEIVER(5)) {
-		cerr << "Inserting receive data: startSeq=" << get_print_seq(tmpSeg.seq)
-			 << ", endSeq=" << get_print_seq(tmpSeg.endSeq) << endl;
-		if (tmpSeg.seq == 0 || tmpSeg.endSeq == 0) {
+		cerr << "Inserting receive data: startSeq=" << get_print_seq(seg->seq)
+			 << ", endSeq=" << get_print_seq(seg->endSeq) << endl;
+		if (seg->seq == 0 || seg->endSeq == 0) {
 			cerr << "Erroneous seq." << endl;
 		}
 	}
 	/* Insert all packets into data structure */
-	insertByteRange(tmpSeg.seq, tmpSeg.endSeq, INSERT_RECV, &tmpSeg, 0);
+	insertByteRange(seg->seq, seg->endSeq, INSERT_RECV, seg, 0);
 }
 
 /*
   This inserts the the data into the ranges map.
   It's called both with sent end received data ranges.
 */
-bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_type itype, DataSeg *data_seg, int level) {
+bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_type itype, const DataSeg *data_seg, int level) {
 	ByteRange *last_br = NULL;
 	map<seq64_t, ByteRange*>::iterator brIt, brIt_end;
 	brIt_end = ranges.end();
@@ -206,22 +194,6 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 	//	debug_print = 1;
 	//}
 	//debug_print = 1;
-
-//	if (data_seg->payloadSize == 1) {
-//		debug_print = 1;
-//	}
-	//if (start_seq >= 222036 && start_seq <= 232036)
-	//	debug_print = 1;
-	//
-	//if (start_seq == 28309)
-	//	debug_print = 1;
-	//
-	//if (start_seq >= 21660765)
-	//	exit(0);
-
-	//if (start_seq >= 22517 && start_seq <= 31205)
-	//	debug_print = 1;
-	//fprintf(stderr, "level: %d\n", level);
 
 	char prefix[100];
 	int i;
@@ -306,7 +278,7 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 #ifdef DEBUG
 			if (itype == INSERT_RECV) {
 				//assert(0 && "RECEIVED!");
-				colored_printf(RED, "Received packet with no payload\n");
+				colored_printf(COLOR_ERROR, "Received packet with no payload\n");
 			}
 #endif
 
@@ -514,7 +486,7 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 							}
 						}
 						else if (itype == INSERT_SOJOURN) {
-							colored_printf(RED, "Sojourn not handled 1!!\n");
+							colored_printf(COLOR_ERROR, "Sojourn not handled 1!!\n");
 							assert(0);
 						}
 						if (insert_more_recursively) {
@@ -659,7 +631,7 @@ bool RangeManager::insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_ty
 						 brIt->second->startSeq, get_print_seq(brIt->second->startSeq));
 
 			if (brIt->second->endSeq < brIt->second->startSeq) {
-				colored_printf(RED, "Startseq is greater than Endseq!!\n");
+				colored_printf(COLOR_ERROR, "Startseq is greater than Endseq!!\n");
 			}
 		}
 #endif
@@ -1197,7 +1169,9 @@ void RangeManager::genStats(PacketsStats *bs) {
 	for (it = analyse_range_start; it != analyse_range_end; it++) {
 		if (it->second->getOrinalPayloadSize()) {
 			last_acked = it;
-			printf("Last acked set to %lld, ackTime: %lld\n", it->second->startSeq, (llint_t) TV_TO_MS(last_acked->second->ackTime));
+			if (DEBUGL(2)) {
+				printf("Last acked set to %lld, ackTime: %lld\n", it->second->startSeq, (llint_t) TV_TO_MS(last_acked->second->ackTime));
+			}
 			break;
 		}
 	}
@@ -1536,7 +1510,7 @@ void RangeManager::printPacketDetails(map<seq64_t, ByteRange*>::iterator it, map
 		psent += it->second->acked_sent; // Count pure acks
 
 		if (psent != (it->second->packet_sent_count + it->second->packet_retrans_count + it->second->acked_sent)) {
-			colored_printf(YELLOW, " SENT MISMATCH packet_sent_count: %u != %u (syn: %u, rst: %u, fin: %u, byte_count: %u)", psent,
+			colored_printf(COLOR_WARN, " SENT MISMATCH packet_sent_count: %u != %u (syn: %u, rst: %u, fin: %u, byte_count: %u)", psent,
 						   it->second->packet_sent_count + it->second->packet_retrans_count + it->second->acked_sent,
 						   it->second->syn, it->second->rst, it->second->fin && !it->second->byte_count, it->second->byte_count);
 		}
@@ -1553,11 +1527,11 @@ void RangeManager::printPacketDetails(map<seq64_t, ByteRange*>::iterator it, map
 
 		if (it->second->syn || it->second->rst || it->second->fin) {
 			if (it->second->syn)
-				colored_printf(YELLOW, " SYN(%d)", it->second->syn);
+				colored_printf(BLUE3, " SYN(%d)", it->second->syn);
 			if (it->second->rst)
-				colored_printf(YELLOW, " RST(%d)", it->second->rst);
+				colored_printf(BLUE3, " RST(%d)", it->second->rst);
 			if (it->second->fin)
-				colored_printf(YELLOW, " FIN(%d)", it->second->fin);
+				colored_printf(BLUE3, " FIN(%d)", it->second->fin);
 		}
 
 		if (GlobOpts::withRecv) {
@@ -1622,7 +1596,7 @@ void RangeManager::calculateRealLoss(map<seq64_t, ByteRange*>::iterator brIt, ma
 				if (index < (ranges.size() * (1 - loss_and_end_limit))) {
 					match_fails_before_end++;
 					if (DEBUGL_RECEIVER(1) && GlobOpts::print_timestamp_mismatch_warn) {
-						colored_printf(YELLOW, "Failed to match %s (%s) (index: %llu) on %s\n",
+						colored_printf(COLOR_WARN, "Failed to match %s (%s) (index: %llu) on %s\n",
 									   STR_ABSOLUTE_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq),
 									   STR_SEQNUM_PAIR(brIt->second->startSeq, brIt->second->endSeq), index, conn->getConnKey().c_str());
 						if (GlobOpts::verbose) {
@@ -1632,7 +1606,7 @@ void RangeManager::calculateRealLoss(map<seq64_t, ByteRange*>::iterator brIt, ma
 							brIt->second->printTstampsTcp(print_limit);
 						}
 						if (GlobOpts::debugLevel == 1) {
-							colored_printf(YELLOW, "Enable debug=2 to show further header mismatch warnings.\n");
+							colored_printf(COLOR_WARN, "Enable debug=2 to show further header mismatch warnings.\n");
 							GlobOpts::print_timestamp_mismatch_warn = false;
 						}
 					}
@@ -1761,8 +1735,8 @@ void RangeManager::calculateRealLoss(map<seq64_t, ByteRange*>::iterator brIt, ma
 
 	if (DEBUGL_RECEIVER(1) && print_timestamp_mismatch_warn_end) {
 		if (match_fails_before_end) {
-			colored_printf(RED, "%s : Failed to find timestamp for %d out of %ld packets. ", conn->getConnKey().c_str(), match_fails_before_end, ranges.size());
-			colored_printf(RED, "These packest were before the %f%% limit (%d) from the end (%llu), and might be caused by packets being dropped from tcpdump\n",
+			colored_printf(COLOR_WARN, "%s : Failed to find timestamp for %d out of %ld packets. ", conn->getConnKey().c_str(), match_fails_before_end, ranges.size());
+			colored_printf(COLOR_WARN, "These packest were before the %f%% limit (%d) from the end (%llu), and might be caused by packets being dropped from tcpdump\n",
 						   (1 - loss_and_end_limit), (int) (ranges.size() * (1 - loss_and_end_limit)), ranges.size());
 		}
 #ifndef DEBUG

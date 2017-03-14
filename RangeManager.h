@@ -4,6 +4,7 @@
 #include "common.h"
 #include "statistics_common.h"
 #include "time_util.h"
+#include "packet_parse.h"
 
 enum received_type {DEF, DATA, RDB, RETR};
 
@@ -84,8 +85,8 @@ public:
 
 	~RangeManager();
 
-	void insertSentRange(sendData *sd);
-	void insertReceivedRange(sendData *sd);
+	void insertSentRange(DataSeg *seg);
+	void insertReceivedRange(DataSeg *seg);
 	bool processAck(DataSeg *seg);
 	void genStats(PacketsStats* bs);
 	ByteRange* getLastRange() {	return ranges.rbegin()->second;	}
@@ -100,7 +101,7 @@ public:
 	void writeSentTimesAndQueueingDelayVariance(const int64_t first_tstamp, vector<csv::ofstream*> streams);
 	int calculateClockDrift();
 	void doDriftCompensation();
-	bool insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_type type, DataSeg *data_seq, int level);
+	bool insertByteRange(seq64_t start_seq, seq64_t end_seq, insert_type type, const DataSeg *data_seq, int level);
 	void genAckLatencyData(const int64_t first_tstamp, vector<SPNS::shared_ptr<vector <LatencyItem> > > &diff_times, const string& connKey);
 	ullint_t getNumBytes() { return lastSeq; } // lastSeq is the last relative seq number
 	size_t getByteRangesCount() { return ranges.size(); }

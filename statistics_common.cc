@@ -118,9 +118,9 @@ csv::ofstream& operator<<(csv::ofstream& os, ConnCSVItem& val)
 	   << val.cs->synCount
 	   << val.cs->finCount
 	   << val.cs->rstCount
-	   << val.cs->nrRetrans
+	   << val.cs->nrPacketRetrans
 	   << val.cs->bundleCount
-	   << val.cs->nrRetrans - val.cs->nrRetransNoPayload + val.cs->bundleCount
+	   << val.cs->nrPacketRetrans - val.cs->nrPacketRetransNoPayload + val.cs->bundleCount
 	   << val.cs->ackCount
 	   << val.cs->totBytesSent
 	   << val.cs->totUniqueBytesSent
@@ -238,7 +238,7 @@ void Percentiles::init()
 	{
 		istringstream(token) >> num;
 		if (num >= 100) {
-			colored_printf(YELLOW, "Invalid percentile '%s'\n", token.c_str());
+			colored_printf(COLOR_ERROR, "Invalid percentile '%s'\n", token.c_str());
 			continue;
 		}
 		max_char_length = static_cast<int>(token.length());

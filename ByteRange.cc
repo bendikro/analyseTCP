@@ -84,7 +84,7 @@ void ByteRange::printTstampsPcap() {
 	}
 }
 
-bool ByteRange::addSegmentEnteredKernelTime(seq64_t seq, timeval &tv) {
+bool ByteRange::addSegmentEnteredKernelTime(seq64_t seq, const timeval &tv) {
 
 	if (sent_data_pkt_pcap_index == -1) {
 		//printf("sent_data_pkt_pcap_index: %hu, acked_sent: %u\n", sent_data_pkt_pcap_index, acked_sent);
@@ -101,7 +101,7 @@ bool ByteRange::addSegmentEnteredKernelTime(seq64_t seq, timeval &tv) {
 		//fprintf(stderr, "ByteRange seq_with_print_range() type: %d\n", sent_tstamp_pcap[sent_data_pkt_pcap_index].second);
 		if (GlobOpts::print_packets_pairs.size() == 0 ||
 			seqWithPrintRange(startSeq, endSeq, print_packet_ranges_index) == 1) {
-			colored_printf(RED, "INSERT INCORRECT SOJOURN TIME for ByteRange(%llu, %llu)\n"
+			colored_printf(COLOR_ERROR, "INSERT INCORRECT SOJOURN TIME for ByteRange(%llu, %llu)\n"
 						   "Sent time '%s' is before sojourn time '%s'\n", startSeq, endSeq,
 						   buf1, buf2);
 			printf("Seq: %llu, startSeq: %llu, endSeq: %llu\n", seq, startSeq, endSeq);
@@ -147,7 +147,7 @@ long ByteRange::getSendAckTimeDiff(RangeManager *rm) {
 				}
 				count++;
 			}
-			colored_printf(RED, "Range(%llu, %llu) has no ACK time. This shouldn't really happen... Packet is %d before last packet\n", startSeq, endSeq, count);
+			colored_printf(COLOR_ERROR, "Range(%llu, %llu) has no ACK time. This shouldn't really happen... Packet is %d before last packet\n", startSeq, endSeq, count);
 		}
 		return 0;
 	}
@@ -158,7 +158,7 @@ long ByteRange::getSendAckTimeDiff(RangeManager *rm) {
 	usec = get_usecs(&tv_diff);
 
 	if (usec < 0) { /* Should not be possible */
-		colored_fprintf(stderr, RED, "Found byte with negative latency (%d usec)\n", usec);
+		colored_fprintf(stderr, COLOR_ERROR, "Found byte with negative latency (%d usec)\n", usec);
 		string s = this->strInfo();
 		cout << s;
 		assert(0);
@@ -219,7 +219,7 @@ vector< pair<int, int> > ByteRange::getSojournTimes() {
 		timersub(&sent_tstamp_pcap[send_tstamp_index].first, &sojourn_tstamps[i].second, &tv_diff);
 		usec = get_usecs(&tv_diff);
 		if (usec < 0) { /* Should not be possible */
-			colored_fprintf(stderr, RED, "Found ByteRange with negative sojourn latency (%d usec).\n", usec);
+			colored_fprintf(stderr, COLOR_ERROR, "Found ByteRange with negative sojourn latency (%d usec).\n", usec);
 			cout << this->strInfo();
 			//assert(0);
 		}

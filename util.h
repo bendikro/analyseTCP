@@ -12,7 +12,6 @@ bool isNumeric(const char* pszInput, size_t nNumberBase);
 void parse_print_packets();
 std::pair <std::string,std::string>  make_optstring(option long_options[]);
 void print_stack(void);
-std::string get_TCP_flags_str(u_char flags);
 
 std::string ipToStr(const in_addr &ip);
 in_addr strToIp(const string &ip);
@@ -34,20 +33,6 @@ std::string strfmt(const char *format, Args ... args) {
 	buf.resize(size);
 	snprintf(&buf[0], size + 1, format, args...);
 	return buf;
-}
-
-/*
-  Used to test if a sequence number comes after another
-  These handle when the newest sequence number has wrapped
-*/
-inline bool before(seq32_t seq1, seq32_t seq2) {
-	return (signed int) (seq1 - seq2) < 0;
-}
-
-#define after(seq2, seq1)   before(seq1, seq2)
-
-inline bool after_or_equal(seq32_t seq1, seq32_t seq2) {
-	return (signed int) (seq2 - seq1) >= 0;
 }
 
 #endif /* UTIL_H */

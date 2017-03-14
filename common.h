@@ -15,10 +15,7 @@
 #define uint64_t unsigned long long
 #define int64_t long long
 */
-
-#define seq32_t uint32_t
 // Following types are at least 64 bit
-#define seq64_t unsigned long long
 #define ullint_t unsigned long long
 #define llint_t long long
 
@@ -67,7 +64,12 @@ using namespace std;
 
 #include "color_print.h"
 
+// Max size of the char buffer used for verbose/debug print functions
+#define PRINT_MAX_BUFFER 1000
+
 #define safe_div(x, y) ((y) != 0 ? ((double) (x)) / (y) : 0.0)
+
+enum relative_seq_type {RELSEQ_NONE, RELSEQ_SEND_OUT, RELSEQ_SEND_ACK, RELSEQ_RECV_INN, RELSEQ_SOJ_SEQ};
 
 enum sent_type {ST_NONE, ST_PKT, ST_RTR, ST_PURE_ACK, ST_RST};
 
@@ -120,132 +122,15 @@ public:
 	static bool print_payload_mismatch_warn;
 	static bool print_timestamp_mismatch_warn;
 	static bool print_missing_byterange_warn;
+	static bool print_pkt_header_caplen_truncated_warn;
 	/* Debug test variables */
 	static bool conn_key_debug;
+	static int pkt_header_caplen_truncated_count;
 };
 
 #define DEBUGL(level) (GlobOpts::debugLevel >= level)
 #define DEBUGL_SENDER(level) (GlobOpts::debugSender && GlobOpts::debugLevel >= level)
 #define DEBUGL_RECEIVER(level) (GlobOpts::debugReceiver && GlobOpts::debugLevel >= level)
-
-typedef pair<seq64_t, seq64_t> sack_t;
-typedef vector< sack_t > sack_list_t;
-typedef shared_ptr< sack_list_t > sack_list_ptr_t;
-
-
-class DataSeg {
-public:
-	seq64_t seq;
-	seq64_t endSeq;
-	seq64_t rdb_end_seq;   /* end seq of rdb data */
-	seq64_t ack;
-	seq32_t seq_absolute;  /* Absolute value of the sequence number */
-	uint16_t window;
-	uint16_t payloadSize;   /* Payload size */
-	bool retrans : 1,       /* Is a retransmission */
-		is_rdb : 1,         /* Is a rdb packet */
-		sacks : 1,          /* Has SACK blocks */
-		in_sequence : 1;    /* Is the segment expected or out of order */
-	u_char flags;
-	timeval tstamp_pcap;
-	uint32_t tstamp_tcp;
-	uint32_t tstamp_tcp_echo;
-	shared_ptr <sack_list_t> tcp_sacks;
-
-	DataSeg() {
-		tcp_sacks = shared_ptr <sack_list_t> (new sack_list_t);
-		retrans = is_rdb = sacks = in_sequence = 0;
-		flags = 0;
-		window = payloadSize = 0;
-		seq_absolute = tstamp_tcp = tstamp_tcp_echo = 0;
-		seq = endSeq = rdb_end_seq = ack = 0;
-	}
-
-	void addTcpSack(sack_t tcp_sack) {
-		tcp_sacks->push_back(tcp_sack);
-	}
-};
-
-/* Struct used to forward relevant data about an anlysed packet */
-struct sendData {
-	uint totalSize;     /* Total packet size */
-	uint ipSize;        /* IP size */
-	uint ipHdrLen;      /* Ip header length */
-	uint tcpHdrLen;     /* TCP header length */
-	uint tcpOptionLen;  /* TCP header option length */
-	DataSeg data;
-};
-
-
-/* ethernet headers are always exactly 14 bytes [1] */
-#define SIZE_ETHERNET 14
-#define SIZE_HEADER_LINUX_COOKED_MODE 16
-
-/* IP header */
-struct sniff_ip {
-	u_char  ip_vhl;                 /* version << 4 | header length >> 2 */
-	u_char  ip_tos;                 /* type of service */
-	u_short ip_len;                 /* total length */
-	u_short ip_id;                  /* identification */
-	u_short ip_off;                 /* fragment offset field */
-#define IP_RF 0x8000            /* reserved fragment flag */
-#define IP_DF 0x4000            /* dont fragment flag */
-#define IP_MF 0x2000            /* more fragments flag */
-#define IP_OFFMASK 0x1fff       /* mask for fragmenting bits */
-	u_char  ip_ttl;                 /* time to live */
-	u_char  ip_p;                   /* protocol */
-	u_short ip_sum;                 /* checksum */
-	in_addr ip_src,ip_dst;  /* source and dest address */
-};
-#define IP_HL(ip)               (((ip)->ip_vhl) & 0x0f)
-#define IP_V(ip)                (((ip)->ip_vhl) >> 4)
-
-/* TCP header */
-typedef u_int tcp_seq;
-
-struct sniff_tcp {
-	u_short th_sport;               /* source port */
-	u_short th_dport;               /* destination port */
-	tcp_seq th_seq;                 /* sequence number */
-	tcp_seq th_ack;                 /* acknowledgement number */
-	u_char  th_offx2;               /* data offset, rsvd */
-#define TH_OFF(th)      (((th)->th_offx2 & 0xf0) >> 4)
-	u_char  th_flags;
-#define TH_FIN  0x01
-#define TH_SYN  0x02
-#define TH_RST  0x04
-#define TH_PUSH 0x08
-#define TH_ACK  0x10
-#define TH_URG  0x20
-#define TH_ECE  0x40
-#define TH_CWR  0x80
-#define TH_FLAGS        (TH_FIN|TH_SYN|TH_RST|TH_ACK|TH_URG|TH_ECE|TH_CWR)
-	u_short th_win;                 /* window */
-	u_short th_sum;                 /* checksum */
-	u_short th_urp;                 /* urgent pointer */
-};
-
-/* Ethernet header */
-struct sniff_ethernet {
-	u_char  ether_dhost[ETHER_ADDR_LEN];    /* destination host address */
-	u_char  ether_shost[ETHER_ADDR_LEN];    /* source host address */
-	u_short ether_type;                     /* IP? ARP? RARP? etc */
-};
-
-/* Linux cooked-mode capture (SLL: sockaddr_ll) */
-struct sniff_linux_cooked_mode {
-	u_char  packet_type[2];                 /* Type
-	                                         * 0: packet was sent to us by somebody else
-	                                         * 1: packet was broadcast by somebody else
-	                                         * 2: packet was multicast, but not broadcast, by somebody else
-	                                         * 3: packet was sent by somebody else to somebody else
-	                                         * 4: packet was sent by us
-	                                         */
-	u_char  link_layer_type[2];              /* Linux ARPHRD_ value for the link layer device type; */
-	u_char  link_layer_adress_len[2];        /* length of the link layer address of the sender of the packet (which could be 0) */
-	uint64_t link_layer_header_size;         /* number of bytes of the link layer header */
-	u_short ether_type;                      /* IP? ARP? RARP? etc */
-} __attribute__((packed));
 
 
 bool endsWith(const string& s, const string& suffix);
@@ -253,21 +138,30 @@ string file_and_linenum();
 void exit_with_file_and_linenum(int exit_code, string file, int linenum);
 void warn_with_file_and_linenum(string file, int linenum);
 
-string seq_pair_str(seq64_t start, seq64_t end);
-
 /* Debug/Verbose printing */
 
 enum debug_type {DSENDER, DRECEIVER};
 
+string debug_type_str(enum debug_type t);
+bool check_debug_level(enum debug_type type, int debugLevel);
+
 #define DEBUG_PREFIX_FMT "[DEBUG %d] "
 #define PREFIX_LEN 20
+
+#define COLOR_FATAL RED
+#define COLOR_ERROR RED
+#define COLOR_WARN YELLOW2
+#define COLOR_NOTICE YELLOW2
+#define COLOR_INFO GREEN2
 
 void dclprintf(enum debug_type type, int debug_level, int fg_color, const char *format, ...);
 void dclfprintf(FILE *stream, enum debug_type type, int debug_level, int fg_color, const char *format, ...);
 void dprintf(enum debug_type type, int debug_level, const char *format, ...);
 void dfprintf(FILE *stream, enum debug_type type, int debug_level, const char *format, ...);
 
+void vbclfprintf(FILE *stream, int verbose_level, int fg_color, const char *format, ...);
 void vbclprintf(int verbose_level, int fg_color, const char *format, ...);
+void vbfprintf(FILE *stream, int verbose_level, const char *format, ...);
 void vbprintf(int verbose_level, const char *format, ...);
 /* END printing */
 

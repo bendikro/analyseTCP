@@ -240,12 +240,12 @@ long next_int(char **str) {
 	long ret = next_digit(*str, &endptr, &result);
 
 	if (ret == -1) {
-		colored_fprintf(stderr, RED, "Failed to parse '%s'\n", *str);
+		colored_fprintf(stderr, COLOR_ERROR, "Failed to parse '%s'\n", *str);
 		perror("strtol");
 		return -1;
 	}
 	else if (ret == 0) {
-		colored_fprintf(stderr, RED, "No digits found in '%s'\n", *str);
+		colored_fprintf(stderr, COLOR_ERROR, "No digits found in '%s'\n", *str);
 		return -1;
 	}
 
@@ -281,59 +281,51 @@ void parse_cmd_args(int argc, char *argv[], string OPTSTRING, string usage_str) 
 	while ((c = getopt_long(argc, argv, OPTSTRING.c_str(), long_options, &option_index)) != -1) {
 		switch (c) {
 		case 's':
-			if ( not tcp_addr.empty())
-			{
-				colored_printf(RED, "-s cannot be combined with --tcp-addr, ignoring -s\n");
+			if (not tcp_addr.empty()) {
+				colored_printf(COLOR_NOTICE, "-s cannot be combined with --tcp-addr, ignoring -s argument '%s'\n", optarg);
 				break;
 			}
 			src_ip = optarg;
 			break;
 		case 'r':
-			if ( not tcp_addr.empty())
-			{
-				colored_printf(RED, "-r cannot be combined with --tcp-addr, ignoring -r\n");
+			if (not tcp_addr.empty()) {
+				colored_printf(COLOR_NOTICE, "-r cannot be combined with --tcp-addr, ignoring -r argument '%s'\n", optarg);
 				break;
 			}
 			dst_ip = optarg;
 			break;
 		case 'p':
-			if ( not tcp_port.empty())
-			{
-				colored_printf(RED, "-p cannot be combined with --tcp-port, ignoring -p\n");
+			if (not tcp_port.empty()) {
+				colored_printf(COLOR_NOTICE, "-p cannot be combined with --tcp-port, ignoring -p argument '%s'\n", optarg);
 				break;
 			}
 			dst_port = string(optarg);
 			break;
 		case 'q':
-			src_port = string(optarg);
-			if (!tcp_port.empty())
-			{
-				colored_printf(RED, "-q cannot be combined with --tcp-port, ignoring -q\n");
-				src_port = "";
-			}
-			break;
-		case OPT_ADDR :
-			if (!dst_ip.empty())
-			{
-				colored_printf(RED, "--tcp-addr cannot be combined with -r, ignoring --tcp-addr\n");
+			if (not tcp_port.empty()) {
+				colored_printf(COLOR_NOTICE, "-q cannot be combined with --tcp-port, ignoring -q argument '%s'\n", optarg);
 				break;
 			}
-			else if (!src_ip.empty())
-			{
-				colored_printf(RED, "--tcp-addr cannot be combined with -s, ignoring --tcp-addr\n");
+			src_port = string(optarg);
+			break;
+		case OPT_ADDR :
+			if (!dst_ip.empty()) {
+				colored_printf(COLOR_NOTICE, "--tcp-addr cannot be combined with -r, ignoring --tcp-addr argument '%s'\n", optarg);
+				break;
+			}
+			else if (!src_ip.empty()) {
+				colored_printf(COLOR_NOTICE, "--tcp-addr cannot be combined with -s, ignoring --tcp-addr argument '%s'\n", optarg);
 				break;
 			}
 			tcp_addr = string(optarg);
 			break;
 		case OPT_PORT :
-			if (!dst_port.empty())
-			{
-				colored_printf(RED, "--tcp-port cannot be combined with -p, ignoring --tcp-port\n");
+			if (!dst_port.empty()) {
+				colored_printf(COLOR_NOTICE, "--tcp-port cannot be combined with -p, ignoring --tcp-port argument '%s'\n", optarg);
 				break;
 			}
-			else if (!src_port.empty())
-			{
-				colored_printf(RED, "--tcp-port cannot be combined with -q, ignoring --tcp-port\n");
+			else if (!src_port.empty()) {
+				colored_printf(COLOR_NOTICE, "--tcp-port cannot be combined with -q, ignoring --tcp-port argument '%s'\n", optarg);
 				break;
 			}
 			tcp_port = string(optarg);
@@ -366,7 +358,7 @@ void parse_cmd_args(int argc, char *argv[], string OPTSTRING, string usage_str) 
 				char *sptr = NULL;
 				uint64_t ret = strtoul(optarg, &sptr, 10);
 				if (ret == 0 || sptr == NULL || *sptr != '\0') {
-					colored_printf(RED, "Option -%c requires a valid integer: '%s'\n", c, optarg);
+					colored_printf(COLOR_FATAL, "Option -%c requires a valid integer: '%s'\n", c, optarg);
 					usage(argv[0], usage_str);
 				}
 				GlobOpts::lossAggrMs = ret;
@@ -378,7 +370,7 @@ void parse_cmd_args(int argc, char *argv[], string OPTSTRING, string usage_str) 
 				char *sptr = NULL;
 				uint64_t ret = strtoul(optarg, &sptr, 10);
 				if (ret == 0 || sptr == NULL || *sptr != '\0') {
-					colored_printf(RED, "Option -%c requires a valid integer: '%s'\n", c, optarg);
+					colored_printf(COLOR_FATAL, "Option -%c requires a valid integer: '%s'\n", c, optarg);
 					usage(argv[0], usage_str);
 				}
 				GlobOpts::throughputAggrMs = ret;
@@ -444,7 +436,8 @@ void parse_cmd_args(int argc, char *argv[], string OPTSTRING, string usage_str) 
 						if (optarg[i] == 'v') {
 							GlobOpts::verbose++;
 						} else {
-							colored_printf(RED, "Invalid optional argument to verbose option: '%s'\n", optarg);
+							colored_printf(COLOR_NOTICE, "Invalid optional argument to verbose option, ignoring -v argument '%s'\n", optarg);
+							break;
 						}
 					}
 				}
@@ -519,11 +512,8 @@ int main(int argc, char *argv[]) {
 	pair <string,string> ret = make_optstring(long_options);
 	parse_cmd_args(argc, argv, ret.first, ret.second);
 
-	if (GlobOpts::debugLevel < 0)
+	if (GlobOpts::debugLevel < 0 && GlobOpts::verbose)
 		cerr << "debugLevel = " << GlobOpts::debugLevel << endl;
-
-	if (GlobOpts::verbose < 1)
-		cerr << "verbose = " << GlobOpts::verbose << endl;
 
 	if (GlobOpts::RFiles_dir.length()) {
 		if (!endsWith(GlobOpts::RFiles_dir, string("/")))

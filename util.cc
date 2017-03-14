@@ -1,21 +1,7 @@
 #include "util.h"
 #include <execinfo.h>
 
-string get_TCP_flags_str(u_char flags) {
-	stringstream out;
-	if (flags & TH_SYN)
-		out << ",SYN";
-	if (flags & TH_ACK)
-		out << ",ACK";
-	if (flags & TH_FIN)
-		out << ",FIN";
-	if (flags & TH_RST)
-		out << ",RST";
-	string result = out.str();
-	if (!result.empty())
-		result.erase(0, 1);
-	return "[" + result + "]";;
-}
+
 /*
   Checks if a char buf is a string
 */

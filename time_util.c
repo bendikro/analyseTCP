@@ -58,11 +58,11 @@ char* sprint_readable_time_now(char *buf) {
 	return buf;
 }
 
-long get_msecs(struct timeval *tv) {
+long get_msecs(const struct timeval *tv) {
 	return tv->tv_sec * 1000 + tv->tv_usec / 1000;
 }
 
-long get_usecs(struct timeval *tv) {
+long get_usecs(const struct timeval *tv) {
 	return tv->tv_sec * 1000000 + tv->tv_usec;
 }
 

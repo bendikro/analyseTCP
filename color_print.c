@@ -11,7 +11,7 @@ int _colored(int fg_color, uint32_t max_size, char *buf, const char *str) {
 	int n;
 	buf[0] = 0;
 	if (fg_color != NO_COLOR && !disable_colors) {
-		n = snprintf(buf, max_size, "%c[%d;%dm%s%c[%dm", 0x1B, 1, fg_color + 30, str, 0x1B, RESET);
+		n = snprintf(buf, max_size, "%c[%d;5;%dm%s%c[m", 0x1B, 38, fg_color, str, 0x1B);
 	}
 	else {
 		n = snprintf(buf, max_size, "%s", str);

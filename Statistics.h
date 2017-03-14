@@ -39,7 +39,7 @@ public:
 	}
 
 	csv::ofstream* newOutStream(string filename) {
-        csv::ofstream* stream = new csv::ofstream(filename);
+		csv::ofstream* stream = new csv::ofstream(filename);
 		if (getWriteHeader())
 			writeHeader(*stream);
 		return stream;

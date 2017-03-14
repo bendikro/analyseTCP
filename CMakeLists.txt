@@ -114,6 +114,7 @@ SET (BASE_SRC
   util.cc util.h
   color_print.c color_print.h
   time_util.c time_util.h
+  packet_parse.cc packet_parse.h
   )
 
 # Prepare sources for app.
@@ -132,6 +133,8 @@ IF (WITH_DASH)
   ADD_EXECUTABLE (analyseDASH ${DASH_SRC})
   TARGET_LINK_LIBRARIES (analyseDASH pcap)
 ENDIF(WITH_DASH)
+
+MESSAGE(STATUS "Build mode: " ${CMAKE_BUILD_TYPE})
 
 # Please write more tests. Very important!! :-)
 IF (TESTS)

@@ -142,18 +142,19 @@ uint32_t Connection::getDuration(bool analyse_range_duration) {
 }
 
 /* Count bundled and retransmitted packets from sent data */
-bool Connection::registerSent(sendData* sd) {
-	totPacketSize += sd->totalSize;
+bool Connection::registerSent(PcapPacket *pkt) {
+	DataSeg *seg = &pkt->seg;
+	totPacketSize += pkt->totalSize;
 	nrPacketsSent++;
 #ifdef DEBUG
 	int debug = 0;
 #endif
 
-	if (sd->data.endSeq > lastLargestEndSeq && lastLargestEndSeq +1 != sd->data.seq) {
+	if (seg->endSeq > lastLargestEndSeq && lastLargestEndSeq +1 != seg->seq) {
 #ifdef DEBUG
 		if (debug) {
-			colored_fprintf(stderr, RED, "CONN: %s\nSending unexpected sequence number: %llu, lastlargest: %llu\n",
-							getConnKey().c_str(), sd->data.seq, lastLargestEndSeq);
+			colored_fprintf(stderr, COLOR_ERROR, "CONN: %s\nSending unexpected sequence number: %llu, lastlargest: %llu\n",
+							getConnKey().c_str(), seg->seq, lastLargestEndSeq);
 		}
 #endif
 		if (closed) {
@@ -163,27 +164,27 @@ bool Connection::registerSent(sendData* sd) {
 
 		// For some reason, seq can increase even if no data was sent, some issue with multiple SYN packets.
 		// 2014-08-12: This is expected for SYN retries after timeout (aka new connections)
-		if (sd->data.flags & TH_SYN) {
+		if (seg->flags & TH_SYN) {
 
-			if (std::labs((int64_t)sd->data.seq_absolute - (int64_t)rm->firstSeq) > 10) {
-				colored_fprintf(stderr, RED, "New SYN changes sequence number by more than 10 (%ld) on connection with %ld ranges already registered.\n"
+			if (std::labs((int64_t)seg->seq_absolute - (int64_t)rm->firstSeq) > 10) {
+				colored_fprintf(stderr, COLOR_NOTICE, "New SYN changes sequence number by more than 10 (%ld) on connection with %ld ranges already registered.\n"
 								"This is presumably due to TCP port number reused for a new connection. "
 								"Marking this connection as closed and ignore any packets in the new connection.\n",
-								std::labs((int64_t)sd->data.seq_absolute - (int64_t)rm->firstSeq), rm->ranges.size());
+								std::labs((int64_t)seg->seq_absolute - (int64_t)rm->firstSeq), rm->ranges.size());
 				closed = true;
 			}
 			else {
-				rm->firstSeq = sd->data.seq_absolute;
-				//printf("Changing SD seq from (%llu - %llu) to (%d - %d)\n", sd->data.seq, sd->data.endSeq, 0, 0);
-				sd->data.seq = 0;
-				sd->data.endSeq = 0;
+				rm->firstSeq = seg->seq_absolute;
+				//printf("Changing SD seq from (%llu - %llu) to (%d - %d)\n", seg->seq, seg->endSeq, 0, 0);
+				seg->seq = 0;
+				seg->endSeq = 0;
 			}
 		}
 	}
 
 	// This is ack
-	if (sd->data.payloadSize == 0) {
-		if (sd->data.flags & TH_RST) {
+	if (seg->payloadSize == 0) {
+		if (seg->flags & TH_RST) {
 			//printf("CONN: %s\n", getConnKey().c_str());
 			//assert("RST!" && 0);
 			//return false;
@@ -195,108 +196,108 @@ bool Connection::registerSent(sendData* sd) {
 
 #ifdef DEBUG
 	if (debug) {
-		printf("\nRegisterSent (%llu): %s\n", (sd->data.endSeq - sd->data.seq),
-		rm->absolute_seq_pair_str(sd->data.seq, END_SEQ(sd->data.endSeq)).c_str());
+		printf("\nRegisterSent (%llu): %s\n", (seg->endSeq - seg->seq),
+		rm->absolute_seq_pair_str(seg->seq, END_SEQ(seg->endSeq)).c_str());
 	}
 #endif
 
-	if (sd->data.endSeq > lastLargestEndSeq) { /* New data */
+	if (seg->endSeq > lastLargestEndSeq) { /* New data */
 		if (DEBUGL_SENDER(6)) {
-			printf("New Data - sd->endSeq: %llu > lastLargestEndSeq: %llu, sd->seq: %llu, lastLargestStartSeq: %llu, len: %u\n",
-				   rm->get_print_seq(END_SEQ(sd->data.endSeq)),
+			printf("New Data - pkt->endSeq: %llu > lastLargestEndSeq: %llu, pkt->seq: %llu, lastLargestStartSeq: %llu, len: %u\n",
+				   rm->get_print_seq(END_SEQ(seg->endSeq)),
 				   rm->get_print_seq(END_SEQ(lastLargestEndSeq)),
-				   rm->get_print_seq(sd->data.seq),
+				   rm->get_print_seq(seg->seq),
 				   rm->get_print_seq(lastLargestStartSeq),
-				   sd->data.payloadSize);
+				   seg->payloadSize);
 		}
 #ifdef DEBUG
 		if (debug) {
-			printf("sd->data.seq:    %llu\n", rm->get_print_seq(sd->data.seq));
+			printf("seg->seq:    %llu\n", rm->get_print_seq(seg->seq));
 			printf(" lastLargestStartSeq:    %llu\n", rm->get_print_seq(lastLargestStartSeq));
-			printf("sd->data.endSeq: %llu\n", rm->get_print_seq(END_SEQ(sd->data.endSeq)));
+			printf("seg->endSeq: %llu\n", rm->get_print_seq(END_SEQ(seg->endSeq)));
 			printf("lastLargestEndSeq: %llu\n", rm->get_print_seq(END_SEQ(lastLargestEndSeq)));
 
-			printf("(sd->data.seq == lastLargestStartSeq): %d\n", (sd->data.seq == lastLargestStartSeq));
-			printf("(sd->data.endSeq > lastLargestEndSeq): %d\n", (sd->data.endSeq > lastLargestEndSeq));
-			printf("(sd->data.seq > lastLargestStartSeq): %d\n", (sd->data.seq > lastLargestStartSeq));
-			printf("(sd->data.seq < lastLargestEndSeq): %d\n", (sd->data.seq < lastLargestEndSeq));
-			printf("(sd->data.endSeq > lastLargestEndSeq): %d\n", (sd->data.endSeq > lastLargestEndSeq));
+			printf("(seg->seq == lastLargestStartSeq): %d\n", (seg->seq == lastLargestStartSeq));
+			printf("(seg->endSeq > lastLargestEndSeq): %d\n", (seg->endSeq > lastLargestEndSeq));
+			printf("(seg->seq > lastLargestStartSeq): %d\n", (seg->seq > lastLargestStartSeq));
+			printf("(seg->seq < lastLargestEndSeq): %d\n", (seg->seq < lastLargestEndSeq));
+			printf("(seg->endSeq > lastLargestEndSeq): %d\n", (seg->endSeq > lastLargestEndSeq));
 		}
 #endif
 		// Same seq as previous packet, if (lastLargestStartSeq + lastLargestEndSeq) == 0, it's the first packet of a stream with no SYN
-		if ((sd->data.seq == lastLargestStartSeq) && (sd->data.endSeq > lastLargestEndSeq)
+		if ((seg->seq == lastLargestStartSeq) && (seg->endSeq > lastLargestEndSeq)
 			&& (lastLargestStartSeq + lastLargestEndSeq) != 0) {
 			bundleCount++;
-			totRDBBytesSent += (lastLargestEndSeq - sd->data.seq);
-			totNewDataSent += (sd->data.endSeq - lastLargestEndSeq);
-			sd->data.is_rdb = true;
-			sd->data.rdb_end_seq = lastLargestEndSeq;
-		} else if ((sd->data.seq > lastLargestStartSeq) && (sd->data.seq < lastLargestEndSeq)
-				   && (sd->data.endSeq > lastLargestEndSeq)) {
-			totRDBBytesSent += (lastLargestEndSeq - sd->data.seq);
-			totNewDataSent += (sd->data.endSeq - lastLargestEndSeq);
+			totRDBBytesSent += (lastLargestEndSeq - seg->seq);
+			totNewDataSent += (seg->endSeq - lastLargestEndSeq);
+			seg->is_rdb = true;
+			seg->rdb_end_seq = lastLargestEndSeq;
+		} else if ((seg->seq > lastLargestStartSeq) && (seg->seq < lastLargestEndSeq)
+				   && (seg->endSeq > lastLargestEndSeq)) {
+			totRDBBytesSent += (lastLargestEndSeq - seg->seq);
+			totNewDataSent += (seg->endSeq - lastLargestEndSeq);
 			bundleCount++;
-			sd->data.is_rdb = true;
-			sd->data.rdb_end_seq = lastLargestEndSeq;
-		} else if ((sd->data.seq < lastLargestEndSeq) && (sd->data.endSeq > lastLargestEndSeq)) {
-			totRDBBytesSent += (lastLargestEndSeq - sd->data.seq);
-			totNewDataSent += (sd->data.endSeq - lastLargestEndSeq);
+			seg->is_rdb = true;
+			seg->rdb_end_seq = lastLargestEndSeq;
+		} else if ((seg->seq < lastLargestEndSeq) && (seg->endSeq > lastLargestEndSeq)) {
+			totRDBBytesSent += (lastLargestEndSeq - seg->seq);
+			totNewDataSent += (seg->endSeq - lastLargestEndSeq);
 			bundleCount++;
-			sd->data.is_rdb = true;
-			sd->data.rdb_end_seq = lastLargestEndSeq;
+			seg->is_rdb = true;
+			seg->rdb_end_seq = lastLargestEndSeq;
 		}
 		else {
 			// New data that is not RDB
-			totNewDataSent += sd->data.payloadSize;
+			totNewDataSent += seg->payloadSize;
 		}
-		lastLargestEndSeq = sd->data.endSeq;
-		lastLargestSeqAbsolute = sd->data.seq_absolute + sd->data.payloadSize;
-	} else if (lastLargestStartSeq > 0 && sd->data.endSeq <= lastLargestStartSeq) { /* All seen before */
+		lastLargestEndSeq = seg->endSeq;
+		lastLargestSeqAbsolute = seg->seq_absolute + seg->payloadSize;
+	} else if (lastLargestStartSeq > 0 && seg->endSeq <= lastLargestStartSeq) { /* All seen before */
 		if (DEBUGL_SENDER(6)) {
-			printf("\nRetrans - lastLargestStartSeq: %llu > 0 && sd->data.seq: %llu <= lastLargestStartSeq: %llu\n",
-				   rm->get_print_seq(lastLargestStartSeq), rm->get_print_seq(sd->data.seq),
+			printf("\nRetrans - lastLargestStartSeq: %llu > 0 && seg->seq: %llu <= lastLargestStartSeq: %llu\n",
+				   rm->get_print_seq(lastLargestStartSeq), rm->get_print_seq(seg->seq),
 				   rm->get_print_seq(lastLargestStartSeq));
 		}
-		nrRetrans++;
-		totRetransBytesSent += sd->data.payloadSize;
-		sd->data.retrans = true;
+		nrPacketRetrans++;
+		totRetransBytesSent += seg->payloadSize;
+		seg->retrans = true;
 	}
 	else {
-		nrRetrans++;
-		totRetransBytesSent += sd->data.payloadSize;
-		sd->data.retrans = true;
+		nrPacketRetrans++;
+		totRetransBytesSent += seg->payloadSize;
+		seg->retrans = true;
 		if (DEBUGL_SENDER(6)) {
-			printf("Retrans - lastLargestStartSeq: %llu > 0 && sd->data.seq: %llu <= lastLargestStartSeq: %llu\n",
-				   rm->get_print_seq(lastLargestStartSeq), rm->get_print_seq(sd->data.seq), rm->get_print_seq(lastLargestStartSeq));
-			printf("New Data - sd->data.endSeq: %llu > lastLargestEndSeq: %llu\n",
-				   rm->get_print_seq(END_SEQ(sd->data.endSeq)), rm->get_print_seq(END_SEQ(lastLargestEndSeq)));
+			printf("Retrans - lastLargestStartSeq: %llu > 0 && seg->seq: %llu <= lastLargestStartSeq: %llu\n",
+				   rm->get_print_seq(lastLargestStartSeq), rm->get_print_seq(seg->seq), rm->get_print_seq(lastLargestStartSeq));
+			printf("New Data - seg->endSeq: %llu > lastLargestEndSeq: %llu\n",
+				   rm->get_print_seq(END_SEQ(seg->endSeq)), rm->get_print_seq(END_SEQ(lastLargestEndSeq)));
 		}
 	}
 
-	if (sd->data.payloadSize) {
+	if (seg->payloadSize) {
 		nrDataPacketsSent++;
-		lastLargestStartSeq = sd->data.seq;
+		lastLargestStartSeq = seg->seq;
 	}
-	totBytesSent += sd->data.payloadSize;
+	totBytesSent += seg->payloadSize;
 	return true;
 }
 
 /* Process range for outgoing packet */
-void Connection::registerRange(sendData* sd) {
+void Connection::registerRange(DataSeg *seg) {
 	if (DEBUGL_SENDER(4)) {
 		if (firstSendTime.tv_sec == 0 && firstSendTime.tv_usec == 0) {
-			firstSendTime = sd->data.tstamp_pcap;
+			firstSendTime = seg->tstamp_pcap;
 		}
 
 		timeval offset;
-		timersub(&(sd->data.tstamp_pcap), &firstSendTime, &offset);
-		cerr << "\nRegistering new outgoing. Seq: " << rm->get_print_seq(sd->data.seq) << " - "
-		     << rm->get_print_seq(END_SEQ(sd->data.endSeq)) << " Absolute seq: " << sd->data.seq << " - "
-			 << END_SEQ(sd->data.endSeq) << " Payload: " << sd->data.payloadSize << endl;
+		timersub(&(seg->tstamp_pcap), &firstSendTime, &offset);
+		cerr << "\nRegistering new outgoing. Seq: " << rm->get_print_seq(seg->seq) << " - "
+		     << rm->get_print_seq(END_SEQ(seg->endSeq)) << " Absolute seq: " << seg->seq << " - "
+			 << END_SEQ(seg->endSeq) << " Payload: " << seg->payloadSize << endl;
 		cerr << "Time offset: Secs: " << offset.tv_sec << "." << offset.tv_usec << endl;
 	}
 
-	rm->insertSentRange(sd);
+	rm->insertSentRange(seg);
 
 	if (DEBUGL_SENDER(4)) {
 		cerr << "Last range: seq: " << rm->get_print_seq(rm->getLastRange()->getStartSeq())
@@ -431,8 +432,8 @@ void Connection::addConnStats(ConnStats* cs) {
 	cs->nrPacketsSentFoundInDump += rm->analysed_packet_sent_count_in_dump;
 	cs->nrPacketsReceivedFoundInDump += rm->analysed_packet_received_count;
 	cs->nrDataPacketsSent += rm->analysed_data_packet_count;
-	cs->nrRetrans += rm->analysed_retr_packet_count;
-	cs->nrRetransNoPayload += rm->analysed_retr_no_payload_packet_count;
+	cs->nrPacketRetrans += rm->analysed_retr_packet_count;
+	cs->nrPacketRetransNoPayload += rm->analysed_retr_no_payload_packet_count;
 	cs->bundleCount += rm->analysed_rdb_packet_count;
 	cs->totUniqueBytes += getNumUniqueBytes();
 	cs->totUniqueBytesSent += rm->analysed_bytes_sent_unique;
@@ -452,7 +453,7 @@ void Connection::addConnStats(ConnStats* cs) {
 	if ((rm->analysed_bytes_sent - getNumUniqueBytes()) != rm->analysed_redundant_bytes) {
 		if (rm->analysed_bytes_sent >= getNumUniqueBytes()) {
 			if (DEBUGL_SENDER(1)) {
-				colored_fprintf(stderr, RED, "Mismatch between redundant bytes and (bytes_sent - UniqueBytes) which should be equal\n");
+				colored_fprintf(stderr, COLOR_WARN, "Mismatch between redundant bytes and (bytes_sent - UniqueBytes) which should be equal\n");
 				fprintf(stderr, "CONNKEY: %s\n", getConnKey().c_str());
 				fprintf(stderr, "rm->analysed_bytes_sent - getNumUniqueBytes (%llu) != rm->analysed_redundant_bytes (%llu)\n",
 					   rm->analysed_bytes_sent - getNumUniqueBytes(), rm->analysed_redundant_bytes);
@@ -472,10 +473,6 @@ void Connection::addConnStats(ConnStats* cs) {
 }
 
 /* Generate statistics for bytewise latency */
-void Connection::genBytesLatencyStats(PacketsStats* bs) {
-	rm->genStats(bs);
-}
-
 PacketsStats* Connection::getBytesLatencyStats() {
 	if (!packetsStats.has_stats()) {
 		packetsStats.init();
@@ -493,16 +490,15 @@ void Connection::validateRanges() {
 	rm->validateContent();
 }
 
-void Connection::registerRecvd(sendData *sd) {
+void Connection::registerRecvd(DataSeg *seg) {
 	/* Insert range into datastructure */
-	if (sd->data.seq <= lastLargestRecvEndSeq &&
-		sd->data.endSeq > lastLargestRecvEndSeq) {
-		sd->data.in_sequence = 1;
+	if (seg->seq <= lastLargestRecvEndSeq &&
+		seg->endSeq > lastLargestRecvEndSeq) {
+		seg->in_sequence = 1;
 	}
-
-	rm->insertReceivedRange(sd);
-	lastLargestRecvEndSeq = sd->data.endSeq;
-	lastLargestRecvSeqAbsolute = sd->data.seq_absolute + sd->data.payloadSize;
+	rm->insertReceivedRange(seg);
+	lastLargestRecvEndSeq = seg->endSeq;
+	lastLargestRecvSeqAbsolute = seg->seq_absolute + seg->payloadSize;
 }
 
 void Connection::writeByteLatencyVariationCDF(ofstream *stream) {

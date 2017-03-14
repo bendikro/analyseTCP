@@ -193,7 +193,7 @@ public:
 	timeval* getAckTime();
 	void setRecvTime(timeval *tv) { received_tstamp_pcap = *tv; }
 	vector< pair<int, int> > getSojournTimes();
-	bool addSegmentEnteredKernelTime(seq64_t seq, timeval &tv);
+	bool addSegmentEnteredKernelTime(seq64_t seq, const timeval &tv);
 };
 
 #endif /* BYTERANGE_H */
