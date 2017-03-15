@@ -128,29 +128,42 @@ public:
 #define DEBUGL_SENDER(level) (GlobOpts::debugSender && GlobOpts::debugLevel >= level)
 #define DEBUGL_RECEIVER(level) (GlobOpts::debugReceiver && GlobOpts::debugLevel >= level)
 
+typedef pair<seq64_t, seq64_t> sack_t;
+typedef vector< sack_t > sack_list_t;
+typedef shared_ptr< sack_list_t > sack_list_ptr_t;
 
-struct DataSeg {
+
+class DataSeg {
+public:
 	seq64_t seq;
 	seq64_t endSeq;
 	seq64_t rdb_end_seq;   /* end seq of rdb data */
-	seq32_t seq_absolute;  /* Absolute value of the sequence number */
 	seq64_t ack;
+	seq32_t seq_absolute;  /* Absolute value of the sequence number */
 	uint16_t window;
 	uint16_t payloadSize;   /* Payload size */
 	bool retrans : 1,       /* Is a retransmission */
 		is_rdb : 1,         /* Is a rdb packet */
 		sacks : 1,          /* Has SACK blocks */
 		in_sequence : 1;    /* Is the segment expected or out of order */
+	u_char flags;
 	timeval tstamp_pcap;
 	uint32_t tstamp_tcp;
 	uint32_t tstamp_tcp_echo;
-	vector< pair<seq64_t, seq64_t> > tcp_sacks;
-	u_char flags;
-	DataSeg() : seq(0), endSeq(0), rdb_end_seq(0), seq_absolute(0), ack(0),
-		window(0), payloadSize(0), retrans(0), is_rdb(0), in_sequence(0),
-		tstamp_tcp(0), tstamp_tcp_echo(0), flags(0) {
+	shared_ptr <sack_list_t> tcp_sacks;
+
+	DataSeg() {
+		tcp_sacks = shared_ptr <sack_list_t> (new sack_list_t);
+		retrans = is_rdb = sacks = in_sequence = 0;
+		flags = 0;
+		window = payloadSize = 0;
+		seq_absolute = tstamp_tcp = tstamp_tcp_echo = 0;
+		seq = endSeq = rdb_end_seq = ack = 0;
 	}
-//	u_char *data;
+
+	void addTcpSack(sack_t tcp_sack) {
+		tcp_sacks->push_back(tcp_sack);
+	}
 };
 
 /* Struct used to forward relevant data about an anlysed packet */

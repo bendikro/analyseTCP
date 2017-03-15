@@ -329,7 +329,7 @@ void Dump::parseTCPOptions(DataSeg* data, uint8_t* opts, uint option_length,
 				seq32_t rightin = ntohl(*(((uint32_t*) (opts + offset + 6  + (4 * blocks * i)))));
 				seq64_t left = tmpConn->getRelativeSequenceNumber(leftin, RELSEQ_SEND_ACK);
 				seq64_t right = tmpConn->getRelativeSequenceNumber(rightin, RELSEQ_SEND_ACK);
-				data->tcp_sacks.push_back(pair<uint64_t, uint32_t>(left, right));
+				data->addTcpSack(pair<seq64_t, seq64_t>(left, right));
 			}
 		}
 		offset += _opt->size;
@@ -473,7 +473,6 @@ void Dump::processAcks(const pcap_pkthdr* header, const u_char *data, u_int link
 	ack = ntohl(tcp->th_ack);
 
 	DataSeg seg;
-	memset(&seg, 0, sizeof(DataSeg));
 	seg.ack         = tmpConn->getRelativeSequenceNumber(ack, RELSEQ_SEND_ACK);
 	seg.tstamp_pcap = header->ts;
 	seg.window = ntohs(tcp->th_win);

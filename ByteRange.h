@@ -25,16 +25,15 @@ public:
 	uint8_t rdb_miss_count;
 	uint8_t rdb_hit_count;
 
-	vector< pair<seq64_t, timeval> > sojourn_tstamps; // endseq for segment, tstamp when entered kernel
-	vector< pair<timeval, sent_type> > sent_tstamp_pcap; // pcap tstamp for when packet was sent, sent_type {ST_NONE, ST_PKT, ST_RTR, ST_PURE_ACK};
+	vector< pair<seq64_t, timeval> > sojourn_tstamps;      // endseq for segment, tstamp when entered kernel
+	vector< pair<timeval, sent_type> > sent_tstamp_pcap;   // pcap tstamp for when packet was sent, sent_type {ST_NONE, ST_PKT, ST_RTR, ST_PURE_ACK};
 	timeval received_tstamp_pcap;
-	uint8_t send_tcp_stamp_recv_index; // The index of the element in the tstamps_tcp vector that matches the received tcp time stamp
+	uint8_t send_tcp_stamp_recv_index;                     // The index of the element in the tstamps_tcp vector that matches the received tcp time stamp
 	uint32_t received_tstamp_tcp;
 	vector< pair<uint32_t, uint32_t> > tstamps_tcp;
-	vector< uint32_t> rdb_tstamps_tcp;  // tcp tstamp for data in RDB packets
-	vector< vector< pair<seq64_t, seq64_t> > > tcp_sacks;  // tcp tstamp for data in RDB packets
-
-	vector< pair<uint32_t, timeval> > lost_tstamps_tcp; // tcp tstamp matched to received used to find which packets were lost
+	vector< uint32_t> rdb_tstamps_tcp;                     // tcp tstamp for data in RDB packets
+	vector< shared_ptr< sack_list_t > > tcp_sacks;
+	vector< pair<uint32_t, timeval> > lost_tstamps_tcp;    // tcp tstamp matched to received used to find which packets were lost
 
 	timeval ackTime;
 	uint8_t acked : 1,

@@ -1571,20 +1571,20 @@ void RangeManager::printPacketDetails(map<seq64_t, ByteRange*>::iterator it, map
 		}
 
 		if (it->second->tcp_sacks.size() > 0) {
-			for (auto &sack_blocks : it->second->tcp_sacks) {
+			for (auto sack_blocks : it->second->tcp_sacks) {
 				printf("\n");
-				for (size_t i = 0;  i < sack_blocks.size(); i++) {
+				for (size_t i = 0;  i < sack_blocks->size(); i++) {
 
 					char prefix = ' ';
-					if (i == 0 && sack_blocks[0].first < it->second->endSeq) {
+					if (i == 0 && (*sack_blocks)[0].first < it->second->endSeq) {
 						prefix = 'D';
 					}
-					else if (i == 1 && !after(uint32_t(sack_blocks[0].second), uint32_t(sack_blocks[1].second)) && !before(uint32_t(sack_blocks[0].first), uint32_t(sack_blocks[1].first))) {
+					else if (i == 1 && !after(uint32_t((*sack_blocks)[0].second), uint32_t((*sack_blocks)[1].second)) && !before(uint32_t((*sack_blocks)[0].first), uint32_t((*sack_blocks)[1].first))) {
 						prefix = 'd';
 					}
 
 					printf("%cSACK (%4llu - %4llu) ", prefix,
-						   get_print_seq(sack_blocks[i].first), get_print_seq(sack_blocks[i].second));
+						   get_print_seq((*sack_blocks)[i].first), get_print_seq((*sack_blocks)[i].second));
 				}
 			}
 		}
